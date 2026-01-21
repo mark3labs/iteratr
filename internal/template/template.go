@@ -1,6 +1,8 @@
 package template
 
 import (
+	"fmt"
+	"os"
 	"strings"
 )
 
@@ -42,4 +44,24 @@ func Render(template string, vars Variables) string {
 	}
 
 	return result
+}
+
+// LoadFromFile loads a template from a file.
+// If the file doesn't exist or can't be read, returns an error.
+func LoadFromFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read template file %s: %w", path, err)
+	}
+	return string(data), nil
+}
+
+// GetTemplate returns the template content.
+// If customPath is non-empty, loads from that file.
+// Otherwise returns the default embedded template.
+func GetTemplate(customPath string) (string, error) {
+	if customPath == "" {
+		return DefaultTemplate, nil
+	}
+	return LoadFromFile(customPath)
 }
