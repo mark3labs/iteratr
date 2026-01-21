@@ -5,12 +5,14 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/glamour"
 )
 
 // AgentOutput displays streaming agent output with auto-scroll.
 type AgentOutput struct {
 	viewport   viewport.Model
 	content    strings.Builder
+	renderer   *glamour.TermRenderer
 	width      int
 	height     int
 	autoScroll bool // Whether to auto-scroll to bottom on new content
@@ -19,7 +21,18 @@ type AgentOutput struct {
 
 // NewAgentOutput creates a new AgentOutput component.
 func NewAgentOutput() *AgentOutput {
+	// Create glamour renderer with dark style
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(0), // Disable word wrap, let viewport handle it
+	)
+	if err != nil {
+		// Fall back to no renderer if initialization fails
+		renderer = nil
+	}
+
 	return &AgentOutput{
+		renderer:   renderer,
 		autoScroll: true, // Start with auto-scroll enabled
 	}
 }
@@ -93,7 +106,17 @@ func (a *AgentOutput) Append(content string) tea.Cmd {
 
 	// Update viewport content
 	if a.ready {
-		a.viewport.SetContent(a.content.String())
+		// Render markdown if renderer is available
+		displayContent := a.content.String()
+		if a.renderer != nil {
+			rendered, err := a.renderer.Render(displayContent)
+			if err == nil {
+				displayContent = rendered
+			}
+			// If rendering fails, fall back to plain text
+		}
+
+		a.viewport.SetContent(displayContent)
 
 		// Auto-scroll to bottom if enabled
 		if a.autoScroll {
