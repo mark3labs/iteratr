@@ -293,9 +293,10 @@ func (s *Store) LoadState(ctx context.Context, session string) (*State, error) {
 	// Using a large batch size to minimize round trips
 	const batchSize = 1000
 	for {
-		msgs, err := consumer.Fetch(batchSize)
+		// Fetch with short timeout to avoid blocking forever
+		msgs, err := consumer.FetchNoWait(batchSize)
 		if err != nil {
-			// No more messages or timeout - we've read everything
+			// No more messages or error - we've read everything
 			break
 		}
 
