@@ -1,0 +1,1 @@
+Task "TUI Task List View - Show task IDs (8 char prefix)" was already completed in iteration #32. The renderTask method in tasks.go:92-107 correctly extracts the first 8 characters of the task ID and renders it with styleTaskID, formatting it as [idprefix] alongside the task content.

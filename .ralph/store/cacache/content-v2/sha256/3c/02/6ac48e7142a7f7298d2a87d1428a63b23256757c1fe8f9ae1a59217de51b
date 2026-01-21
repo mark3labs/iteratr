@@ -1,0 +1,1 @@
+Verified that ACP client tasks (agent subprocess management, streaming updates, tool routing) were already implemented in previous iterations. All functionality is working and tests pass.

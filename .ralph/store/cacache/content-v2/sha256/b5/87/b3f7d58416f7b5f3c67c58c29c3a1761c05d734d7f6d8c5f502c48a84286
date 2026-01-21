@@ -1,0 +1,1 @@
+Task "TUI Foundation - Implement view switching (1-5 keys)" was already completed in iteration #24. The handleKeyPress method in app.go:126-152 fully implements view switching with keys 1-5, setting activeView and rendering the appropriate view via renderActiveView().

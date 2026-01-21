@@ -1,0 +1,1 @@
+Task "TUI Foundation - Set up alt screen and mouse support" was already completed in iteration #23. The View() method in app.go correctly sets AltScreen=true, MouseMode=tea.MouseModeCellMotion, and ReportFocus=true, which matches Bubbletea v2 API requirements.

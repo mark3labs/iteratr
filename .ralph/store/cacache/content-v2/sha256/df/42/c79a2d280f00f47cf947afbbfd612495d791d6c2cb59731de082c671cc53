@@ -1,0 +1,1 @@
+After reviewing the opencode ACP docs and our implementation, I realize our custom tools (task_add, inbox_list, etc) are implemented correctly. They're intercepted via SessionUpdate in handleToolCall(). The tool descriptions in ToolDescriptions constant need to be included in the prompt template so the LLM knows to call them.

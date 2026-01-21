@@ -1,0 +1,1 @@
+Task "ACP Client - Implement agent subprocess management" was already completed in previous iterations. The RunIteration method in client.go:214-276 fully implements subprocess management with opencode via ACP.
