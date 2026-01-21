@@ -43,6 +43,14 @@ func (d *Dashboard) Render() string {
 		sections = append(sections, "", progressInfo)
 	}
 
+	// Section 3: Current Task
+	if d.state != nil {
+		currentTask := d.renderCurrentTask()
+		if currentTask != "" {
+			sections = append(sections, "", currentTask)
+		}
+	}
+
 	// Join sections with spacing
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
@@ -122,4 +130,34 @@ func (d *Dashboard) renderProgressIndicator() string {
 	bar := styleProgressFill.Render(filled) + styleDim.Render(empty)
 	label := styleStatLabel.Render("Progress:")
 	return fmt.Sprintf("%s [%s] %s", label, bar, styleStatValue.Render(progressText))
+}
+
+// renderCurrentTask renders the current in_progress task (if any).
+func (d *Dashboard) renderCurrentTask() string {
+	// Find first in_progress task
+	var currentTask *session.Task
+	for _, task := range d.state.Tasks {
+		if task.Status == "in_progress" {
+			currentTask = task
+			break
+		}
+	}
+
+	// Return empty string if no in_progress task
+	if currentTask == nil {
+		return ""
+	}
+
+	// Format task ID (8 char prefix)
+	taskIDPrefix := currentTask.ID
+	if len(taskIDPrefix) > 8 {
+		taskIDPrefix = taskIDPrefix[:8]
+	}
+
+	// Build current task display
+	label := styleStatLabel.Render("Current Task:")
+	taskText := fmt.Sprintf("[%s] %s", taskIDPrefix, currentTask.Content)
+	taskBox := styleCurrentTask.Render(taskText)
+
+	return fmt.Sprintf("%s\n%s", label, taskBox)
 }
