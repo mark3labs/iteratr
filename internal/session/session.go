@@ -64,3 +64,270 @@ func (s *Store) PublishEvent(ctx context.Context, event Event) (*jetstream.PubAc
 
 	return ack, nil
 }
+
+// State represents the current state of a session, reconstructed from events.
+// It implements the reduce pattern by applying events to build up the current state.
+type State struct {
+	Session    string           `json:"session"`
+	Tasks      map[string]*Task `json:"tasks"`      // Task ID -> Task
+	Notes      []*Note          `json:"notes"`      // Chronological list of notes
+	Inbox      []*Message       `json:"inbox"`      // Inbox messages
+	Iterations []*Iteration     `json:"iterations"` // Iteration history
+	Complete   bool             `json:"complete"`   // Session marked complete
+}
+
+// Task represents a task in the task system.
+type Task struct {
+	ID        string    `json:"id"`
+	Content   string    `json:"content"`
+	Status    string    `json:"status"` // remaining, in_progress, completed, blocked
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Iteration int       `json:"iteration"` // Iteration that last modified this task
+}
+
+// Note represents a note recorded during a session.
+type Note struct {
+	ID        string    `json:"id"`
+	Content   string    `json:"content"`
+	Type      string    `json:"type"` // learning, stuck, tip, decision
+	CreatedAt time.Time `json:"created_at"`
+	Iteration int       `json:"iteration"` // Iteration that created this note
+}
+
+// Message represents an inbox message.
+type Message struct {
+	ID        string    `json:"id"`
+	Content   string    `json:"content"`
+	Read      bool      `json:"read"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Iteration represents a single iteration execution.
+type Iteration struct {
+	Number    int       `json:"number"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at,omitempty"`
+	Complete  bool      `json:"complete"`
+}
+
+// Apply applies an event to the state, implementing the reduce pattern.
+// This method mutates the state based on the event type and action.
+func (st *State) Apply(event Event) {
+	switch event.Type {
+	case nats.EventTypeTask:
+		st.applyTaskEvent(event)
+	case nats.EventTypeNote:
+		st.applyNoteEvent(event)
+	case nats.EventTypeInbox:
+		st.applyInboxEvent(event)
+	case nats.EventTypeIteration:
+		st.applyIterationEvent(event)
+	case nats.EventTypeControl:
+		st.applyControlEvent(event)
+	}
+}
+
+// applyTaskEvent handles task-related events.
+func (st *State) applyTaskEvent(event Event) {
+	switch event.Action {
+	case "add":
+		// Parse metadata for status and iteration
+		var meta struct {
+			Status    string `json:"status"`
+			Iteration int    `json:"iteration"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Default status to "remaining"
+		if meta.Status == "" {
+			meta.Status = "remaining"
+		}
+
+		// Create new task
+		task := &Task{
+			ID:        event.ID,
+			Content:   event.Data,
+			Status:    meta.Status,
+			CreatedAt: event.Timestamp,
+			UpdatedAt: event.Timestamp,
+			Iteration: meta.Iteration,
+		}
+		st.Tasks[event.ID] = task
+
+	case "status":
+		// Parse metadata for task ID and new status
+		var meta struct {
+			TaskID    string `json:"task_id"`
+			Status    string `json:"status"`
+			Iteration int    `json:"iteration"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Update task status if it exists
+		if task, exists := st.Tasks[meta.TaskID]; exists {
+			task.Status = meta.Status
+			task.UpdatedAt = event.Timestamp
+			task.Iteration = meta.Iteration
+		}
+	}
+}
+
+// applyNoteEvent handles note-related events.
+func (st *State) applyNoteEvent(event Event) {
+	switch event.Action {
+	case "add":
+		// Parse metadata for note type and iteration
+		var meta struct {
+			Type      string `json:"type"`
+			Iteration int    `json:"iteration"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Create new note
+		note := &Note{
+			ID:        event.ID,
+			Content:   event.Data,
+			Type:      meta.Type,
+			CreatedAt: event.Timestamp,
+			Iteration: meta.Iteration,
+		}
+		st.Notes = append(st.Notes, note)
+	}
+}
+
+// applyInboxEvent handles inbox-related events.
+func (st *State) applyInboxEvent(event Event) {
+	switch event.Action {
+	case "add":
+		// Create new message
+		msg := &Message{
+			ID:        event.ID,
+			Content:   event.Data,
+			Read:      false,
+			CreatedAt: event.Timestamp,
+		}
+		st.Inbox = append(st.Inbox, msg)
+
+	case "mark_read":
+		// Parse metadata for message ID
+		var meta struct {
+			MessageID string `json:"message_id"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Mark message as read
+		for _, msg := range st.Inbox {
+			if msg.ID == meta.MessageID {
+				msg.Read = true
+				break
+			}
+		}
+	}
+}
+
+// applyIterationEvent handles iteration-related events.
+func (st *State) applyIterationEvent(event Event) {
+	switch event.Action {
+	case "start":
+		// Parse metadata for iteration number
+		var meta struct {
+			Number int `json:"number"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Create new iteration
+		iter := &Iteration{
+			Number:    meta.Number,
+			StartedAt: event.Timestamp,
+			Complete:  false,
+		}
+		st.Iterations = append(st.Iterations, iter)
+
+	case "complete":
+		// Parse metadata for iteration number
+		var meta struct {
+			Number int `json:"number"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Mark iteration as complete
+		for _, iter := range st.Iterations {
+			if iter.Number == meta.Number {
+				iter.Complete = true
+				iter.EndedAt = event.Timestamp
+				break
+			}
+		}
+	}
+}
+
+// applyControlEvent handles control-related events.
+func (st *State) applyControlEvent(event Event) {
+	switch event.Action {
+	case "session_complete":
+		st.Complete = true
+	}
+}
+
+// LoadState reconstructs the current state of a session by reading and reducing
+// all events from the JetStream event log. This implements the event sourcing pattern.
+func (s *Store) LoadState(ctx context.Context, session string) (*State, error) {
+	// Create a consumer filtered to this session's events
+	consumer, err := s.stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
+		FilterSubject: nats.SubjectForSession(session),
+		DeliverPolicy: jetstream.DeliverAllPolicy, // Start from beginning
+		AckPolicy:     jetstream.AckExplicitPolicy,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create consumer: %w", err)
+	}
+
+	// Initialize empty state
+	state := &State{
+		Session: session,
+		Tasks:   make(map[string]*Task),
+	}
+
+	// Fetch events in batches and reduce into state
+	// Using a large batch size to minimize round trips
+	const batchSize = 1000
+	for {
+		msgs, err := consumer.Fetch(batchSize)
+		if err != nil {
+			// No more messages or timeout - we've read everything
+			break
+		}
+
+		msgCount := 0
+		for msg := range msgs.Messages() {
+			msgCount++
+			// Unmarshal event
+			var event Event
+			if err := json.Unmarshal(msg.Data(), &event); err != nil {
+				// Skip malformed events but acknowledge them
+				msg.Ack()
+				continue
+			}
+
+			// Store the message sequence as ID if not set
+			if event.ID == "" {
+				meta, _ := msg.Metadata()
+				event.ID = fmt.Sprintf("%d", meta.Sequence.Stream)
+			}
+
+			// Apply event to state (reduce)
+			state.Apply(event)
+
+			// Acknowledge message
+			msg.Ack()
+		}
+
+		// If we got fewer messages than batch size, we've reached the end
+		if msgCount < batchSize {
+			break
+		}
+	}
+
+	return state, nil
+}
