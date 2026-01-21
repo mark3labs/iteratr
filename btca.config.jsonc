@@ -1,0 +1,35 @@
+{
+  "$schema": "https://btca.dev/btca.schema.json",
+  "providerTimeoutMs": 300000,
+  "resources": [
+    {
+      "type": "git",
+      "name": "opencode",
+      "url": "https://github.com/anomalyco/opencode",
+      "branch": "main",
+      "specialNotes": "OpenCode AI coding agent. Check docs/ and internal/ for implementation details."
+    },
+    {
+      "type": "git",
+      "name": "bubbleteaV2",
+      "url": "https://github.com/charmbracelet/bubbletea",
+      "branch": "v2.0.0-rc.2",
+      "specialNotes": "Bubbletea v2 TUI framework. Note: v2 has breaking changes from v1."
+    },
+    {
+      "type": "git",
+      "name": "natsGo",
+      "url": "https://github.com/nats-io/nats.go",
+      "branch": "main",
+      "specialNotes": "NATS Go client library."
+    },
+    {
+      "type": "git",
+      "name": "acpGoSdk",
+      "url": "https://github.com/coder/acp-go-sdk",
+      "branch": "main"
+    }
+  ],
+  "model": "claude-haiku-4-5",
+  "provider": "opencode"
+}
