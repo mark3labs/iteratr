@@ -37,6 +37,12 @@ func (d *Dashboard) Render() string {
 	sessionInfo := d.renderSessionInfo()
 	sections = append(sections, sessionInfo)
 
+	// Section 2: Progress Indicator
+	if d.state != nil {
+		progressInfo := d.renderProgressIndicator()
+		sections = append(sections, "", progressInfo)
+	}
+
 	// Join sections with spacing
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
@@ -79,4 +85,41 @@ func (d *Dashboard) UpdateState(state *session.State) tea.Cmd {
 		d.sessionName = state.Session
 	}
 	return nil
+}
+
+// renderProgressIndicator renders a progress bar showing task completion.
+func (d *Dashboard) renderProgressIndicator() string {
+	// Count tasks by status
+	var total, completed int
+	for _, task := range d.state.Tasks {
+		total++
+		if task.Status == "completed" {
+			completed++
+		}
+	}
+
+	// Build progress bar
+	const barWidth = 40
+	var completedWidth int
+	if total > 0 {
+		completedWidth = (completed * barWidth) / total
+	}
+
+	// Create the bar with filled and empty portions
+	filled := ""
+	empty := ""
+	for i := 0; i < completedWidth; i++ {
+		filled += "█"
+	}
+	for i := completedWidth; i < barWidth; i++ {
+		empty += "░"
+	}
+
+	// Format the progress text
+	progressText := fmt.Sprintf("%d/%d tasks", completed, total)
+
+	// Combine bar and text
+	bar := styleProgressFill.Render(filled) + styleDim.Render(empty)
+	label := styleStatLabel.Render("Progress:")
+	return fmt.Sprintf("%s [%s] %s", label, bar, styleStatValue.Render(progressText))
 }
