@@ -28,6 +28,12 @@
       "name": "acpGoSdk",
       "url": "https://github.com/coder/acp-go-sdk",
       "branch": "main"
+    },
+    {
+      "type": "git",
+      "name": "bubbles",
+      "url": "https://github.com/charmbracelet/bubbles",
+      "branch": "v2.0.0-rc.1"
     }
   ],
   "model": "claude-haiku-4-5",
