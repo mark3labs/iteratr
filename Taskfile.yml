@@ -1,0 +1,153 @@
+# Taskfile for iteratr
+# Install Task: https://taskfile.dev/installation/
+version: '3'
+
+vars:
+  BINARY_NAME: iteratr
+  VERSION:
+    sh: echo "${VERSION:-dev}"
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+  BUILD_TIME:
+    sh: date -u '+%Y-%m-%d_%H:%M:%S'
+  CMD_DIR: ./cmd/iteratr
+  TEST_DIRS: ./...
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the binary
+    vars:
+      LDFLAGS: '-ldflags "-X main.Version={{.VERSION}} -X main.Commit={{.COMMIT}} -X main.BuildTime={{.BUILD_TIME}}"'
+    cmds:
+      - echo "Building {{.BINARY_NAME}}..."
+      - go build {{.LDFLAGS}} -o {{.BINARY_NAME}} {{.CMD_DIR}}
+      - echo "Build complete"
+
+  build-all:
+    desc: Build for all platforms
+    vars:
+      LDFLAGS: '-ldflags "-X main.Version={{.VERSION}} -X main.Commit={{.COMMIT}} -X main.BuildTime={{.BUILD_TIME}}"'
+    cmds:
+      - echo "Building for multiple platforms..."
+      - GOOS=linux GOARCH=amd64 go build {{.LDFLAGS}} -o {{.BINARY_NAME}}-linux-amd64 {{.CMD_DIR}}
+      - GOOS=linux GOARCH=arm64 go build {{.LDFLAGS}} -o {{.BINARY_NAME}}-linux-arm64 {{.CMD_DIR}}
+      - GOOS=darwin GOARCH=amd64 go build {{.LDFLAGS}} -o {{.BINARY_NAME}}-darwin-amd64 {{.CMD_DIR}}
+      - GOOS=darwin GOARCH=arm64 go build {{.LDFLAGS}} -o {{.BINARY_NAME}}-darwin-arm64 {{.CMD_DIR}}
+      - GOOS=windows GOARCH=amd64 go build {{.LDFLAGS}} -o {{.BINARY_NAME}}-windows-amd64.exe {{.CMD_DIR}}
+      - echo "Multi-platform build complete"
+
+  install:
+    desc: Install the binary to GOPATH/bin
+    vars:
+      LDFLAGS: '-ldflags "-X main.Version={{.VERSION}} -X main.Commit={{.COMMIT}} -X main.BuildTime={{.BUILD_TIME}}"'
+    cmds:
+      - echo "Installing {{.BINARY_NAME}}..."
+      - go install {{.LDFLAGS}} {{.CMD_DIR}}
+      - echo "Install complete"
+
+  test:
+    desc: Run tests
+    cmds:
+      - echo "Running tests..."
+      - go test -v -race -coverprofile=coverage.out {{.TEST_DIRS}}
+      - echo "Tests complete"
+
+  test-short:
+    desc: Run tests without race detector (faster)
+    cmds:
+      - echo "Running tests (short)..."
+      - go test -v -short {{.TEST_DIRS}}
+
+  test-coverage:
+    desc: Run tests and show coverage report
+    deps: [test]
+    cmds:
+      - echo "Generating coverage report..."
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report created at coverage.html"
+
+  lint:
+    desc: Run linters (requires golangci-lint)
+    cmds:
+      - echo "Running linters..."
+      - golangci-lint run --timeout=5m ./internal/... ./cmd/iteratr/...
+      - echo "Lint complete"
+    preconditions:
+      - sh: which golangci-lint
+        msg: "golangci-lint not found. Install from https://golangci-lint.run/usage/install/"
+
+  fmt:
+    desc: Format code
+    cmds:
+      - echo "Formatting code..."
+      - go fmt {{.TEST_DIRS}}
+      - echo "Format complete"
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - echo "Running go vet..."
+      - go vet {{.TEST_DIRS}}
+      - echo "Vet complete"
+
+  check:
+    desc: Run all checks (fmt, vet, lint, test)
+    deps: [fmt, vet, lint, test]
+    cmds:
+      - echo "All checks passed"
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - echo "Cleaning..."
+      - rm -f {{.BINARY_NAME}}
+      - rm -f {{.BINARY_NAME}}-*
+      - rm -f coverage.out coverage.html
+      - rm -rf .iteratr/
+      - echo "Clean complete"
+
+  deps:
+    desc: Download dependencies
+    cmds:
+      - echo "Downloading dependencies..."
+      - go mod download
+      - go mod tidy
+      - echo "Dependencies updated"
+
+  deps-update:
+    desc: Update dependencies
+    cmds:
+      - echo "Updating dependencies..."
+      - go get -u ./...
+      - go mod tidy
+      - echo "Dependencies updated"
+
+  run:
+    desc: Build and run iteratr
+    deps: [build]
+    cmds:
+      - ./{{.BINARY_NAME}}
+
+  doctor:
+    desc: Run iteratr doctor to check dependencies
+    deps: [build]
+    cmds:
+      - ./{{.BINARY_NAME}} doctor
+
+  dev:
+    desc: Quick dev cycle (fmt, vet, build)
+    deps: [fmt, vet, build]
+    cmds:
+      - echo "Development build ready"
+
+  ci:
+    desc: CI pipeline (deps, check, build)
+    deps: [deps, check, build]
+    cmds:
+      - echo "CI pipeline complete"
