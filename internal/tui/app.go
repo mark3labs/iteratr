@@ -2,8 +2,11 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/mark3labs/iteratr/internal/session"
 	"github.com/nats-io/nats.go"
 )
@@ -177,8 +180,40 @@ func (a *App) View() tea.View {
 
 // renderHeader renders the top header bar with session info and navigation.
 func (a *App) renderHeader() string {
-	// TODO: Implement with lipgloss styles
-	return "iteratr | " + a.sessionName
+	// Build header components
+	title := styleHeaderTitle.Render("iteratr")
+	sep := styleHeaderSeparator.Render(" | ")
+	session := styleHeaderInfo.Render(a.sessionName)
+
+	// Get current iteration number
+	iteration := ""
+	if a.dashboard != nil && a.dashboard.iteration > 0 {
+		iteration = styleHeaderSeparator.Render(" | ") +
+			styleHeaderInfo.Render(fmt.Sprintf("Iteration #%d", a.dashboard.iteration))
+	}
+
+	// Build view tabs
+	tabs := a.renderViewTabs()
+
+	// Left side: title + session + iteration
+	left := title + sep + session + iteration
+
+	// Right side: view tabs
+	right := tabs
+
+	// Calculate spacing to fill width
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	padding := a.width - leftWidth - rightWidth - 2 // -2 for side padding
+	if padding < 1 {
+		padding = 1
+	}
+
+	// Join with spacing
+	header := left + strings.Repeat(" ", padding) + right
+
+	// Apply header style and fill width
+	return styleHeader.Width(a.width).Render(header)
 }
 
 // renderActiveView renders the currently active view component.
@@ -199,10 +234,78 @@ func (a *App) renderActiveView() string {
 	}
 }
 
+// renderViewTabs renders the view navigation tabs for the header.
+func (a *App) renderViewTabs() string {
+	views := []struct {
+		key  string
+		name string
+		view ViewType
+	}{
+		{"1", "Dashboard", ViewDashboard},
+		{"2", "Tasks", ViewTasks},
+		{"3", "Logs", ViewLogs},
+		{"4", "Notes", ViewNotes},
+		{"5", "Inbox", ViewInbox},
+	}
+
+	var tabs []string
+	for _, v := range views {
+		if v.view == a.activeView {
+			// Active view - highlight
+			tabs = append(tabs, styleFooterActive.Render(fmt.Sprintf("[%s]", v.key)))
+		} else {
+			// Inactive view - dim
+			tabs = append(tabs, styleFooterKey.Render(v.key))
+		}
+	}
+
+	return strings.Join(tabs, " ")
+}
+
 // renderFooter renders the bottom footer bar with navigation hints.
 func (a *App) renderFooter() string {
-	// TODO: Implement with lipgloss styles
-	return "[1] Dashboard [2] Tasks [3] Logs [4] Notes [5] Inbox    q=quit"
+	// Build footer components
+	var parts []string
+
+	// View navigation
+	views := []struct {
+		key  string
+		name string
+		view ViewType
+	}{
+		{"1", "Dashboard", ViewDashboard},
+		{"2", "Tasks", ViewTasks},
+		{"3", "Logs", ViewLogs},
+		{"4", "Notes", ViewNotes},
+		{"5", "Inbox", ViewInbox},
+	}
+
+	for _, v := range views {
+		key := styleFooterKey.Render(fmt.Sprintf("[%s]", v.key))
+		label := styleFooterLabel.Render(v.name)
+		if v.view == a.activeView {
+			// Highlight active view
+			label = styleFooterActive.Render(v.name)
+		}
+		parts = append(parts, key+" "+label)
+	}
+
+	// Add quit hint on the right
+	footer := strings.Join(parts, "  ")
+	quit := styleFooterKey.Render("q") + styleFooterLabel.Render("=quit")
+
+	// Calculate spacing
+	footerWidth := lipgloss.Width(footer)
+	quitWidth := lipgloss.Width(quit)
+	padding := a.width - footerWidth - quitWidth - 2 // -2 for side padding
+	if padding < 2 {
+		padding = 2
+	}
+
+	footer = footer + strings.Repeat(" ", padding) + quit
+
+	// Apply footer style and fill width
+	return styleFooter.Width(a.width).Render(footer)
 }
 
 // subscribeToEvents subscribes to NATS events for this session.
