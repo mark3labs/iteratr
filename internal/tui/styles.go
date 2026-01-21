@@ -212,6 +212,11 @@ var (
 				Foreground(colorTextDim).
 				Italic(true)
 
+	styleAgentOutput = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorMuted).
+				Padding(1)
+
 	// List styles
 	styleListItem = lipgloss.NewStyle().
 			Foreground(colorText).
