@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
@@ -27,28 +28,32 @@ func NewDashboard(agentOutput *AgentOutput) *Dashboard {
 
 // Update handles messages for the dashboard.
 func (d *Dashboard) Update(msg tea.Msg) tea.Cmd {
-	// TODO: Implement dashboard-specific updates
+	// Forward scroll events to agent output viewport
+	if d.agentOutput != nil {
+		return d.agentOutput.Update(msg)
+	}
 	return nil
 }
 
 // Render returns the dashboard view as a string.
 func (d *Dashboard) Render() string {
-	// Build dashboard sections
-	var sections []string
+	// Build header sections (fixed height)
+	var headerSections []string
 
 	// Section 1: Session Info
 	sessionInfo := d.renderSessionInfo()
-	sections = append(sections, sessionInfo)
+	headerSections = append(headerSections, sessionInfo)
 
 	// Section 2: Progress Indicator
 	if d.state != nil {
 		progressInfo := d.renderProgressIndicator()
-		sections = append(sections, "", progressInfo)
+		headerSections = append(headerSections, "") // blank line
+		headerSections = append(headerSections, progressInfo)
 
 		// Section 2.5: Task Stats
 		taskStats := d.renderTaskStats()
 		if taskStats != "" {
-			sections = append(sections, taskStats)
+			headerSections = append(headerSections, taskStats)
 		}
 	}
 
@@ -56,18 +61,24 @@ func (d *Dashboard) Render() string {
 	if d.state != nil {
 		currentTask := d.renderCurrentTask()
 		if currentTask != "" {
-			sections = append(sections, "", currentTask)
+			headerSections = append(headerSections, "") // blank line
+			headerSections = append(headerSections, currentTask)
 		}
 	}
 
-	// Section 4: Agent Output
+	// Render header
+	header := lipgloss.JoinVertical(lipgloss.Left, headerSections...)
+
+	// Section 4: Agent Output (takes remaining space)
+	var agentSection string
 	if d.agentOutput != nil {
-		sections = append(sections, "", styleStatLabel.Render("Agent Output:"))
-		sections = append(sections, d.agentOutput.Render())
+		agentLabel := styleStatLabel.Render("Agent Output:")
+		agentContent := d.agentOutput.Render()
+		agentSection = lipgloss.JoinVertical(lipgloss.Left, "", agentLabel, "", agentContent)
 	}
 
-	// Join sections with spacing
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	// Join header and agent sections
+	return lipgloss.JoinVertical(lipgloss.Left, header, agentSection)
 }
 
 // renderSessionInfo renders the session name and iteration number.
@@ -91,6 +102,16 @@ func (d *Dashboard) renderSessionInfo() string {
 func (d *Dashboard) UpdateSize(width, height int) tea.Cmd {
 	d.width = width
 	d.height = height
+
+	// Update agent output viewport size
+	// Reserve space for: session info (2) + progress (2) + current task (3) + agent label (2) + padding (3)
+	if d.agentOutput != nil {
+		agentHeight := height - 12
+		if agentHeight < 5 {
+			agentHeight = 5
+		}
+		d.agentOutput.UpdateSize(width, agentHeight)
+	}
 	return nil
 }
 
@@ -166,7 +187,10 @@ func (d *Dashboard) renderTaskStats() string {
 	}
 
 	label := styleStatLabel.Render("Status:")
-	return fmt.Sprintf("%s %s", label, lipgloss.JoinHorizontal(lipgloss.Left, parts...))
+	// Join with separator for readability
+	separator := styleDim.Render(" | ")
+	statusText := strings.Join(parts, separator)
+	return fmt.Sprintf("%s %s", label, statusText)
 }
 
 // taskStats holds task statistics by status.

@@ -85,14 +85,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
+		// Calculate content height (minus header and footer, each ~1 line with padding)
+		contentHeight := msg.Height - 4 // header(1) + footer(1) + padding(2)
+		if contentHeight < 5 {
+			contentHeight = 5
+		}
 		// Propagate size to all views
 		return a, tea.Batch(
-			a.dashboard.UpdateSize(msg.Width, msg.Height),
-			a.tasks.UpdateSize(msg.Width, msg.Height),
-			a.logs.UpdateSize(msg.Width, msg.Height),
-			a.notes.UpdateSize(msg.Width, msg.Height),
-			a.inbox.UpdateSize(msg.Width, msg.Height),
-			a.agent.UpdateSize(msg.Width, msg.Height),
+			a.dashboard.UpdateSize(msg.Width, contentHeight),
+			a.tasks.UpdateSize(msg.Width, contentHeight),
+			a.logs.UpdateSize(msg.Width, contentHeight),
+			a.notes.UpdateSize(msg.Width, contentHeight),
+			a.inbox.UpdateSize(msg.Width, contentHeight),
+			a.agent.UpdateSize(msg.Width, contentHeight),
 		)
 
 	case AgentOutputMsg:
@@ -102,7 +107,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.agent.AppendTool(msg.Tool, msg.Input)
 
 	case IterationStartMsg:
-		return a, a.dashboard.SetIteration(msg.Number)
+		return a, tea.Batch(
+			a.dashboard.SetIteration(msg.Number),
+			a.agent.AddIterationDivider(msg.Number),
+		)
 
 	case StateUpdateMsg:
 		// Propagate state updates to all views
@@ -167,7 +175,22 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 	}
 
-	return a, nil
+	// Forward unhandled keys to active view for scrolling etc.
+	var cmd tea.Cmd
+	switch a.activeView {
+	case ViewDashboard:
+		cmd = a.dashboard.Update(msg)
+	case ViewTasks:
+		cmd = a.tasks.Update(msg)
+	case ViewLogs:
+		cmd = a.logs.Update(msg)
+	case ViewNotes:
+		cmd = a.notes.Update(msg)
+	case ViewInbox:
+		cmd = a.inbox.Update(msg)
+	}
+
+	return a, cmd
 }
 
 // View renders the current view. In Bubbletea v2, this returns tea.View

@@ -34,6 +34,13 @@
       "name": "bubbles",
       "url": "https://github.com/charmbracelet/bubbles",
       "branch": "v2.0.0-rc.1"
+    },
+    {
+      "type": "git",
+      "name": "crush",
+      "url": "https://github.com/charmbracelet/crush",
+      "branch": "main",
+      "specialNotes": "Stylish TUI components including scroll and messages"
     }
   ],
   "model": "claude-haiku-4-5",

@@ -15,13 +15,15 @@ type MessageType int
 const (
 	MessageTypeText MessageType = iota
 	MessageTypeTool
+	MessageTypeDivider
 )
 
 // AgentMessage represents a single message from the agent.
 type AgentMessage struct {
-	Type    MessageType
-	Content string
-	Tool    string // Tool name for tool messages
+	Type      MessageType
+	Content   string
+	Tool      string // Tool name for tool messages
+	Iteration int    // Iteration number for dividers
 }
 
 // AgentOutput displays streaming agent output with auto-scroll.
@@ -127,6 +129,16 @@ func (a *AgentOutput) AppendTool(tool string, input map[string]any) tea.Cmd {
 	return nil
 }
 
+// AddIterationDivider adds a horizontal divider for a new iteration.
+func (a *AgentOutput) AddIterationDivider(iteration int) tea.Cmd {
+	a.messages = append(a.messages, AgentMessage{
+		Type:      MessageTypeDivider,
+		Iteration: iteration,
+	})
+	a.refreshContent()
+	return nil
+}
+
 // formatToolInput formats the tool input for display.
 func formatToolInput(input map[string]any) string {
 	if input == nil {
@@ -148,13 +160,10 @@ func (a *AgentOutput) refreshContent() {
 	var rendered strings.Builder
 	contentWidth := a.width - 4 // Account for border and padding
 
-	for i, msg := range a.messages {
-		if i > 0 {
-			rendered.WriteString("\n")
-		}
-
+	for _, msg := range a.messages {
 		block := a.renderMessage(msg, contentWidth)
 		rendered.WriteString(block)
+		rendered.WriteString("\n") // blank line after each message
 	}
 
 	a.viewport.SetContent(rendered.String())
@@ -169,6 +178,8 @@ func (a *AgentOutput) renderMessage(msg AgentMessage, width int) string {
 	switch msg.Type {
 	case MessageTypeTool:
 		return a.renderToolMessage(msg, width)
+	case MessageTypeDivider:
+		return a.renderDivider(msg, width)
 	default:
 		return a.renderTextMessage(msg, width)
 	}
@@ -207,6 +218,30 @@ func (a *AgentOutput) renderToolMessage(msg AgentMessage, width int) string {
 	}
 
 	return style.Render(content)
+}
+
+// renderDivider renders an iteration divider with a horizontal rule.
+func (a *AgentOutput) renderDivider(msg AgentMessage, width int) string {
+	// Create the iteration label
+	label := fmt.Sprintf(" Iteration #%d ", msg.Iteration)
+	labelWidth := len(label)
+
+	// Calculate line widths on each side
+	lineWidth := (width - labelWidth) / 2
+	if lineWidth < 3 {
+		lineWidth = 3
+	}
+
+	// Build the horizontal rule with centered label
+	line := strings.Repeat("─", lineWidth)
+	divider := line + label + line
+
+	// Style the divider
+	style := lipgloss.NewStyle().
+		Foreground(colorMuted).
+		Bold(true)
+
+	return style.Render(divider)
 }
 
 // wrapText wraps text to the given width.
