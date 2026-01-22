@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mark3labs/iteratr/internal/session"
@@ -11,17 +12,22 @@ import (
 
 // InboxPanel displays unread messages and provides an input field for sending.
 type InboxPanel struct {
+	viewport     viewport.Model
 	state        *session.State
 	width        int
 	height       int
 	inputValue   string
 	inputFocused bool
 	cursorPos    int
+	focused      bool
 }
 
 // NewInboxPanel creates a new InboxPanel component.
 func NewInboxPanel() *InboxPanel {
-	return &InboxPanel{}
+	vp := viewport.New()
+	return &InboxPanel{
+		viewport: vp,
+	}
 }
 
 // Update handles messages for the inbox panel.
@@ -42,49 +48,57 @@ func (i *InboxPanel) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 
-		// Only handle input when focused
-		if !i.inputFocused {
+		// Only handle input when input field is focused
+		if i.inputFocused {
+			switch k {
+			case "enter":
+				// Send message
+				if i.inputValue != "" {
+					return i.sendMessage()
+				}
+			case "backspace":
+				if i.cursorPos > 0 && len(i.inputValue) > 0 {
+					// Remove character before cursor
+					i.inputValue = i.inputValue[:i.cursorPos-1] + i.inputValue[i.cursorPos:]
+					i.cursorPos--
+				}
+			case "left":
+				if i.cursorPos > 0 {
+					i.cursorPos--
+				}
+			case "right":
+				if i.cursorPos < len(i.inputValue) {
+					i.cursorPos++
+				}
+			case "home":
+				i.cursorPos = 0
+			case "end":
+				i.cursorPos = len(i.inputValue)
+			case "ctrl+u":
+				// Clear line
+				i.inputValue = ""
+				i.cursorPos = 0
+			default:
+				// Insert regular characters (single printable characters)
+				if len(k) == 1 && k[0] >= 32 && k[0] <= 126 {
+					// Insert at cursor position
+					i.inputValue = i.inputValue[:i.cursorPos] + k + i.inputValue[i.cursorPos:]
+					i.cursorPos++
+				}
+			}
 			return nil
 		}
 
-		switch k {
-		case "enter":
-			// Send message
-			if i.inputValue != "" {
-				return i.sendMessage()
-			}
-		case "backspace":
-			if i.cursorPos > 0 && len(i.inputValue) > 0 {
-				// Remove character before cursor
-				i.inputValue = i.inputValue[:i.cursorPos-1] + i.inputValue[i.cursorPos:]
-				i.cursorPos--
-			}
-		case "left":
-			if i.cursorPos > 0 {
-				i.cursorPos--
-			}
-		case "right":
-			if i.cursorPos < len(i.inputValue) {
-				i.cursorPos++
-			}
-		case "home":
-			i.cursorPos = 0
-		case "end":
-			i.cursorPos = len(i.inputValue)
-		case "ctrl+u":
-			// Clear line
-			i.inputValue = ""
-			i.cursorPos = 0
-		default:
-			// Insert regular characters (single printable characters)
-			if len(k) == 1 && k[0] >= 32 && k[0] <= 126 {
-				// Insert at cursor position
-				i.inputValue = i.inputValue[:i.cursorPos] + k + i.inputValue[i.cursorPos:]
-				i.cursorPos++
-			}
-		}
+		// When input not focused, delegate to viewport for scrolling
+		var cmd tea.Cmd
+		i.viewport, cmd = i.viewport.Update(msg)
+		return cmd
 	}
-	return nil
+
+	// Delegate other messages to viewport
+	var cmd tea.Cmd
+	i.viewport, cmd = i.viewport.Update(msg)
+	return cmd
 }
 
 // sendMessage sends the current input value as a message.
@@ -117,28 +131,8 @@ func (i *InboxPanel) Render() string {
 	content.WriteString(stylePanelTitle.Render("Inbox"))
 	content.WriteString("\n\n")
 
-	// Filter unread messages
-	var unreadMessages []*session.Message
-	for _, msg := range i.state.Inbox {
-		if !msg.Read {
-			unreadMessages = append(unreadMessages, msg)
-		}
-	}
-
-	// Display unread messages
-	if len(unreadMessages) == 0 {
-		content.WriteString(styleEmptyState.Render("No unread messages"))
-	} else {
-		// Show count
-		content.WriteString(styleBadgeInfo.Render(fmt.Sprintf("%d unread", len(unreadMessages))))
-		content.WriteString("\n\n")
-
-		// Render each message
-		for _, msg := range unreadMessages {
-			content.WriteString(i.renderMessage(msg))
-			content.WriteString("\n")
-		}
-	}
+	// Viewport content (messages)
+	content.WriteString(i.viewport.View())
 
 	// Add input field at the bottom
 	content.WriteString("\n")
@@ -210,11 +204,58 @@ func (i *InboxPanel) renderInputField() string {
 func (i *InboxPanel) UpdateSize(width, height int) tea.Cmd {
 	i.width = width
 	i.height = height
+
+	// Account for border (2), title (2), input field (~6 lines)
+	viewportHeight := height - 12
+	if viewportHeight < 1 {
+		viewportHeight = 1
+	}
+
+	i.viewport.SetWidth(width - 4)
+	i.viewport.SetHeight(viewportHeight)
+	i.updateContent()
+
 	return nil
 }
 
 // UpdateState updates the inbox panel with new session state.
 func (i *InboxPanel) UpdateState(state *session.State) tea.Cmd {
 	i.state = state
+	i.updateContent()
 	return nil
+}
+
+// updateContent rebuilds the viewport content from the current state.
+func (i *InboxPanel) updateContent() {
+	if i.state == nil {
+		i.viewport.SetContent("")
+		return
+	}
+
+	var content strings.Builder
+
+	// Filter unread messages
+	var unreadMessages []*session.Message
+	for _, msg := range i.state.Inbox {
+		if !msg.Read {
+			unreadMessages = append(unreadMessages, msg)
+		}
+	}
+
+	// Display unread messages
+	if len(unreadMessages) == 0 {
+		content.WriteString(styleEmptyState.Render("No unread messages"))
+	} else {
+		// Show count
+		content.WriteString(styleBadgeInfo.Render(fmt.Sprintf("%d unread", len(unreadMessages))))
+		content.WriteString("\n\n")
+
+		// Render each message
+		for _, msg := range unreadMessages {
+			content.WriteString(i.renderMessage(msg))
+			content.WriteString("\n")
+		}
+	}
+
+	i.viewport.SetContent(content.String())
 }
