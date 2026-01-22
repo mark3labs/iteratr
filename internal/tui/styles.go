@@ -156,8 +156,13 @@ var (
 	// General styles
 	styleBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorMuted).
+			BorderForeground(colorBorderDefault).
 			Padding(0, 1)
+
+	styleBorderFocused = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorBorderFocused).
+				Padding(0, 1)
 
 	styleTitle = lipgloss.NewStyle().
 			Foreground(colorPrimary).
@@ -208,7 +213,7 @@ var (
 
 	styleTaskSelected = lipgloss.NewStyle().
 				Foreground(colorPrimary).
-				Background(lipgloss.Color("237")). // Slightly lighter than background
+				Background(colorSurface0). // Slightly lighter than background
 				Bold(true)
 
 	styleGroupHeader = lipgloss.NewStyle().
@@ -293,7 +298,7 @@ var (
 
 	styleAgentCode = lipgloss.NewStyle().
 			Foreground(colorSecondary).
-			Background(lipgloss.Color("236"))
+			Background(colorSurface0)
 
 	styleAgentThinking = lipgloss.NewStyle().
 				Foreground(colorTextDim).
@@ -316,13 +321,23 @@ var (
 	// Panel styles
 	stylePanel = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
-			BorderForeground(colorMuted).
+			BorderForeground(colorBorderDefault).
 			Padding(1, 2)
 
+	stylePanelFocused = lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(colorBorderFocused).
+				Padding(1, 2)
+
 	stylePanelTitle = lipgloss.NewStyle().
-			Foreground(colorPrimary).
+			Foreground(colorText).
 			Bold(true).
 			MarginBottom(1)
+
+	stylePanelTitleFocused = lipgloss.NewStyle().
+				Foreground(colorPrimary).
+				Bold(true).
+				MarginBottom(1)
 
 	// Badge styles
 	styleBadge = lipgloss.NewStyle().
@@ -361,4 +376,18 @@ var (
 			Foreground(colorTextDim).
 			Italic(true).
 			Align(lipgloss.Center)
+
+	// Scroll indicator style (for viewport scroll percentage)
+	styleScrollIndicator = lipgloss.NewStyle().
+				Foreground(colorSubtext0).
+				Background(colorSurface0).
+				Padding(0, 1)
 )
+
+// borderStyle returns the appropriate border style based on focus state
+func borderStyle(focused bool) lipgloss.Style {
+	if focused {
+		return stylePanelFocused
+	}
+	return stylePanel
+}
