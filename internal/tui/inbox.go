@@ -21,19 +21,34 @@ type InboxPanel struct {
 	inputFocused bool
 	cursorPos    int
 	focused      bool
+	pulse        Pulse
+	lastMsgCount int             // Track message count to detect new messages
+	pulsedMsgIDs map[string]bool // Track which messages have been pulsed
+	needsPulse   bool            // Flag indicating pulse should start on next Update
 }
 
 // NewInboxPanel creates a new InboxPanel component.
 func NewInboxPanel() *InboxPanel {
 	vp := viewport.New()
 	return &InboxPanel{
-		viewport: vp,
+		viewport:     vp,
+		pulse:        NewPulse(),
+		pulsedMsgIDs: make(map[string]bool),
 	}
 }
 
 // Update handles messages for the inbox panel.
 func (i *InboxPanel) Update(msg tea.Msg) tea.Cmd {
+	// Start pulse if needed
+	if i.needsPulse && !i.pulse.IsActive() {
+		i.needsPulse = false
+		return i.pulse.Start()
+	}
+
 	switch msg := msg.(type) {
+	case PulseMsg:
+		// Handle pulse animation
+		return i.pulse.Update(msg)
 	case tea.KeyPressMsg:
 		k := msg.String()
 
@@ -104,8 +119,18 @@ func (i *InboxPanel) Update(msg tea.Msg) tea.Cmd {
 
 // Draw renders the inbox panel to the screen buffer.
 func (i *InboxPanel) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
+	// Apply pulse effect to title if there are new messages
+	title := "Inbox"
+	if i.pulse.IsActive() {
+		// Add visual indicator when pulse is active
+		intensity := i.pulse.Intensity()
+		if intensity > 0.5 {
+			title = "Inbox ●" // Add dot indicator during pulse
+		}
+	}
+
 	// Draw panel border with title
-	inner := DrawPanel(scr, area, "Inbox", i.focused)
+	inner := DrawPanel(scr, area, title, i.focused)
 
 	// Reserve space for input field (separator + prompt + input + help = ~6 lines)
 	inputHeight := 6
@@ -324,7 +349,37 @@ func (i *InboxPanel) SetSize(width, height int) {
 
 // SetState updates the inbox panel with new session state.
 func (i *InboxPanel) SetState(state *session.State) {
+	oldState := i.state
 	i.state = state
+
+	// Detect new messages and mark for pulse
+	if oldState != nil && state != nil {
+		// Count unread messages in new state
+		unreadCount := 0
+		var newMsgIDs []string
+		for _, msg := range state.Inbox {
+			if !msg.Read {
+				unreadCount++
+				// Check if this is a new message we haven't pulsed for yet
+				if !i.pulsedMsgIDs[msg.ID] {
+					newMsgIDs = append(newMsgIDs, msg.ID)
+				}
+			}
+		}
+
+		// Mark new messages for pulsing
+		if len(newMsgIDs) > 0 {
+			// Mark these messages as pulsed
+			for _, id := range newMsgIDs {
+				i.pulsedMsgIDs[id] = true
+			}
+			// Set flag to start pulse on next Update
+			i.needsPulse = true
+		}
+
+		i.lastMsgCount = unreadCount
+	}
+
 	i.updateContent()
 }
 

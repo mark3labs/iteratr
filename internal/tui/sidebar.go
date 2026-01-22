@@ -21,6 +21,9 @@ type Sidebar struct {
 	cursor        int // Selected task index (for future interactivity)
 	focused       bool
 	noteIndex     map[string]int // O(1) lookup: note ID -> index in state.Notes
+	pulse         Pulse
+	pulsedTaskIDs map[string]string // Track task ID -> last status to detect changes
+	needsPulse    bool              // Flag indicating pulse should start on next Update
 }
 
 // NewSidebar creates a new Sidebar component.
@@ -31,17 +34,27 @@ func NewSidebar() *Sidebar {
 		cursor:        0,
 		focused:       false,
 		noteIndex:     make(map[string]int),
+		pulse:         NewPulse(),
+		pulsedTaskIDs: make(map[string]string),
 	}
 }
 
 // Update handles messages for the sidebar.
 func (s *Sidebar) Update(msg tea.Msg) tea.Cmd {
-	if !s.focused {
-		return nil
+	// Start pulse if needed
+	if s.needsPulse && !s.pulse.IsActive() {
+		s.needsPulse = false
+		return s.pulse.Start()
 	}
 
 	switch msg := msg.(type) {
+	case PulseMsg:
+		// Handle pulse animation (even when not focused)
+		return s.pulse.Update(msg)
 	case tea.KeyPressMsg:
+		if !s.focused {
+			return nil
+		}
 		return s.handleKeyPress(msg)
 	}
 	return nil
@@ -64,8 +77,18 @@ func (s *Sidebar) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 
 // drawTasksSection renders the tasks section with header and viewport content.
 func (s *Sidebar) drawTasksSection(scr uv.Screen, area uv.Rectangle) {
+	// Apply pulse effect to title if task status changed
+	title := "Tasks"
+	if s.pulse.IsActive() {
+		// Add visual indicator when pulse is active
+		intensity := s.pulse.Intensity()
+		if intensity > 0.5 {
+			title = "Tasks ●" // Add dot indicator during pulse
+		}
+	}
+
 	// Draw panel with "Tasks" title
-	inner := DrawPanel(scr, area, "Tasks", s.focused)
+	inner := DrawPanel(scr, area, title, s.focused)
 
 	// Render viewport content
 	content := s.tasksViewport.View()
@@ -254,7 +277,30 @@ func (s *Sidebar) SetSize(width, height int) {
 
 // SetState updates the sidebar with new session state.
 func (s *Sidebar) SetState(state *session.State) {
+	oldState := s.state
 	s.state = state
+
+	// Detect task status changes and mark for pulse
+	if oldState != nil && state != nil {
+		statusChanged := false
+
+		// Check for new or changed task statuses
+		for id, task := range state.Tasks {
+			oldStatus, existed := s.pulsedTaskIDs[id]
+
+			// If task is new or status changed, mark for pulse
+			if !existed || oldStatus != task.Status {
+				s.pulsedTaskIDs[id] = task.Status
+				statusChanged = true
+			}
+		}
+
+		// Set flag to start pulse on next Update
+		if statusChanged {
+			s.needsPulse = true
+		}
+	}
+
 	s.updateContent()
 }
 

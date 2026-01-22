@@ -129,6 +129,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update status bar (for spinner animation)
 	statusCmd := a.status.Update(msg)
 
+	// Update sidebar and inbox (for pulse animations)
+	sidebarCmd := a.sidebar.Update(msg)
+	inboxCmd := a.inbox.Update(msg)
+
 	// Delegate to active view component
 	var cmd tea.Cmd
 	switch a.activeView {
@@ -139,10 +143,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ViewNotes:
 		cmd = a.notes.Update(msg)
 	case ViewInbox:
-		cmd = a.inbox.Update(msg)
+		// Inbox already updated above for pulse, reuse the command
+		cmd = inboxCmd
+		inboxCmd = nil
 	}
 
-	return a, tea.Batch(statusCmd, cmd)
+	return a, tea.Batch(statusCmd, sidebarCmd, inboxCmd, cmd)
 }
 
 // handleKeyPress processes keyboard input using hierarchical priority routing.
