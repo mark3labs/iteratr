@@ -306,8 +306,8 @@ func (i *InboxPanel) renderInputField() string {
 	return content.String()
 }
 
-// UpdateSize updates the inbox panel dimensions.
-func (i *InboxPanel) UpdateSize(width, height int) tea.Cmd {
+// SetSize updates the inbox panel dimensions.
+func (i *InboxPanel) SetSize(width, height int) {
 	i.width = width
 	i.height = height
 
@@ -320,14 +320,33 @@ func (i *InboxPanel) UpdateSize(width, height int) tea.Cmd {
 	i.viewport.SetWidth(width - 4)
 	i.viewport.SetHeight(viewportHeight)
 	i.updateContent()
+}
 
+// SetState updates the inbox panel with new session state.
+func (i *InboxPanel) SetState(state *session.State) {
+	i.state = state
+	i.updateContent()
+}
+
+// SetFocus sets the focus state of the inbox panel.
+func (i *InboxPanel) SetFocus(focused bool) {
+	i.focused = focused
+}
+
+// IsFocused returns whether the inbox panel is focused.
+func (i *InboxPanel) IsFocused() bool {
+	return i.focused
+}
+
+// UpdateSize updates the inbox panel dimensions (legacy compatibility).
+func (i *InboxPanel) UpdateSize(width, height int) tea.Cmd {
+	i.SetSize(width, height)
 	return nil
 }
 
-// UpdateState updates the inbox panel with new session state.
+// UpdateState updates the inbox panel with new session state (legacy compatibility).
 func (i *InboxPanel) UpdateState(state *session.State) tea.Cmd {
-	i.state = state
-	i.updateContent()
+	i.SetState(state)
 	return nil
 }
 
@@ -365,3 +384,6 @@ func (i *InboxPanel) updateContent() {
 
 	i.viewport.SetContent(content.String())
 }
+
+// Compile-time interface checks
+var _ FocusableComponent = (*InboxPanel)(nil)
