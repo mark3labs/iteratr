@@ -111,10 +111,7 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			1,
 		)
 
-		indicatorStyle := lipgloss.NewStyle().
-			Foreground(colorMuted).
-			Background(colorBgSubtle)
-		styledIndicator := indicatorStyle.Render(indicator)
+		styledIndicator := styleScrollIndicator.Render(indicator)
 		uv.NewStyledString(styledIndicator).Draw(scr, indicatorArea)
 	}
 

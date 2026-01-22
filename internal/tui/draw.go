@@ -84,9 +84,7 @@ func DrawPanel(scr uv.Screen, area uv.Rectangle, title string, focused bool) uv.
 // DrawScrollIndicator renders a scroll position indicator
 func DrawScrollIndicator(scr uv.Screen, area uv.Rectangle, percent float64) {
 	indicator := fmt.Sprintf(" %d%% ", int(percent*100))
-	indicatorStyle := lipgloss.NewStyle().
-		Foreground(colorTextDim).
-		Background(colorBgHeader)
+	indicatorStyle := styleScrollIndicator
 
 	// Position at bottom-right of area
 	indicatorArea := uv.Rectangle{

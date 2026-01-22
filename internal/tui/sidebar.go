@@ -81,8 +81,7 @@ func (s *Sidebar) drawTasksSection(scr uv.Screen, area uv.Rectangle) {
 			len(indicator),
 			1,
 		)
-		style := lipgloss.NewStyle().Background(colorBgSubtle).Foreground(colorMuted)
-		DrawStyled(scr, indicatorArea, style, indicator)
+		DrawStyled(scr, indicatorArea, styleScrollIndicator, indicator)
 	}
 }
 
@@ -105,8 +104,7 @@ func (s *Sidebar) drawNotesSection(scr uv.Screen, area uv.Rectangle) {
 			len(indicator),
 			1,
 		)
-		style := lipgloss.NewStyle().Background(colorBgSubtle).Foreground(colorMuted)
-		DrawStyled(scr, indicatorArea, style, indicator)
+		DrawStyled(scr, indicatorArea, styleScrollIndicator, indicator)
 	}
 }
 
