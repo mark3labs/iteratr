@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/lipgloss"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/mark3labs/iteratr/internal/session"
 	"github.com/nats-io/nats.go"
 )
@@ -179,26 +181,67 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // View renders the current view. In Bubbletea v2, this returns tea.View
 // with display options like AltScreen and MouseMode.
 func (a *App) View() tea.View {
+	var view tea.View
+	view.AltScreen = true                    // Full-screen mode
+	view.MouseMode = tea.MouseModeCellMotion // Enable mouse events
+	view.ReportFocus = true                  // Enable focus events
+
 	if a.quitting {
 		// Return minimal view when quitting - don't render full UI
-		return tea.NewView("")
+		view.Content = lipglossv2.NewLayer("")
+		return view
 	}
 
-	// Render header, content, status bar, and footer
-	header := a.renderHeader()
-	content := a.renderActiveView()
-	statusBar := a.renderStatusBar()
-	footer := a.renderFooter()
+	// Recalculate layout if needed
+	if a.layoutDirty {
+		a.layout = CalculateLayout(a.width, a.height)
+		a.propagateSizes()
+		a.layoutDirty = false
+	}
 
-	// Join vertically with lipgloss
-	output := header + "\n" + content + "\n" + statusBar + "\n" + footer
+	// Create screen buffer for drawing
+	canvas := uv.NewScreenBuffer(a.width, a.height)
 
-	// Create view with display options
-	v := tea.NewView(output)
-	v.AltScreen = true                    // Full-screen mode
-	v.MouseMode = tea.MouseModeCellMotion // Enable mouse events
-	v.ReportFocus = true                  // Enable focus events
-	return v
+	// Draw all components to canvas
+	view.Cursor = a.Draw(canvas, canvas.Bounds())
+
+	// Convert canvas to lipgloss Layer
+	view.Content = lipglossv2.NewLayer(canvas.Render())
+
+	return view
+}
+
+// Draw renders all components to the screen buffer.
+func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
+	var cursor *tea.Cursor
+
+	// Draw all regions using the calculated layout
+	a.header.Draw(scr, a.layout.Header)
+	cursor = a.drawActiveView(scr, a.layout.Main)
+	a.status.Draw(scr, a.layout.Status)
+	a.footer.Draw(scr, a.layout.Footer)
+
+	// TODO: Draw sidebar in desktop mode (Phase 14)
+	// if a.layout.Mode == LayoutDesktop {
+	// 	a.sidebar.Draw(scr, a.layout.Sidebar)
+	// }
+
+	return cursor
+}
+
+// drawActiveView renders the currently active view component to the screen.
+func (a *App) drawActiveView(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
+	switch a.activeView {
+	case ViewDashboard:
+		return a.dashboard.Draw(scr, area)
+	case ViewLogs:
+		return a.logs.Draw(scr, area)
+	case ViewNotes:
+		return a.notes.Draw(scr, area)
+	case ViewInbox:
+		return a.inbox.Draw(scr, area)
+	}
+	return nil
 }
 
 // renderStatusBar renders the task status bar above the footer.
