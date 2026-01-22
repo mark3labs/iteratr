@@ -145,6 +145,7 @@ func BuildPrompt(ctx context.Context, cfg BuildConfig) (string, error) {
 		Inbox:     formatInbox(state),
 		Notes:     formatNotes(state),
 		Tasks:     formatTasks(state),
+		History:   formatIterationHistory(state),
 		Extra:     cfg.ExtraInstructions,
 		Port:      strconv.Itoa(cfg.NATSPort),
 		Binary:    binaryPath,
