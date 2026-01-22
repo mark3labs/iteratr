@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/mark3labs/iteratr/internal/session"
 )
 
@@ -17,7 +18,11 @@ type LogViewer struct {
 	events   []session.Event // Live event stream
 	width    int
 	height   int
+	focused  bool
 }
+
+// Compile-time interface check
+var _ FocusableComponent = (*LogViewer)(nil)
 
 // NewLogViewer creates a new LogViewer component.
 func NewLogViewer() *LogViewer {
@@ -25,6 +30,24 @@ func NewLogViewer() *LogViewer {
 	return &LogViewer{
 		viewport: vp,
 	}
+}
+
+// Draw renders the log viewer to the screen buffer.
+func (l *LogViewer) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
+	// Draw panel border with title
+	inner := DrawPanel(scr, area, "Event Log", l.focused)
+
+	// Draw viewport content
+	content := l.viewport.View()
+	DrawText(scr, inner, content)
+
+	// Draw scroll indicator if content overflows
+	if l.viewport.TotalLineCount() > l.viewport.Height() {
+		percent := l.viewport.ScrollPercent()
+		DrawScrollIndicator(scr, area, percent)
+	}
+
+	return nil
 }
 
 // Update handles messages for the log viewer.
@@ -89,19 +112,27 @@ func (l *LogViewer) renderEvent(event session.Event) string {
 	return fmt.Sprintf("%s %s %-10s %s", timestampStr, typeStr, actionStr, contentStr)
 }
 
-// UpdateSize updates the log viewer dimensions.
-func (l *LogViewer) UpdateSize(width, height int) tea.Cmd {
+// SetSize updates the log viewer dimensions.
+func (l *LogViewer) SetSize(width, height int) {
 	l.width = width
 	l.height = height
 	l.viewport.SetWidth(width - 2) // Account for border
 	l.viewport.SetHeight(height - 2)
-	return nil
 }
 
-// UpdateState updates the log viewer with new session state.
-func (l *LogViewer) UpdateState(state *session.State) tea.Cmd {
+// SetState updates the log viewer with new session state.
+func (l *LogViewer) SetState(state *session.State) {
 	l.state = state
-	return nil
+}
+
+// SetFocus updates the focus state.
+func (l *LogViewer) SetFocus(focused bool) {
+	l.focused = focused
+}
+
+// IsFocused returns whether the log viewer is focused.
+func (l *LogViewer) IsFocused() bool {
+	return l.focused
 }
 
 // AddEvent adds a new event to the log viewer.

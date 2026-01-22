@@ -79,12 +79,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Propagate size to all views
 		// Note: agent output is sized by dashboard (it owns the agent component)
-		return a, tea.Batch(
-			a.dashboard.UpdateSize(msg.Width, contentHeight),
-			a.logs.UpdateSize(msg.Width, contentHeight),
-			a.notes.UpdateSize(msg.Width, contentHeight),
-			a.inbox.UpdateSize(msg.Width, contentHeight),
-		)
+		a.dashboard.UpdateSize(msg.Width, contentHeight)
+		a.logs.SetSize(msg.Width, contentHeight)
+		a.notes.UpdateSize(msg.Width, contentHeight)
+		a.inbox.UpdateSize(msg.Width, contentHeight)
+		return a, nil
 
 	case AgentOutputMsg:
 		return a, a.agent.AppendText(msg.Content)
@@ -100,12 +99,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case StateUpdateMsg:
 		// Propagate state updates to all views
-		return a, tea.Batch(
-			a.dashboard.UpdateState(msg.State),
-			a.logs.UpdateState(msg.State),
-			a.notes.UpdateState(msg.State),
-			a.inbox.UpdateState(msg.State),
-		)
+		a.dashboard.UpdateState(msg.State)
+		a.logs.SetState(msg.State)
+		a.notes.UpdateState(msg.State)
+		a.inbox.UpdateState(msg.State)
+		return a, nil
 
 	case EventMsg:
 		// Forward event to log viewer, reload state, and wait for next event
