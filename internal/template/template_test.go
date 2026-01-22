@@ -352,26 +352,60 @@ func TestFormatTasks(t *testing.T) {
 			want: []string{"No tasks"},
 		},
 		{
-			name: "tasks by status",
+			name: "tasks by status with default priority",
 			state: &session.State{
 				Tasks: map[string]*session.Task{
-					"task001": {ID: "task001abc", Content: "Do thing 1", Status: "remaining", Iteration: 0},
-					"task002": {ID: "task002xyz", Content: "Do thing 2", Status: "in_progress", Iteration: 5},
-					"task003": {ID: "task003def", Content: "Done thing", Status: "completed", Iteration: 3},
-					"task004": {ID: "task004ghi", Content: "Blocked thing", Status: "blocked", Iteration: 0},
+					"task001": {ID: "task001abc", Content: "Do thing 1", Status: "remaining", Priority: 2, Iteration: 0},
+					"task002": {ID: "task002xyz", Content: "Do thing 2", Status: "in_progress", Priority: 2, Iteration: 5},
+					"task003": {ID: "task003def", Content: "Done thing", Status: "completed", Priority: 2, Iteration: 3},
+					"task004": {ID: "task004ghi", Content: "Blocked thing", Status: "blocked", Priority: 2, Iteration: 0},
 				},
 			},
 			want: []string{
 				"Remaining:",
-				"[task001a] Do thing 1",
+				"[P2] [task001a] Do thing 1",
 				"In progress:",
-				"[task002x] Do thing 2",
+				"[P2] [task002x] Do thing 2",
 				"[iteration #5]",
 				"Completed:",
-				"[task003d] Done thing",
+				"[P2] [task003d] Done thing",
 				"[iteration #3]",
 				"Blocked:",
-				"[task004g] Blocked thing",
+				"[P2] [task004g] Blocked thing",
+			},
+		},
+		{
+			name: "tasks with various priorities",
+			state: &session.State{
+				Tasks: map[string]*session.Task{
+					"task001": {ID: "task001abc", Content: "Critical task", Status: "remaining", Priority: 0, Iteration: 0},
+					"task002": {ID: "task002xyz", Content: "High priority", Status: "remaining", Priority: 1, Iteration: 0},
+					"task003": {ID: "task003def", Content: "Medium task", Status: "remaining", Priority: 2, Iteration: 0},
+					"task004": {ID: "task004ghi", Content: "Low priority", Status: "remaining", Priority: 3, Iteration: 0},
+					"task005": {ID: "task005jkl", Content: "Backlog item", Status: "remaining", Priority: 4, Iteration: 0},
+				},
+			},
+			want: []string{
+				"[P0] [task001a] Critical task",
+				"[P1] [task002x] High priority",
+				"[P2] [task003d] Medium task",
+				"[P3] [task004g] Low priority",
+				"[P4] [task005j] Backlog item",
+			},
+		},
+		{
+			name: "tasks with dependencies",
+			state: &session.State{
+				Tasks: map[string]*session.Task{
+					"task001": {ID: "task001abc", Content: "Base task", Status: "remaining", Priority: 2, DependsOn: []string{}, Iteration: 0},
+					"task002": {ID: "task002xyz", Content: "Dependent task", Status: "remaining", Priority: 2, DependsOn: []string{"task001abc"}, Iteration: 0},
+					"task003": {ID: "task003def", Content: "Multi-dependent", Status: "remaining", Priority: 2, DependsOn: []string{"task001abc", "task002xyz"}, Iteration: 0},
+				},
+			},
+			want: []string{
+				"[P2] [task001a] Base task",
+				"[P2] [task002x] Dependent task (depends on: task001a)",
+				"[P2] [task003d] Multi-dependent (depends on: task001a, task002x)",
 			},
 		},
 	}

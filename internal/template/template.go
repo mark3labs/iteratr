@@ -243,11 +243,31 @@ func formatTasks(state *session.State) string {
 		displayStatus := strings.ToUpper(status[:1]) + strings.ReplaceAll(status[1:], "_", " ")
 		sb.WriteString(fmt.Sprintf("%s:\n", displayStatus))
 		for _, task := range tasks {
+			// Format priority prefix [P0]-[P4]
+			priorityPrefix := fmt.Sprintf("[P%d] ", task.Priority)
+
+			// Format iteration info
 			iterInfo := ""
 			if task.Iteration > 0 {
 				iterInfo = fmt.Sprintf(" [iteration #%d]", task.Iteration)
 			}
-			sb.WriteString(fmt.Sprintf("  - [%s] %s%s\n", task.ID[:8], task.Content, iterInfo))
+
+			// Format dependency info
+			depInfo := ""
+			if len(task.DependsOn) > 0 {
+				// Collect short IDs of dependencies
+				depIDs := make([]string, len(task.DependsOn))
+				for i, depID := range task.DependsOn {
+					if len(depID) >= 8 {
+						depIDs[i] = depID[:8]
+					} else {
+						depIDs[i] = depID
+					}
+				}
+				depInfo = fmt.Sprintf(" (depends on: %s)", strings.Join(depIDs, ", "))
+			}
+
+			sb.WriteString(fmt.Sprintf("  - %s[%s] %s%s%s\n", priorityPrefix, task.ID[:8], task.Content, iterInfo, depInfo))
 		}
 	}
 

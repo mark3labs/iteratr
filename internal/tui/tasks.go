@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -97,7 +98,16 @@ func (t *TaskList) adjustScroll() {
 	}
 }
 
-// getFilteredTasks returns tasks matching the current filter.
+// statusOrder defines the sort order for task statuses.
+// Order: completed, in_progress, remaining, blocked
+var statusOrder = map[string]int{
+	"completed":   0,
+	"in_progress": 1,
+	"remaining":   2,
+	"blocked":     3,
+}
+
+// getFilteredTasks returns tasks matching the current filter, sorted by status and ID.
 func (t *TaskList) getFilteredTasks() []*session.Task {
 	if t.state == nil {
 		return nil
@@ -109,6 +119,17 @@ func (t *TaskList) getFilteredTasks() []*session.Task {
 			filtered = append(filtered, task)
 		}
 	}
+
+	// Sort by status order, then by ID
+	sort.Slice(filtered, func(i, j int) bool {
+		statusI := statusOrder[filtered[i].Status]
+		statusJ := statusOrder[filtered[j].Status]
+		if statusI != statusJ {
+			return statusI < statusJ
+		}
+		return filtered[i].ID < filtered[j].ID
+	})
+
 	return filtered
 }
 
@@ -185,10 +206,24 @@ func (t *TaskList) renderAllGroups(tasks []*session.Task) string {
 
 	var sections []string
 
+	// Sort tasks within each group by ID
+	sortByID := func(tasks []*session.Task) {
+		sort.Slice(tasks, func(i, j int) bool {
+			return tasks[i].ID < tasks[j].ID
+		})
+	}
+	sortByID(completed)
+	sortByID(inProgress)
+	sortByID(remaining)
+	sortByID(blocked)
+
 	// Track global index for cursor highlighting
 	globalIdx := 0
 
-	// Render each status group
+	// Render each status group in order: completed, in_progress, remaining, blocked
+	if len(completed) > 0 {
+		sections = append(sections, t.renderGroup("COMPLETED", completed, styleStatusCompleted, &globalIdx))
+	}
 	if len(inProgress) > 0 {
 		sections = append(sections, t.renderGroup("IN PROGRESS", inProgress, styleStatusInProgress, &globalIdx))
 	}
@@ -197,9 +232,6 @@ func (t *TaskList) renderAllGroups(tasks []*session.Task) string {
 	}
 	if len(blocked) > 0 {
 		sections = append(sections, t.renderGroup("BLOCKED", blocked, styleStatusBlocked, &globalIdx))
-	}
-	if len(completed) > 0 {
-		sections = append(sections, t.renderGroup("COMPLETED", completed, styleStatusCompleted, &globalIdx))
 	}
 
 	if len(sections) == 0 {
