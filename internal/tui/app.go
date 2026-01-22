@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	lipglossv2 "charm.land/lipgloss/v2"
@@ -75,6 +76,7 @@ func (a *App) Init() tea.Cmd {
 		a.waitForEvents(),
 		a.loadInitialState(),
 		a.agent.Init(),
+		a.checkConnectionHealth(), // Start periodic connection health checks
 	)
 }
 
@@ -124,6 +126,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.loadInitialState(), // Reload state to reflect changes
 			a.waitForEvents(),    // Recursively wait for next event
 		)
+
+	case ConnectionStatusMsg:
+		// Update connection status in status bar
+		a.status.SetConnectionStatus(msg.Connected)
+		// Reschedule health check
+		return a, a.checkConnectionHealth()
 	}
 
 	// Update status bar (for spinner animation) - always visible
@@ -409,6 +417,16 @@ func (a *App) loadInitialState() tea.Cmd {
 	}
 }
 
+// checkConnectionHealth monitors NATS connection status and sends updates.
+// It checks the connection every 2 seconds and sends a ConnectionStatusMsg
+// when the status changes.
+func (a *App) checkConnectionHealth() tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+		connected := a.nc != nil && a.nc.IsConnected()
+		return ConnectionStatusMsg{Connected: connected}
+	})
+}
+
 // Custom message types for the TUI
 type AgentOutputMsg struct {
 	Content string
@@ -429,6 +447,11 @@ type StateUpdateMsg struct {
 
 type EventMsg struct {
 	Event session.Event
+}
+
+// ConnectionStatusMsg is sent when NATS connection status changes.
+type ConnectionStatusMsg struct {
+	Connected bool
 }
 
 // propagateSizes updates component sizes based on the current layout.
