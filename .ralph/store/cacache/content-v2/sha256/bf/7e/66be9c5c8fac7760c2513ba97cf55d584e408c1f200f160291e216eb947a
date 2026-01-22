@@ -1,0 +1,1 @@
+Tool CLI already fully implemented in cmd/iteratr/tool.go. Uses --data-dir to read port from file instead of --port flag, which is more robust.

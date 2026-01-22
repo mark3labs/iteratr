@@ -1,0 +1,1 @@
+Implemented JSON event parsing directly in runner.go parseEvent method instead of separate parser.go file. Simpler design since parsing is tightly coupled to runner.
