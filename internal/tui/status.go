@@ -15,6 +15,7 @@ type StatusBar struct {
 	connected  bool
 	working    bool
 	layoutMode LayoutMode
+	spinner    Spinner
 }
 
 // NewStatusBar creates a new StatusBar component.
@@ -22,6 +23,7 @@ func NewStatusBar() *StatusBar {
 	return &StatusBar{
 		connected: false,
 		working:   false,
+		spinner:   NewDefaultSpinner(),
 	}
 }
 
@@ -73,7 +75,14 @@ func (s *StatusBar) SetSize(width, height int) {
 func (s *StatusBar) SetState(state *session.State) {
 	s.state = state
 	// Update working state based on in_progress tasks
+	wasWorking := s.working
 	s.working = s.hasInProgressTasks()
+
+	// Start spinner animation when work begins
+	// Note: The tick command will be returned by Update() on next message
+	if s.working && !wasWorking {
+		// Working state changed to true - spinner will start on next Update
+	}
 }
 
 // SetConnectionStatus updates the connection status.
@@ -86,16 +95,26 @@ func (s *StatusBar) SetLayoutMode(mode LayoutMode) {
 	s.layoutMode = mode
 }
 
-// Update handles messages (minimal for status bar).
+// Update handles messages and spinner animation.
 func (s *StatusBar) Update(msg tea.Msg) tea.Cmd {
+	// Update spinner if working
+	if s.working {
+		cmd := s.spinner.Update(msg)
+		if cmd != nil {
+			return cmd
+		}
+		// Ensure spinner keeps ticking
+		return s.spinner.Tick()
+	}
 	return nil
 }
 
 // getWorkingIndicator returns the appropriate working indicator.
-// ◐ = working, ○ = idle
+// Uses animated spinner when working, ○ when idle
 func (s *StatusBar) getWorkingIndicator() string {
 	if s.working {
-		return styleStatusInProgress.Render("◐")
+		// Show animated spinner
+		return s.spinner.View()
 	}
 	return styleDim.Render("○")
 }

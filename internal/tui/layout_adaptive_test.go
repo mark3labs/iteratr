@@ -150,9 +150,11 @@ func TestStatusBar_AdaptToLayoutMode(t *testing.T) {
 				t.Errorf("Both modes should contain 'task:' prefix, got: %q", content)
 			}
 
-			// Both modes should show the working indicator
-			if !strings.Contains(content, "◐") {
-				t.Errorf("Both modes should contain '◐' working indicator, got: %q", content)
+			// Both modes should show the working indicator (spinner animation)
+			// The spinner uses braille characters like ⠋, ⠙, ⠹, etc.
+			hasSpinner := strings.ContainsAny(content, "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+			if !hasSpinner {
+				t.Errorf("Both modes should contain working indicator (spinner), got: %q", content)
 			}
 		})
 	}
