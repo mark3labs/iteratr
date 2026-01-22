@@ -20,6 +20,7 @@ type Sidebar struct {
 	notesViewport viewport.Model
 	cursor        int // Selected task index (for future interactivity)
 	focused       bool
+	taskIndex     map[string]int // O(1) lookup: task ID -> index in ordered task list
 	noteIndex     map[string]int // O(1) lookup: note ID -> index in state.Notes
 	pulse         Pulse
 	pulsedTaskIDs map[string]string // Track task ID -> last status to detect changes
@@ -33,6 +34,7 @@ func NewSidebar() *Sidebar {
 		notesViewport: viewport.New(),
 		cursor:        0,
 		focused:       false,
+		taskIndex:     make(map[string]int),
 		noteIndex:     make(map[string]int),
 		pulse:         NewPulse(),
 		pulsedTaskIDs: make(map[string]string),
@@ -304,14 +306,21 @@ func (s *Sidebar) SetState(state *session.State) {
 	s.updateContent()
 }
 
-// rebuildIndex rebuilds the ID-based lookup index for notes.
-// This provides O(1) lookups for notes by ID.
-// Note: Tasks are already stored as a map in state.Tasks (ID -> Task),
-// so they already have O(1) lookup and don't need an additional index.
+// rebuildIndex rebuilds the ID-based lookup indices for tasks and notes.
+// This provides O(1) lookups by ID.
 func (s *Sidebar) rebuildIndex() {
 	if s.state == nil {
+		s.taskIndex = make(map[string]int)
 		s.noteIndex = make(map[string]int)
 		return
+	}
+
+	// Rebuild task index: map task ID -> position in ordered task list
+	// This provides O(1) lookup to find a task's position in the display order
+	tasks := s.getTasks()
+	s.taskIndex = make(map[string]int, len(tasks))
+	for idx, task := range tasks {
+		s.taskIndex[task.ID] = idx
 	}
 
 	// Rebuild note index: map note ID -> position in state.Notes slice
