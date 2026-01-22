@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // MessageType indicates the type of agent message.
@@ -35,6 +36,11 @@ type AgentOutput struct {
 	autoScroll bool // Whether to auto-scroll to bottom on new content
 	ready      bool // Whether viewport is initialized
 }
+
+// Compile-time interface checks
+var _ Drawable = (*AgentOutput)(nil)
+var _ Updateable = (*AgentOutput)(nil)
+var _ Component = (*AgentOutput)(nil)
 
 // NewAgentOutput creates a new AgentOutput component.
 func NewAgentOutput() *AgentOutput {
@@ -77,6 +83,42 @@ func (a *AgentOutput) Render() string {
 		return styleDim.Render("Waiting for agent output...")
 	}
 	return a.viewport.View()
+}
+
+// Draw renders the agent output to a screen buffer.
+func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
+	if !a.ready {
+		// Show waiting message
+		waitMsg := styleDim.Render("Waiting for agent output...")
+		uv.NewStyledString(waitMsg).Draw(scr, area)
+		return nil
+	}
+
+	// Render viewport content
+	content := a.viewport.View()
+	uv.NewStyledString(content).Draw(scr, area)
+
+	// Draw scroll indicator if there's overflow
+	if a.viewport.TotalLineCount() > a.viewport.Height() {
+		pct := a.viewport.ScrollPercent()
+		indicator := fmt.Sprintf(" %d%% ", int(pct*100))
+
+		// Position indicator at bottom-right of area
+		indicatorArea := uv.Rect(
+			area.Max.X-len(indicator),
+			area.Max.Y-1,
+			len(indicator),
+			1,
+		)
+
+		indicatorStyle := lipgloss.NewStyle().
+			Foreground(colorMuted).
+			Background(colorBgSubtle)
+		styledIndicator := indicatorStyle.Render(indicator)
+		uv.NewStyledString(styledIndicator).Draw(scr, indicatorArea)
+	}
+
+	return nil
 }
 
 // UpdateSize updates the agent output dimensions.

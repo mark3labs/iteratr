@@ -17,6 +17,7 @@ var (
 	// Background colors
 	colorBgHeader = lipgloss.Color("235") // Dark gray
 	colorBgFooter = lipgloss.Color("235") // Dark gray
+	colorBgSubtle = lipgloss.Color("237") // Slightly lighter than background
 
 	// Text colors
 	colorText       = lipgloss.Color("252") // Light gray
