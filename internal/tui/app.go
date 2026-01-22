@@ -126,12 +126,29 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	}
 
-	// Update status bar (for spinner animation)
+	// Update status bar (for spinner animation) - always visible
 	statusCmd := a.status.Update(msg)
 
-	// Update sidebar and inbox (for pulse animations)
-	sidebarCmd := a.sidebar.Update(msg)
-	inboxCmd := a.inbox.Update(msg)
+	// Update sidebar if visible (desktop mode or toggled in compact mode)
+	var sidebarCmd tea.Cmd
+	if a.layout.Mode == LayoutDesktop || a.sidebarVisible {
+		sidebarCmd = a.sidebar.Update(msg)
+	}
+
+	// Update inbox for pulse animation only if:
+	// 1. It's the active view (needs full updates), OR
+	// 2. Pulse is active (animation needs to complete even when not visible)
+	var inboxCmd tea.Cmd
+	if a.activeView == ViewInbox {
+		// Inbox is active - full update
+		inboxCmd = a.inbox.Update(msg)
+	} else {
+		// Inbox not active - only update for pulse animation if active
+		switch msg.(type) {
+		case PulseMsg:
+			inboxCmd = a.inbox.Update(msg)
+		}
+	}
 
 	// Delegate to active view component
 	var cmd tea.Cmd
@@ -143,9 +160,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ViewNotes:
 		cmd = a.notes.Update(msg)
 	case ViewInbox:
-		// Inbox already updated above for pulse, reuse the command
-		cmd = inboxCmd
-		inboxCmd = nil
+		// Inbox already updated above, don't update twice
+		cmd = nil
 	}
 
 	return a, tea.Batch(statusCmd, sidebarCmd, inboxCmd, cmd)
