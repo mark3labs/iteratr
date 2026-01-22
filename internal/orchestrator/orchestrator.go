@@ -32,6 +32,7 @@ type Config struct {
 	DataDir           string // Data directory for NATS storage
 	WorkDir           string // Working directory for agent
 	Headless          bool   // Run without TUI
+	Model             string // Model to use (e.g., anthropic/claude-sonnet-4-5)
 }
 
 // Orchestrator manages the iteration loop with embedded NATS, ACP client, and TUI.
