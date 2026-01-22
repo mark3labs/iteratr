@@ -274,6 +274,8 @@ func (st *State) applyControlEvent(event Event) {
 	switch event.Action {
 	case "session_complete":
 		st.Complete = true
+	case "session_restart":
+		st.Complete = false
 	}
 }
 

@@ -150,8 +150,24 @@ func (o *Orchestrator) Run() error {
 	// Check if session is already complete
 	if state.Complete {
 		logger.Info("Session '%s' is already marked as complete", o.cfg.SessionName)
-		fmt.Printf("Session '%s' is already marked as complete\n", o.cfg.SessionName)
-		return nil
+		fmt.Printf("Session '%s' is already marked as complete.\n", o.cfg.SessionName)
+		fmt.Print("Do you want to restart it? [y/N]: ")
+
+		var response string
+		fmt.Scanln(&response)
+
+		if response != "y" && response != "Y" {
+			fmt.Println("Session not restarted.")
+			return nil
+		}
+
+		// Restart the session
+		if err := o.store.SessionRestart(o.ctx, o.cfg.SessionName); err != nil {
+			logger.Error("Failed to restart session: %v", err)
+			return fmt.Errorf("failed to restart session: %w", err)
+		}
+		logger.Info("Session '%s' restarted", o.cfg.SessionName)
+		fmt.Println("Session restarted.")
 	}
 
 	// Print session info in headless mode
@@ -442,6 +458,15 @@ func (o *Orchestrator) startTUI() error {
 
 		if _, err := o.tuiProgram.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		}
+	}()
+
+	// Monitor TUI quit and cancel orchestrator context
+	go func() {
+		<-o.tuiDone
+		logger.Debug("TUI quit detected, cancelling orchestrator context")
+		if o.cancel != nil {
+			o.cancel()
 		}
 	}()
 

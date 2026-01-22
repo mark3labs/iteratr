@@ -27,3 +27,23 @@ func (s *Store) SessionComplete(ctx context.Context, session string) error {
 
 	return nil
 }
+
+// SessionRestart marks a completed session as not complete, allowing it to continue.
+// Creates an event of type "control" with action "session_restart".
+func (s *Store) SessionRestart(ctx context.Context, session string) error {
+	// Create event
+	event := Event{
+		Session: session,
+		Type:    nats.EventTypeControl,
+		Action:  "session_restart",
+		Data:    "Session restarted",
+	}
+
+	// Publish event
+	_, err := s.PublishEvent(ctx, event)
+	if err != nil {
+		return fmt.Errorf("failed to publish session restart event: %w", err)
+	}
+
+	return nil
+}

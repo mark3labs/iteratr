@@ -185,8 +185,8 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // with display options like AltScreen and MouseMode.
 func (a *App) View() tea.View {
 	if a.quitting {
-		v := tea.NewView("Goodbye!\n")
-		return v
+		// Return minimal view when quitting - don't render full UI
+		return tea.NewView("")
 	}
 
 	// Render header, content, status bar, and footer
