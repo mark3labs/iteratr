@@ -20,6 +20,7 @@ type Sidebar struct {
 	notesViewport viewport.Model
 	cursor        int // Selected task index (for future interactivity)
 	focused       bool
+	noteIndex     map[string]int // O(1) lookup: note ID -> index in state.Notes
 }
 
 // NewSidebar creates a new Sidebar component.
@@ -29,6 +30,7 @@ func NewSidebar() *Sidebar {
 		notesViewport: viewport.New(),
 		cursor:        0,
 		focused:       false,
+		noteIndex:     make(map[string]int),
 	}
 }
 
@@ -258,11 +260,31 @@ func (s *Sidebar) SetState(state *session.State) {
 	s.updateContent()
 }
 
+// rebuildIndex rebuilds the ID-based lookup index for notes.
+// This provides O(1) lookups for notes by ID.
+// Note: Tasks are already stored as a map in state.Tasks (ID -> Task),
+// so they already have O(1) lookup and don't need an additional index.
+func (s *Sidebar) rebuildIndex() {
+	if s.state == nil {
+		s.noteIndex = make(map[string]int)
+		return
+	}
+
+	// Rebuild note index: map note ID -> position in state.Notes slice
+	s.noteIndex = make(map[string]int, len(s.state.Notes))
+	for idx := range s.state.Notes {
+		s.noteIndex[s.state.Notes[idx].ID] = idx
+	}
+}
+
 // updateContent rebuilds viewport content from state.
 func (s *Sidebar) updateContent() {
 	if s.state == nil {
 		return
 	}
+
+	// Rebuild indices for O(1) lookups
+	s.rebuildIndex()
 
 	// Update tasks viewport
 	s.tasksViewport.SetContent(s.buildTasksContent())
@@ -373,6 +395,29 @@ func (s *Sidebar) Render() string {
 func (s *Sidebar) SetFocused(focused bool)                  { s.SetFocus(focused) }
 func (s *Sidebar) UpdateSize(width, height int) tea.Cmd     { s.SetSize(width, height); return nil }
 func (s *Sidebar) UpdateState(state *session.State) tea.Cmd { s.SetState(state); return nil }
+
+// GetTaskByID returns a task by ID using O(1) lookup.
+// Returns nil if task not found.
+func (s *Sidebar) GetTaskByID(id string) *session.Task {
+	if s.state == nil {
+		return nil
+	}
+	// state.Tasks is already a map[string]*Task, so this is O(1)
+	return s.state.Tasks[id]
+}
+
+// GetNoteByID returns a note by ID using O(1) lookup.
+// Returns nil if note not found.
+func (s *Sidebar) GetNoteByID(id string) *session.Note {
+	if s.state == nil {
+		return nil
+	}
+	idx, ok := s.noteIndex[id]
+	if !ok || idx < 0 || idx >= len(s.state.Notes) {
+		return nil
+	}
+	return s.state.Notes[idx]
+}
 
 // Compile-time interface check
 var _ FocusableComponent = (*Sidebar)(nil)
