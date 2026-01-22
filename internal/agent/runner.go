@@ -109,16 +109,32 @@ func (r *Runner) RunIteration(ctx context.Context, prompt string) error {
 	}
 	stdin.Close()
 
-	// Parse JSON events from stdout
+	// Parse JSON events from stdout using bufio.Reader (no line length limit)
 	logger.Debug("Parsing JSON events from opencode")
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
+	reader := bufio.NewReader(stdout)
+	for {
 		// Check context between reads
 		if ctx.Err() != nil {
 			logger.Debug("Context cancelled during output parsing")
 			break
 		}
-		line := scanner.Text()
+
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				// Process any remaining data before EOF
+				if line != "" {
+					r.parseEvent(line)
+				}
+				break
+			}
+			logger.Error("Read error: %v", err)
+			close(done)
+			return fmt.Errorf("failed to read output: %w", err)
+		}
+
+		// Trim newline and skip empty lines
+		line = line[:len(line)-1] // Remove trailing \n
 		if line == "" {
 			continue
 		}
@@ -133,11 +149,6 @@ func (r *Runner) RunIteration(ctx context.Context, prompt string) error {
 		// Wait briefly for process to die, then return
 		cmd.Wait()
 		return ctx.Err()
-	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error("Scanner error: %v", err)
-		return fmt.Errorf("failed to read output: %w", err)
 	}
 
 	// Wait for process to complete

@@ -283,7 +283,7 @@ func (s *Sidebar) SetState(state *session.State) {
 	s.state = state
 
 	// Detect task status changes and mark for pulse
-	if oldState != nil && state != nil {
+	if state != nil {
 		statusChanged := false
 
 		// Check for new or changed task statuses
@@ -291,9 +291,12 @@ func (s *Sidebar) SetState(state *session.State) {
 			oldStatus, existed := s.pulsedTaskIDs[id]
 
 			// If task is new or status changed, mark for pulse
+			// Only trigger pulse if we had a previous state (not initial load)
 			if !existed || oldStatus != task.Status {
 				s.pulsedTaskIDs[id] = task.Status
-				statusChanged = true
+				if oldState != nil {
+					statusChanged = true
+				}
 			}
 		}
 

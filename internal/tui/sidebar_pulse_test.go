@@ -168,3 +168,94 @@ func TestSidebar_PulseIntensity(t *testing.T) {
 		t.Errorf("Pulse intensity should be between 0 and 1, got %f", intensity)
 	}
 }
+
+func TestSidebar_NoPulseOnInitialLoad(t *testing.T) {
+	// Create sidebar
+	sidebar := NewSidebar()
+	sidebar.SetSize(40, 30)
+
+	// Set initial state directly (no previous state)
+	initialState := &session.State{
+		Tasks: map[string]*session.Task{
+			"task1": {
+				ID:      "task1",
+				Content: "Do something",
+				Status:  "remaining",
+			},
+		},
+	}
+	sidebar.SetState(initialState)
+
+	// needsPulse should NOT be set on initial load (no oldState to compare against)
+	if sidebar.needsPulse {
+		t.Error("needsPulse should not be set on initial state load")
+	}
+
+	// But pulsedTaskIDs should be populated for future comparisons
+	if len(sidebar.pulsedTaskIDs) != 1 {
+		t.Errorf("pulsedTaskIDs should have 1 entry, got %d", len(sidebar.pulsedTaskIDs))
+	}
+	if sidebar.pulsedTaskIDs["task1"] != "remaining" {
+		t.Errorf("pulsedTaskIDs[task1] should be 'remaining', got '%s'", sidebar.pulsedTaskIDs["task1"])
+	}
+}
+
+func TestSidebar_TaskStatusTrackedAcrossUpdates(t *testing.T) {
+	// Create sidebar
+	sidebar := NewSidebar()
+	sidebar.SetSize(40, 30)
+
+	// Set initial state
+	initialState := &session.State{
+		Tasks: map[string]*session.Task{
+			"task1": {
+				ID:      "task1",
+				Content: "Do something",
+				Status:  "remaining",
+			},
+		},
+	}
+	sidebar.SetState(initialState)
+
+	// Verify pulsedTaskIDs is populated
+	if sidebar.pulsedTaskIDs["task1"] != "remaining" {
+		t.Errorf("After initial load, pulsedTaskIDs[task1] should be 'remaining', got '%s'", sidebar.pulsedTaskIDs["task1"])
+	}
+
+	// Update with same status - should not trigger pulse
+	sameState := &session.State{
+		Tasks: map[string]*session.Task{
+			"task1": {
+				ID:      "task1",
+				Content: "Do something",
+				Status:  "remaining",
+			},
+		},
+	}
+	sidebar.SetState(sameState)
+
+	if sidebar.needsPulse {
+		t.Error("needsPulse should not be set when status hasn't changed")
+	}
+
+	// Update with changed status - should trigger pulse
+	changedState := &session.State{
+		Tasks: map[string]*session.Task{
+			"task1": {
+				ID:      "task1",
+				Content: "Do something",
+				Status:  "in_progress",
+			},
+		},
+	}
+	sidebar.SetState(changedState)
+
+	if !sidebar.needsPulse {
+		t.Error("needsPulse should be set when status changed")
+	}
+
+	// Verify pulsedTaskIDs is updated
+	if sidebar.pulsedTaskIDs["task1"] != "in_progress" {
+		t.Errorf("After status change, pulsedTaskIDs[task1] should be 'in_progress', got '%s'", sidebar.pulsedTaskIDs["task1"])
+	}
+}

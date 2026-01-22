@@ -36,10 +36,12 @@ func init() {
 	toolCmd.AddCommand(taskPriorityCmd)
 	toolCmd.AddCommand(taskDependsCmd)
 	toolCmd.AddCommand(taskListCmd)
+	toolCmd.AddCommand(taskNextCmd)
 	toolCmd.AddCommand(noteAddCmd)
 	toolCmd.AddCommand(noteListCmd)
 	toolCmd.AddCommand(inboxListCmd)
 	toolCmd.AddCommand(inboxMarkReadCmd)
+	toolCmd.AddCommand(iterationSummaryCmd)
 	toolCmd.AddCommand(sessionCompleteCmd)
 
 	// Common flags for all tool subcommands
@@ -483,6 +485,100 @@ var inboxMarkReadCmd = &cobra.Command{
 
 func init() {
 	inboxMarkReadCmd.Flags().String("id", "", "Message ID (required)")
+}
+
+// task-next command
+var taskNextCmd = &cobra.Command{
+	Use:   "task-next",
+	Short: "Get the next highest priority unblocked task",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if toolFlags.name == "" {
+			return fmt.Errorf("session name is required (--name)")
+		}
+
+		store, cleanup, err := connectToSession()
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		ctx := context.Background()
+		task, err := store.TaskNext(ctx, toolFlags.name)
+		if err != nil {
+			return err
+		}
+
+		if task == nil {
+			fmt.Println("No ready tasks")
+			return nil
+		}
+
+		// Output JSON for parsing
+		output, _ := json.Marshal(map[string]any{
+			"id":       task.ID,
+			"content":  task.Content,
+			"priority": task.Priority,
+			"status":   task.Status,
+		})
+		fmt.Println(string(output))
+		return nil
+	},
+}
+
+// iteration-summary command
+var iterationSummaryCmd = &cobra.Command{
+	Use:   "iteration-summary",
+	Short: "Record a summary for the current iteration",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if toolFlags.name == "" {
+			return fmt.Errorf("session name is required (--name)")
+		}
+
+		summary, _ := cmd.Flags().GetString("summary")
+		if summary == "" {
+			return fmt.Errorf("summary is required")
+		}
+
+		store, cleanup, err := connectToSession()
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		ctx := context.Background()
+
+		// Load state to get current iteration number
+		state, err := store.LoadState(ctx, toolFlags.name)
+		if err != nil {
+			return fmt.Errorf("failed to load state: %w", err)
+		}
+
+		// Find the current (last) iteration number
+		iterNum := 1
+		if len(state.Iterations) > 0 {
+			iterNum = state.Iterations[len(state.Iterations)-1].Number
+		}
+
+		// Collect task IDs that are in_progress or were recently worked on
+		var tasksWorked []string
+		for id, task := range state.Tasks {
+			if task.Status == "in_progress" || task.Iteration == iterNum {
+				tasksWorked = append(tasksWorked, id)
+			}
+		}
+
+		err = store.IterationSummary(ctx, toolFlags.name, iterNum, summary, tasksWorked)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Summary recorded for iteration #%d\n", iterNum)
+		return nil
+	},
+}
+
+func init() {
+	iterationSummaryCmd.Flags().String("summary", "", "Summary of what was accomplished (required)")
 }
 
 // session-complete command

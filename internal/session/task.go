@@ -295,6 +295,51 @@ func isValidTaskStatus(status string) bool {
 	}
 }
 
+// TaskNext returns the highest priority unblocked task.
+// A task is "ready" if it has status "remaining" and all its dependencies are completed.
+// Returns nil if no ready tasks exist.
+func (s *Store) TaskNext(ctx context.Context, session string) (*Task, error) {
+	// Load current state
+	state, err := s.LoadState(ctx, session)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load state: %w", err)
+	}
+
+	var bestTask *Task
+	for _, task := range state.Tasks {
+		// Skip non-remaining tasks
+		if task.Status != "remaining" {
+			continue
+		}
+
+		// Check if all dependencies are completed
+		allDepsCompleted := true
+		for _, depID := range task.DependsOn {
+			if depTask, exists := state.Tasks[depID]; exists {
+				if depTask.Status != "completed" {
+					allDepsCompleted = false
+					break
+				}
+			} else {
+				// Dependency doesn't exist - treat as unresolved
+				allDepsCompleted = false
+				break
+			}
+		}
+
+		if !allDepsCompleted {
+			continue
+		}
+
+		// This task is ready - compare priority (lower is higher priority)
+		if bestTask == nil || task.Priority < bestTask.Priority {
+			bestTask = task
+		}
+	}
+
+	return bestTask, nil
+}
+
 // resolveTaskID resolves a task ID or prefix to a full task ID.
 // Supports prefix matching with minimum 8 characters.
 // Returns an error if the prefix is ambiguous or not found.
