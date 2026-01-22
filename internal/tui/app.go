@@ -126,6 +126,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	}
 
+	// Update status bar (for spinner animation)
+	statusCmd := a.status.Update(msg)
+
 	// Delegate to active view component
 	var cmd tea.Cmd
 	switch a.activeView {
@@ -139,7 +142,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = a.inbox.Update(msg)
 	}
 
-	return a, cmd
+	return a, tea.Batch(statusCmd, cmd)
 }
 
 // handleKeyPress processes keyboard input using hierarchical priority routing.
