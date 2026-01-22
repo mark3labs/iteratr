@@ -350,7 +350,6 @@ COMPLETED:
 ## Out of Scope
 
 - Git commit tracking per iteration (future enhancement)
-- Note summarization for long sessions (future enhancement)
 - Inbox priority levels (not needed currently)
 - First-iteration initializer pattern (too complex for v1)
 - Test status tracking separate from task status (can use notes for now)
