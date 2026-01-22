@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/mark3labs/iteratr/internal/session"
 )
 
@@ -99,6 +100,111 @@ func (i *InboxPanel) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	i.viewport, cmd = i.viewport.Update(msg)
 	return cmd
+}
+
+// Draw renders the inbox panel to the screen buffer.
+func (i *InboxPanel) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
+	// Draw panel border with title
+	inner := DrawPanel(scr, area, "Inbox", i.focused)
+
+	// Reserve space for input field (separator + prompt + input + help = ~6 lines)
+	inputHeight := 6
+	messagesHeight := inner.Dy() - inputHeight
+	if messagesHeight < 1 {
+		messagesHeight = 1
+	}
+
+	// Split inner area into messages viewport and input field
+	messagesArea := uv.Rectangle{
+		Min: inner.Min,
+		Max: uv.Position{X: inner.Max.X, Y: inner.Min.Y + messagesHeight},
+	}
+	inputArea := uv.Rectangle{
+		Min: uv.Position{X: inner.Min.X, Y: inner.Min.Y + messagesHeight},
+		Max: inner.Max,
+	}
+
+	// Draw viewport content (messages)
+	content := i.viewport.View()
+	DrawText(scr, messagesArea, content)
+
+	// Draw scroll indicator if content overflows
+	if i.viewport.TotalLineCount() > i.viewport.Height() {
+		percent := i.viewport.ScrollPercent()
+		DrawScrollIndicator(scr, area, percent)
+	}
+
+	// Draw input field
+	i.drawInputField(scr, inputArea)
+
+	// Return cursor position if input is focused
+	if i.inputFocused {
+		// Calculate cursor position: prompt + cursor offset
+		promptWidth := len("Send message: ")
+		cursorX := inputArea.Min.X + promptWidth + i.cursorPos
+		cursorY := inputArea.Min.Y + 2 // After separator line
+		return &tea.Cursor{
+			Position: tea.Position{X: cursorX, Y: cursorY},
+		}
+	}
+
+	return nil
+}
+
+// drawInputField renders the input field section.
+func (i *InboxPanel) drawInputField(scr uv.Screen, area uv.Rectangle) {
+	if area.Dy() < 4 {
+		return // Not enough space
+	}
+
+	var y int = area.Min.Y
+
+	// Draw separator line
+	separatorArea := uv.Rectangle{
+		Min: uv.Position{X: area.Min.X, Y: y},
+		Max: uv.Position{X: area.Max.X, Y: y + 1},
+	}
+	separator := strings.Repeat("─", area.Dx())
+	DrawText(scr, separatorArea, separator)
+	y++
+
+	// Skip a line
+	y++
+
+	// Draw prompt + input value
+	promptArea := uv.Rectangle{
+		Min: uv.Position{X: area.Min.X, Y: y},
+		Max: uv.Position{X: area.Max.X, Y: y + 1},
+	}
+	prompt := styleInputPrompt.Render("Send message: ")
+
+	// Build input text with cursor if focused
+	inputText := i.inputValue
+	if i.inputFocused && i.cursorPos <= len(inputText) {
+		if i.cursorPos == len(inputText) {
+			inputText += "▌"
+		} else {
+			inputText = inputText[:i.cursorPos] + "▌" + inputText[i.cursorPos:]
+		}
+	}
+
+	inputStyled := styleInputField.Render(inputText)
+	line := prompt + inputStyled
+	DrawText(scr, promptArea, line)
+	y++
+
+	// Draw help text
+	helpArea := uv.Rectangle{
+		Min: uv.Position{X: area.Min.X, Y: y},
+		Max: uv.Position{X: area.Max.X, Y: y + 1},
+	}
+	var helpText string
+	if i.inputFocused {
+		helpText = styleDim.Render("Enter=send | Ctrl+U=clear | Esc=unfocus")
+	} else {
+		helpText = styleDim.Render("Press 'i' to focus input field")
+	}
+	DrawText(scr, helpArea, helpText)
 }
 
 // sendMessage sends the current input value as a message.
