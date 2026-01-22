@@ -20,6 +20,7 @@ type Variables struct {
 	Inbox     string // Formatted inbox messages
 	Notes     string // Formatted notes from previous iterations
 	Tasks     string // Formatted task list
+	History   string // Formatted iteration history
 	Extra     string // Extra instructions
 	Port      string // NATS server port
 	Binary    string // Full path to iteratr binary
@@ -33,6 +34,7 @@ type Variables struct {
 // - {{inbox}} - Formatted inbox messages (empty if none)
 // - {{notes}} - Formatted notes (empty if none)
 // - {{tasks}} - Formatted task list
+// - {{history}} - Formatted iteration history
 // - {{extra}} - Extra instructions (empty if none)
 // - {{port}} - NATS server port
 // - {{binary}} - Full path to iteratr binary
@@ -46,6 +48,7 @@ func Render(template string, vars Variables) string {
 		"{{inbox}}":     vars.Inbox,
 		"{{notes}}":     vars.Notes,
 		"{{tasks}}":     vars.Tasks,
+		"{{history}}":   vars.History,
 		"{{extra}}":     vars.Extra,
 		"{{port}}":      vars.Port,
 		"{{binary}}":    vars.Binary,
