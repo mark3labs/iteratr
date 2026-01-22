@@ -103,7 +103,37 @@ func (o *Orchestrator) Start() error {
 	}
 	logger.Debug("JetStream setup complete")
 
-	// 4. Create agent runner
+	// 4. Check if session is already complete (before TUI starts)
+	logger.Debug("Checking session state")
+	state, err := o.store.LoadState(o.ctx, o.cfg.SessionName)
+	if err != nil {
+		logger.Error("Failed to load session state: %v", err)
+		return fmt.Errorf("failed to load session state: %w", err)
+	}
+
+	if state.Complete {
+		logger.Info("Session '%s' is already marked as complete", o.cfg.SessionName)
+		fmt.Printf("Session '%s' is already marked as complete.\n", o.cfg.SessionName)
+		fmt.Print("Do you want to restart it? [y/N]: ")
+
+		var response string
+		fmt.Scanln(&response)
+
+		if response != "y" && response != "Y" {
+			fmt.Println("Session not restarted.")
+			return fmt.Errorf("session already complete")
+		}
+
+		// Restart the session
+		if err := o.store.SessionRestart(o.ctx, o.cfg.SessionName); err != nil {
+			logger.Error("Failed to restart session: %v", err)
+			return fmt.Errorf("failed to restart session: %w", err)
+		}
+		logger.Info("Session '%s' restarted", o.cfg.SessionName)
+		fmt.Println("Session restarted.")
+	}
+
+	// 5. Create agent runner
 	logger.Debug("Creating agent runner")
 	o.runner = agent.NewRunner(agent.RunnerConfig{
 		Model:       o.cfg.Model,
@@ -115,7 +145,7 @@ func (o *Orchestrator) Start() error {
 		OnError:     nil, // Errors returned from RunIteration
 	})
 
-	// 5. Start TUI if not headless
+	// 6. Start TUI if not headless
 	if !o.cfg.Headless {
 		logger.Debug("Starting TUI")
 		if err := o.startTUI(); err != nil {
@@ -147,27 +177,11 @@ func (o *Orchestrator) Run() error {
 	startIteration := len(state.Iterations) + 1
 	logger.Debug("Starting from iteration %d (found %d previous iterations)", startIteration, len(state.Iterations))
 
-	// Check if session is already complete
+	// Check if session was marked complete (e.g., by external process or previous run)
+	// Note: The interactive restart prompt happens in Start(), this is just a safety check
 	if state.Complete {
 		logger.Info("Session '%s' is already marked as complete", o.cfg.SessionName)
-		fmt.Printf("Session '%s' is already marked as complete.\n", o.cfg.SessionName)
-		fmt.Print("Do you want to restart it? [y/N]: ")
-
-		var response string
-		fmt.Scanln(&response)
-
-		if response != "y" && response != "Y" {
-			fmt.Println("Session not restarted.")
-			return nil
-		}
-
-		// Restart the session
-		if err := o.store.SessionRestart(o.ctx, o.cfg.SessionName); err != nil {
-			logger.Error("Failed to restart session: %v", err)
-			return fmt.Errorf("failed to restart session: %w", err)
-		}
-		logger.Info("Session '%s' restarted", o.cfg.SessionName)
-		fmt.Println("Session restarted.")
+		return nil
 	}
 
 	// Print session info in headless mode
