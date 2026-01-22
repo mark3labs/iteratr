@@ -390,19 +390,19 @@ func TestModelConfiguration(t *testing.T) {
 		model string
 	}{
 		{
-			name:  "anthropic model",
+			name:  "anthropic-model",
 			model: "anthropic/claude-sonnet-4-5",
 		},
 		{
-			name:  "openai model",
+			name:  "openai-model",
 			model: "openai/gpt-4",
 		},
 		{
-			name:  "empty model (use default)",
+			name:  "empty-model-use-default",
 			model: "",
 		},
 		{
-			name:  "custom provider",
+			name:  "custom-provider",
 			model: "custom/my-model",
 		},
 	}

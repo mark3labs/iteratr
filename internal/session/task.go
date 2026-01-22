@@ -192,6 +192,67 @@ func (s *Store) TaskPriority(ctx context.Context, session string, params TaskPri
 	return err
 }
 
+// TaskDependsParams represents the parameters for adding a task dependency.
+type TaskDependsParams struct {
+	ID        string `json:"id"`         // Task ID or prefix (8+ chars)
+	DependsOn string `json:"depends_on"` // Task ID or prefix that this task depends on
+	Iteration int    `json:"iteration"`
+}
+
+// TaskDepends adds a dependency to an existing task.
+// The ID and DependsOn parameters support prefix matching (minimum 8 characters).
+func (s *Store) TaskDepends(ctx context.Context, session string, params TaskDependsParams) error {
+	// Validate required fields
+	if params.ID == "" {
+		return fmt.Errorf("task ID is required")
+	}
+	if params.DependsOn == "" {
+		return fmt.Errorf("depends_on is required")
+	}
+
+	// Load current state to resolve task ID prefixes
+	state, err := s.LoadState(ctx, session)
+	if err != nil {
+		return fmt.Errorf("failed to load state: %w", err)
+	}
+
+	// Resolve task ID (supports prefix matching)
+	taskID, err := resolveTaskID(state, params.ID)
+	if err != nil {
+		return err
+	}
+
+	// Resolve dependency task ID (supports prefix matching)
+	dependsOnID, err := resolveTaskID(state, params.DependsOn)
+	if err != nil {
+		return fmt.Errorf("failed to resolve depends_on task: %w", err)
+	}
+
+	// Validate that task isn't depending on itself
+	if taskID == dependsOnID {
+		return fmt.Errorf("task cannot depend on itself")
+	}
+
+	// Create event metadata
+	meta, _ := json.Marshal(map[string]any{
+		"task_id":    taskID,
+		"depends_on": dependsOnID,
+		"iteration":  params.Iteration,
+	})
+
+	// Create and publish event
+	event := Event{
+		Session: session,
+		Type:    nats.EventTypeTask,
+		Action:  "depends",
+		Data:    dependsOnID, // Store dependency ID in data field for convenience
+		Meta:    meta,
+	}
+
+	_, err = s.PublishEvent(ctx, event)
+	return err
+}
+
 // TaskList returns all tasks grouped by status.
 func (s *Store) TaskList(ctx context.Context, session string) (*TaskListResult, error) {
 	// Load current state

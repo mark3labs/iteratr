@@ -34,6 +34,7 @@ func init() {
 	toolCmd.AddCommand(taskAddCmd)
 	toolCmd.AddCommand(taskStatusCmd)
 	toolCmd.AddCommand(taskPriorityCmd)
+	toolCmd.AddCommand(taskDependsCmd)
 	toolCmd.AddCommand(taskListCmd)
 	toolCmd.AddCommand(noteAddCmd)
 	toolCmd.AddCommand(noteListCmd)
@@ -228,6 +229,50 @@ var taskPriorityCmd = &cobra.Command{
 func init() {
 	taskPriorityCmd.Flags().String("id", "", "Task ID (required)")
 	taskPriorityCmd.Flags().Int("priority", 2, "Priority level (0=critical, 1=high, 2=medium, 3=low, 4=backlog)")
+}
+
+// task-depends command
+var taskDependsCmd = &cobra.Command{
+	Use:   "task-depends",
+	Short: "Add task dependency",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if toolFlags.name == "" {
+			return fmt.Errorf("session name is required (--name)")
+		}
+
+		id, _ := cmd.Flags().GetString("id")
+		dependsOn, _ := cmd.Flags().GetString("depends-on")
+
+		if id == "" {
+			return fmt.Errorf("task ID is required")
+		}
+		if dependsOn == "" {
+			return fmt.Errorf("depends-on is required")
+		}
+
+		store, cleanup, err := connectToSession()
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		ctx := context.Background()
+		err = store.TaskDepends(ctx, toolFlags.name, session.TaskDependsParams{
+			ID:        id,
+			DependsOn: dependsOn,
+		})
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("OK")
+		return nil
+	},
+}
+
+func init() {
+	taskDependsCmd.Flags().String("id", "", "Task ID (required)")
+	taskDependsCmd.Flags().String("depends-on", "", "Task ID this task depends on (required)")
 }
 
 // task-list command
