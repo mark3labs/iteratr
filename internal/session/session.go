@@ -87,7 +87,9 @@ type State struct {
 type Task struct {
 	ID        string    `json:"id"`
 	Content   string    `json:"content"`
-	Status    string    `json:"status"` // remaining, in_progress, completed, blocked
+	Status    string    `json:"status"`     // remaining, in_progress, completed, blocked
+	Priority  int       `json:"priority"`   // 0-4, default 2 (0=critical, 1=high, 2=medium, 3=low, 4=backlog)
+	DependsOn []string  `json:"depends_on"` // Task IDs this task is blocked by
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Iteration int       `json:"iteration"` // Iteration that last modified this task
@@ -112,10 +114,12 @@ type Message struct {
 
 // Iteration represents a single iteration execution.
 type Iteration struct {
-	Number    int       `json:"number"`
-	StartedAt time.Time `json:"started_at"`
-	EndedAt   time.Time `json:"ended_at,omitempty"`
-	Complete  bool      `json:"complete"`
+	Number      int       `json:"number"`
+	StartedAt   time.Time `json:"started_at"`
+	EndedAt     time.Time `json:"ended_at,omitempty"`
+	Complete    bool      `json:"complete"`
+	Summary     string    `json:"summary,omitempty"`      // What was accomplished
+	TasksWorked []string  `json:"tasks_worked,omitempty"` // Task IDs touched
 }
 
 // Apply applies an event to the state, implementing the reduce pattern.
@@ -139,9 +143,10 @@ func (st *State) Apply(event Event) {
 func (st *State) applyTaskEvent(event Event) {
 	switch event.Action {
 	case "add":
-		// Parse metadata for status and iteration
+		// Parse metadata for status, priority, and iteration
 		var meta struct {
 			Status    string `json:"status"`
+			Priority  int    `json:"priority"`
 			Iteration int    `json:"iteration"`
 		}
 		json.Unmarshal(event.Meta, &meta)
@@ -151,11 +156,28 @@ func (st *State) applyTaskEvent(event Event) {
 			meta.Status = "remaining"
 		}
 
+		// Default priority to 2 (medium) if not set
+		// Note: If priority is explicitly 0 (critical), it will be preserved
+		// We check if meta has priority set by seeing if it's non-zero or checking meta itself
+		priority := meta.Priority
+		if priority == 0 && event.Meta != nil {
+			// Check if priority was explicitly set to 0 in metadata
+			var checkMeta map[string]interface{}
+			json.Unmarshal(event.Meta, &checkMeta)
+			if _, hasPriority := checkMeta["priority"]; !hasPriority {
+				priority = 2 // Default to medium
+			}
+		} else if priority == 0 && event.Meta == nil {
+			priority = 2 // Default to medium
+		}
+
 		// Create new task
 		task := &Task{
 			ID:        event.ID,
 			Content:   event.Data,
 			Status:    meta.Status,
+			Priority:  priority,
+			DependsOn: []string{}, // Initialize empty dependencies
 			CreatedAt: event.Timestamp,
 			UpdatedAt: event.Timestamp,
 			Iteration: meta.Iteration,
@@ -174,6 +196,49 @@ func (st *State) applyTaskEvent(event Event) {
 		// Update task status if it exists
 		if task, exists := st.Tasks[meta.TaskID]; exists {
 			task.Status = meta.Status
+			task.UpdatedAt = event.Timestamp
+			task.Iteration = meta.Iteration
+		}
+
+	case "priority":
+		// Parse metadata for task ID and new priority
+		var meta struct {
+			TaskID    string `json:"task_id"`
+			Priority  int    `json:"priority"`
+			Iteration int    `json:"iteration"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Update task priority if it exists
+		if task, exists := st.Tasks[meta.TaskID]; exists {
+			task.Priority = meta.Priority
+			task.UpdatedAt = event.Timestamp
+			task.Iteration = meta.Iteration
+		}
+
+	case "depends":
+		// Parse metadata for task ID and dependency
+		var meta struct {
+			TaskID    string `json:"task_id"`
+			DependsOn string `json:"depends_on"`
+			Iteration int    `json:"iteration"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Add dependency if task exists and dependency not already present
+		if task, exists := st.Tasks[meta.TaskID]; exists {
+			// Check if dependency already exists
+			found := false
+			for _, dep := range task.DependsOn {
+				if dep == meta.DependsOn {
+					found = true
+					break
+				}
+			}
+			// Add if not found
+			if !found {
+				task.DependsOn = append(task.DependsOn, meta.DependsOn)
+			}
 			task.UpdatedAt = event.Timestamp
 			task.Iteration = meta.Iteration
 		}
@@ -263,6 +328,24 @@ func (st *State) applyIterationEvent(event Event) {
 			if iter.Number == meta.Number {
 				iter.Complete = true
 				iter.EndedAt = event.Timestamp
+				break
+			}
+		}
+
+	case "summary":
+		// Parse metadata for iteration number, summary, and tasks worked
+		var meta struct {
+			Number      int      `json:"number"`
+			Summary     string   `json:"summary"`
+			TasksWorked []string `json:"tasks_worked"`
+		}
+		json.Unmarshal(event.Meta, &meta)
+
+		// Update iteration with summary and tasks worked
+		for _, iter := range st.Iterations {
+			if iter.Number == meta.Number {
+				iter.Summary = meta.Summary
+				iter.TasksWorked = meta.TasksWorked
 				break
 			}
 		}
