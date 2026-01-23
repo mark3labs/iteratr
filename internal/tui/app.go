@@ -128,7 +128,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sidebar.SetState(msg.State)
 		a.dashboard.UpdateState(msg.State)
 		a.logs.SetState(msg.State)
-		return a, nil
+		return a, a.status.Tick()
 
 	case EventMsg:
 		// Forward event to log viewer, reload state, and wait for next event

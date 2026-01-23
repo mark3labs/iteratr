@@ -60,17 +60,17 @@ func TestStatusBar_SpinnerAnimation(t *testing.T) {
 				sb.SetState(state)
 			}
 
-			// Update spinner once to get it started
-			cmd := sb.Update(nil)
+			// Tick() starts the spinner after SetState
+			cmd := sb.Tick()
 
-			// Verify Update returns tick command when working
+			// Verify Tick returns tick command when working
 			if tt.expectSpinner {
 				if cmd == nil {
-					t.Error("Expected Update to return tick command when working, got nil")
+					t.Error("Expected Tick to return command when working, got nil")
 				}
 			} else {
 				if cmd != nil {
-					t.Errorf("Expected Update to return nil when not working, got %T", cmd)
+					t.Errorf("Expected Tick to return nil when not working, got %T", cmd)
 				}
 			}
 
@@ -107,16 +107,16 @@ func TestStatusBar_SpinnerTicking(t *testing.T) {
 	}
 	sb.SetState(state)
 
-	// First Update should return tick command
-	cmd1 := sb.Update(nil)
+	// Tick() should return the initial tick command
+	cmd1 := sb.Tick()
 	if cmd1 == nil {
-		t.Fatal("Expected first Update to return tick command")
+		t.Fatal("Expected Tick to return command after SetState with in_progress task")
 	}
 
 	// Execute the tick command to get a spinner message
 	msg := cmd1()
 
-	// Update with spinner message should return another tick
+	// Update with spinner message should return another tick (chain continues)
 	cmd2 := sb.Update(msg)
 	if cmd2 == nil {
 		t.Error("Expected Update with spinner message to return next tick")
@@ -146,17 +146,23 @@ func TestStatusBar_SpinnerStopsWhenDone(t *testing.T) {
 	}
 	sb.SetState(state)
 
-	// Update should return tick
-	cmd := sb.Update(nil)
+	// Tick should return command
+	cmd := sb.Tick()
 	if cmd == nil {
-		t.Fatal("Expected Update to return tick when working")
+		t.Fatal("Expected Tick to return command when working")
 	}
 
 	// Now complete the task
 	state.Tasks["task1"].Status = "completed"
 	sb.SetState(state)
 
-	// Update should now return nil
+	// Tick should now return nil (no longer working)
+	cmd = sb.Tick()
+	if cmd != nil {
+		t.Error("Expected Tick to return nil when no longer working")
+	}
+
+	// Update should also return nil
 	cmd = sb.Update(nil)
 	if cmd != nil {
 		t.Error("Expected Update to return nil when no longer working")
