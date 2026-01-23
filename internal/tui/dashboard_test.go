@@ -153,7 +153,7 @@ func TestDashboard_RenderProgressIndicator(t *testing.T) {
 // Current task is now shown in StatusBar component
 
 func TestDashboard_UpdateState(t *testing.T) {
-	d := NewDashboard(nil)
+	d := NewDashboard(nil, NewSidebar())
 
 	state := &session.State{
 		Session: "new-session",
@@ -171,7 +171,7 @@ func TestDashboard_UpdateState(t *testing.T) {
 }
 
 func TestDashboard_SetIteration(t *testing.T) {
-	d := NewDashboard(nil)
+	d := NewDashboard(nil, NewSidebar())
 
 	d.SetIteration(10)
 
@@ -181,7 +181,7 @@ func TestDashboard_SetIteration(t *testing.T) {
 }
 
 func TestDashboard_UpdateSize(t *testing.T) {
-	d := NewDashboard(nil)
+	d := NewDashboard(nil, NewSidebar())
 
 	d.UpdateSize(100, 50)
 
@@ -194,7 +194,7 @@ func TestDashboard_UpdateSize(t *testing.T) {
 }
 
 func TestNewDashboard(t *testing.T) {
-	d := NewDashboard(nil)
+	d := NewDashboard(nil, NewSidebar())
 
 	if d == nil {
 		t.Fatal("expected non-nil dashboard")
@@ -213,7 +213,7 @@ func TestNewDashboard(t *testing.T) {
 func TestDashboard_UserInputMsgOnEnter(t *testing.T) {
 	// Create a new agent output and dashboard
 	agentOutput := NewAgentOutput()
-	d := NewDashboard(agentOutput)
+	d := NewDashboard(agentOutput, NewSidebar())
 	d.UpdateSize(100, 50)
 
 	// Set focus to input pane
@@ -270,7 +270,7 @@ func TestDashboard_UserInputMsgOnEnter(t *testing.T) {
 func TestDashboard_UserInputMsgQueuedWhenBusy(t *testing.T) {
 	// Create a new agent output and dashboard
 	agentOutput := NewAgentOutput()
-	d := NewDashboard(agentOutput)
+	d := NewDashboard(agentOutput, NewSidebar())
 	d.UpdateSize(100, 50)
 
 	// Set agent as busy
@@ -311,7 +311,7 @@ func TestDashboard_UserInputMsgQueuedWhenBusy(t *testing.T) {
 func TestDashboard_EmptyInputNoMessage(t *testing.T) {
 	// Create a new agent output and dashboard
 	agentOutput := NewAgentOutput()
-	d := NewDashboard(agentOutput)
+	d := NewDashboard(agentOutput, NewSidebar())
 	d.UpdateSize(100, 50)
 
 	// Set focus to input pane
@@ -338,7 +338,7 @@ func TestDashboard_EmptyInputNoMessage(t *testing.T) {
 func TestDashboard_InputFocusWithIKey(t *testing.T) {
 	// Create a new agent output and dashboard
 	agentOutput := NewAgentOutput()
-	d := NewDashboard(agentOutput)
+	d := NewDashboard(agentOutput, NewSidebar())
 	d.UpdateSize(100, 50)
 
 	// Initially focus should be on agent
@@ -368,7 +368,7 @@ func TestDashboard_InputFocusWithIKey(t *testing.T) {
 func TestDashboard_InputFocusFromTasksPane(t *testing.T) {
 	// Create a new agent output and dashboard
 	agentOutput := NewAgentOutput()
-	d := NewDashboard(agentOutput)
+	d := NewDashboard(agentOutput, NewSidebar())
 	d.UpdateSize(100, 50)
 
 	// Set focus to tasks pane
@@ -390,7 +390,7 @@ func TestDashboard_InputFocusFromTasksPane(t *testing.T) {
 func TestDashboard_InputBlurWithEscape(t *testing.T) {
 	// Create a new agent output and dashboard
 	agentOutput := NewAgentOutput()
-	d := NewDashboard(agentOutput)
+	d := NewDashboard(agentOutput, NewSidebar())
 	d.UpdateSize(100, 50)
 
 	// Focus input
@@ -430,7 +430,7 @@ func TestDashboard_InputBlurWithEscape(t *testing.T) {
 func TestDashboard_InputFocusIdempotent(t *testing.T) {
 	// Create a new agent output and dashboard
 	agentOutput := NewAgentOutput()
-	d := NewDashboard(agentOutput)
+	d := NewDashboard(agentOutput, NewSidebar())
 	d.UpdateSize(100, 50)
 
 	// Focus input once

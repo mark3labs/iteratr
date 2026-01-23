@@ -269,6 +269,67 @@ func (s *ScrollList) GotoTop() {
 	s.offsetLine = 0
 }
 
+// ScrollToItem scrolls the minimum amount needed to make the item at idx visible.
+// If the item is already fully visible, no scrolling occurs.
+func (s *ScrollList) ScrollToItem(idx int) {
+	if idx < 0 || idx >= len(s.items) {
+		return
+	}
+
+	// Calculate the line offset of the target item
+	itemStartLine := 0
+	for i := 0; i < idx; i++ {
+		h := s.items[i].Height()
+		if h == 0 {
+			s.items[i].Render(s.width)
+			h = s.items[i].Height()
+		}
+		itemStartLine += h
+	}
+
+	itemHeight := s.items[idx].Height()
+	if itemHeight == 0 {
+		s.items[idx].Render(s.width)
+		itemHeight = s.items[idx].Height()
+	}
+	itemEndLine := itemStartLine + itemHeight
+
+	currentOffset := s.currentOffsetInLines()
+
+	// If item starts above viewport, scroll up to show it
+	if itemStartLine < currentOffset {
+		// Set offset to show this item at the top
+		s.offsetIdx = idx
+		s.offsetLine = 0
+		return
+	}
+
+	// If item ends below viewport, scroll down to show it
+	if itemEndLine > currentOffset+s.height {
+		// Scroll so the item's bottom aligns with viewport bottom
+		targetOffset := itemEndLine - s.height
+		if targetOffset < 0 {
+			targetOffset = 0
+		}
+		// Find which item contains the target offset line
+		lineCount := 0
+		for i := 0; i < len(s.items); i++ {
+			h := s.items[i].Height()
+			if h == 0 {
+				s.items[i].Render(s.width)
+				h = s.items[i].Height()
+			}
+			if lineCount+h > targetOffset {
+				s.offsetIdx = i
+				s.offsetLine = targetOffset - lineCount
+				return
+			}
+			lineCount += h
+		}
+	}
+	// Item is already visible, no scrolling needed
+}
+
 // AtBottom returns true if the viewport is scrolled to the bottom.
 func (s *ScrollList) AtBottom() bool {
 	if len(s.items) == 0 {

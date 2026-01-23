@@ -157,16 +157,6 @@ var (
 	styleStatusBlocked    = lipgloss.NewStyle().Foreground(colorError)
 
 	// General styles
-	styleBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorBorderDefault).
-			Padding(0, 1)
-
-	styleBorderFocused = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBorderFocused).
-				Padding(0, 1)
-
 	styleTitle = lipgloss.NewStyle().
 			Foreground(colorPrimary).
 			Bold(true).
@@ -207,23 +197,10 @@ var (
 				Foreground(colorTextBright)
 
 	// Task list styles
-	styleTaskID = lipgloss.NewStyle().
-			Foreground(colorMuted).
-			Bold(false)
-
-	styleTaskContent = lipgloss.NewStyle().
-				Foreground(colorText)
-
 	styleTaskSelected = lipgloss.NewStyle().
 				Foreground(colorPrimary).
 				Background(colorSurface0). // Slightly lighter than background
 				Bold(true)
-
-	styleGroupHeader = lipgloss.NewStyle().
-				Foreground(colorSecondary).
-				Bold(true).
-				Underline(true).
-				MarginTop(1)
 
 	// Log viewer styles
 	styleLogTimestamp = lipgloss.NewStyle().
@@ -455,26 +432,14 @@ var (
 			Foreground(colorSecondary).
 			Bold(true)
 
-	// Panel styles
-	stylePanel = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(colorBorderDefault).
-			Padding(1, 2)
-
-	stylePanelFocused = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(colorBorderFocused).
-				Padding(1, 2)
-
+	// Panel styles (no borders - focus indicated by header color)
 	stylePanelTitle = lipgloss.NewStyle().
-			Foreground(colorText).
-			Bold(true).
-			MarginBottom(1)
+			Foreground(colorSubtext0).
+			Bold(true)
 
 	stylePanelTitleFocused = lipgloss.NewStyle().
 				Foreground(colorPrimary).
-				Bold(true).
-				MarginBottom(1)
+				Bold(true)
 
 	// Badge styles
 	styleBadge = lipgloss.NewStyle().
@@ -560,14 +525,6 @@ var (
 	styleHintSeparator = lipgloss.NewStyle().
 				Foreground(colorSurface2)
 )
-
-// borderStyle returns the appropriate border style based on focus state
-func borderStyle(focused bool) lipgloss.Style {
-	if focused {
-		return stylePanelFocused
-	}
-	return stylePanel
-}
 
 // renderModalTitle renders a title with diagonal hatching decoration.
 // Creates format: "Title ╱╱╱╱╱╱╱╱╱" with a gradient from primary to secondary.

@@ -14,6 +14,7 @@ type StatusBar struct {
 	state      *session.State
 	connected  bool
 	working    bool
+	ticking    bool // Whether the spinner tick chain has been started
 	layoutMode LayoutMode
 	spinner    Spinner
 }
@@ -69,13 +70,11 @@ func (s *StatusBar) SetSize(width, height int) {
 func (s *StatusBar) SetState(state *session.State) {
 	s.state = state
 	// Update working state based on in_progress tasks
-	wasWorking := s.working
 	s.working = s.hasInProgressTasks()
 
-	// Start spinner animation when work begins
-	// Note: The tick command will be returned by Update() on next message
-	if s.working && !wasWorking {
-		// Working state changed to true - spinner will start on next Update
+	// Reset tick chain flag when work stops so it restarts on next work period
+	if !s.working {
+		s.ticking = false
 	}
 }
 
@@ -91,15 +90,22 @@ func (s *StatusBar) SetLayoutMode(mode LayoutMode) {
 
 // Update handles messages and spinner animation.
 func (s *StatusBar) Update(msg tea.Msg) tea.Cmd {
-	// Update spinner if working
-	if s.working {
-		cmd := s.spinner.Update(msg)
-		if cmd != nil {
-			return cmd
-		}
-		// Ensure spinner keeps ticking
+	if !s.working {
+		return nil
+	}
+
+	// Forward to spinner - it returns a cmd only for its own tick messages
+	cmd := s.spinner.Update(msg)
+	if cmd != nil {
+		return cmd // Spinner handled its tick, returns next tick (self-sustaining chain)
+	}
+
+	// Start the tick chain once when working becomes true
+	if !s.ticking {
+		s.ticking = true
 		return s.spinner.Tick()
 	}
+
 	return nil
 }
 

@@ -22,9 +22,6 @@ const (
 	FocusInput
 )
 
-// SidebarWidth is the fixed width for the task sidebar.
-const SidebarWidth = 45
-
 // Dashboard displays session overview, progress, and current task.
 type Dashboard struct {
 	sessionName  string
@@ -42,10 +39,12 @@ type Dashboard struct {
 }
 
 // NewDashboard creates a new Dashboard component.
-func NewDashboard(agentOutput *AgentOutput) *Dashboard {
+// The sidebar parameter is shared with App to ensure keyboard navigation
+// and rendering operate on the same instance.
+func NewDashboard(agentOutput *AgentOutput, sidebar *Sidebar) *Dashboard {
 	return &Dashboard{
 		agentOutput: agentOutput,
-		sidebar:     NewSidebar(),
+		sidebar:     sidebar,
 		focusPane:   FocusAgent,
 	}
 }
@@ -119,6 +118,7 @@ func (d *Dashboard) Update(msg tea.Msg) tea.Cmd {
 			case FocusNotes:
 				d.focusPane = FocusAgent
 			}
+			d.updateScrollListFocus()
 			return nil
 		}
 
@@ -224,17 +224,8 @@ func (d *Dashboard) SetSize(width, height int) {
 // UpdateSize updates the dashboard dimensions (legacy method for backward compatibility).
 func (d *Dashboard) UpdateSize(width, height int) tea.Cmd {
 	d.SetSize(width, height)
-
-	// Calculate widths
-	sidebarWidth := SidebarWidth
-	mainWidth := width - sidebarWidth
-	if mainWidth < 40 {
-		mainWidth = 40
-	}
-
-	// Update sidebar size
-	d.sidebar.UpdateSize(sidebarWidth, height)
-
+	// Note: sidebar sizing is handled by App.propagateSizes() directly
+	// since Dashboard shares the same Sidebar instance with App.
 	return nil
 }
 
@@ -256,8 +247,8 @@ func (d *Dashboard) SetState(state *session.State) {
 // UpdateState updates the dashboard with new session state (legacy method for backward compatibility).
 func (d *Dashboard) UpdateState(state *session.State) tea.Cmd {
 	d.SetState(state)
-	// Update sidebar state
-	d.sidebar.UpdateState(state)
+	// Note: sidebar state is propagated by App directly via a.sidebar.SetState()
+	// since Dashboard shares the same Sidebar instance with App.
 	return nil
 }
 

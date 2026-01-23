@@ -680,15 +680,10 @@ var _ FocusableComponent = (*Sidebar)(nil)
 
 // Sidebar styles (used by legacy Render method, will be removed in Phase 12)
 var (
-	styleSidebarBorder = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder(), true, true, true, false). // No left border
-				BorderForeground(colorMuted)
+	styleSidebarBorder = lipgloss.NewStyle()
 
 	styleSidebarHeader = lipgloss.NewStyle().
-				Foreground(colorSecondary).
+				Foreground(colorSubtext0).
 				Bold(true).
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderBottom(true).
-				BorderForeground(colorMuted).
 				PaddingLeft(1)
 )

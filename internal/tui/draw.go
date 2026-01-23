@@ -24,58 +24,37 @@ func FillArea(scr uv.Screen, area uv.Rectangle, style lipgloss.Style) {
 	uv.NewStyledString(fill).Draw(scr, area)
 }
 
-// DrawBorder renders a border around an area and returns the inner content area
-func DrawBorder(scr uv.Screen, area uv.Rectangle, style lipgloss.Style) uv.Rectangle {
-	// Render border frame
-	border := style.Width(area.Dx()).Height(area.Dy()).Render("")
-	uv.NewStyledString(border).Draw(scr, area)
+// DrawPanel renders a panel with a title header and returns the inner content area.
+// Focus is indicated by the header color (no borders).
+func DrawPanel(scr uv.Screen, area uv.Rectangle, title string, focused bool) uv.Rectangle {
+	headerHeight := 0
 
-	// Return inner content area (accounting for border thickness)
-	// Normal border takes 1 cell on each side
-	innerX := area.Min.X + 1
-	innerY := area.Min.Y + 1
-	innerWidth := area.Dx() - 2
-	innerHeight := area.Dy() - 2
+	// Draw title header if provided
+	if title != "" {
+		headerHeight = 1
+		titleStyle := stylePanelTitle
+		if focused {
+			titleStyle = stylePanelTitleFocused
+		}
+		titleText := titleStyle.Render(title)
 
-	// Ensure dimensions are not negative
-	if innerWidth < 0 {
-		innerWidth = 0
+		titleArea := uv.Rectangle{
+			Min: uv.Position{X: area.Min.X, Y: area.Min.Y},
+			Max: uv.Position{X: area.Max.X, Y: area.Min.Y + 1},
+		}
+		uv.NewStyledString(titleText).Draw(scr, titleArea)
 	}
+
+	// Return content area below the header
+	innerHeight := area.Dy() - headerHeight
 	if innerHeight < 0 {
 		innerHeight = 0
 	}
 
 	return uv.Rectangle{
-		Min: uv.Position{X: innerX, Y: innerY},
-		Max: uv.Position{X: innerX + innerWidth, Y: innerY + innerHeight},
+		Min: uv.Position{X: area.Min.X, Y: area.Min.Y + headerHeight},
+		Max: uv.Position{X: area.Max.X, Y: area.Min.Y + headerHeight + innerHeight},
 	}
-}
-
-// DrawPanel renders a bordered panel with optional title and returns the inner area
-func DrawPanel(scr uv.Screen, area uv.Rectangle, title string, focused bool) uv.Rectangle {
-	// Use the borderStyle helper for consistent focus styling
-	panelStyle := borderStyle(focused)
-
-	// Draw the border
-	inner := DrawBorder(scr, area, panelStyle)
-
-	// Draw title if provided
-	if title != "" {
-		titleStyle := stylePanelTitle
-		if focused {
-			titleStyle = stylePanelTitleFocused
-		}
-		titleText := titleStyle.Render(" " + title + " ")
-
-		// Draw title at top-left of border (overlaying the border line)
-		titleArea := uv.Rectangle{
-			Min: uv.Position{X: area.Min.X + 2, Y: area.Min.Y},
-			Max: uv.Position{X: area.Min.X + 2 + len(title) + 2, Y: area.Min.Y + 1},
-		}
-		uv.NewStyledString(titleText).Draw(scr, titleArea)
-	}
-
-	return inner
 }
 
 // DrawScrollIndicator renders a scroll position indicator

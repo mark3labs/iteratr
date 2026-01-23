@@ -111,6 +111,22 @@ func (a *AgentOutput) Update(msg tea.Msg) tea.Cmd {
 			// Move focus to next expandable message
 			a.moveFocusNext()
 			return nil
+		case "k":
+			// Scroll up by one line (vim-style)
+			if a.scrollList != nil {
+				a.scrollList.ScrollBy(-1)
+				a.scrollList.SetAutoScroll(false)
+			}
+			return nil
+		case "j":
+			// Scroll down by one line (vim-style)
+			if a.scrollList != nil {
+				a.scrollList.ScrollBy(1)
+				if a.scrollList.AtBottom() {
+					a.scrollList.SetAutoScroll(true)
+				}
+			}
+			return nil
 		case "space", "enter":
 			// Toggle expansion on focused message if it's expandable
 			if a.focusedIndex >= 0 && a.focusedIndex < len(a.messages) {
@@ -430,6 +446,20 @@ func (a *AgentOutput) refreshContent() {
 
 	a.scrollList.SetItems(items)
 
+	// Compute messageLineStarts for click-to-expand hit detection.
+	// Each entry is the cumulative line offset where that message starts.
+	a.messageLineStarts = make([]int, len(items))
+	offset := 0
+	for i, item := range items {
+		a.messageLineStarts[i] = offset
+		h := item.Height()
+		if h == 0 {
+			item.Render(a.scrollList.width)
+			h = item.Height()
+		}
+		offset += h
+	}
+
 	// Only adjust scroll position if auto-scroll is enabled
 	// No full re-render needed - ScrollList renders lazily on next View() call
 	if a.scrollList.autoScroll {
@@ -642,6 +672,7 @@ func (a *AgentOutput) Append(content string) tea.Cmd {
 
 // moveFocusPrevious moves focus to the previous expandable message.
 // Wraps around to the last expandable message if at the beginning.
+// Disables autoScroll so new content doesn't snap the view back to bottom.
 func (a *AgentOutput) moveFocusPrevious() {
 	if len(a.messages) == 0 {
 		return
@@ -656,6 +687,7 @@ func (a *AgentOutput) moveFocusPrevious() {
 	// If no message is focused, focus the last expandable message
 	if a.focusedIndex < 0 {
 		a.focusedIndex = expandableIndices[len(expandableIndices)-1]
+		a.scrollFocusedIntoView()
 		return
 	}
 
@@ -675,10 +707,17 @@ func (a *AgentOutput) moveFocusPrevious() {
 		// Wrap to last expandable message
 		a.focusedIndex = expandableIndices[len(expandableIndices)-1]
 	}
+
+	// User is navigating away from bottom - disable auto-scroll
+	if a.scrollList != nil {
+		a.scrollList.SetAutoScroll(false)
+		a.scrollFocusedIntoView()
+	}
 }
 
 // moveFocusNext moves focus to the next expandable message.
 // Wraps around to the first expandable message if at the end.
+// Re-enables autoScroll if the user reaches the last message.
 func (a *AgentOutput) moveFocusNext() {
 	if len(a.messages) == 0 {
 		return
@@ -693,6 +732,10 @@ func (a *AgentOutput) moveFocusNext() {
 	// If no message is focused, focus the first expandable message
 	if a.focusedIndex < 0 {
 		a.focusedIndex = expandableIndices[0]
+		if a.scrollList != nil {
+			a.scrollList.SetAutoScroll(false)
+			a.scrollFocusedIntoView()
+		}
 		return
 	}
 
@@ -708,9 +751,20 @@ func (a *AgentOutput) moveFocusNext() {
 	// Move to next expandable message (wrap around if needed)
 	if currentPos >= 0 && currentPos < len(expandableIndices)-1 {
 		a.focusedIndex = expandableIndices[currentPos+1]
+		// Check if we reached the last expandable message - re-enable autoScroll
+		if a.scrollList != nil {
+			if currentPos+1 == len(expandableIndices)-1 {
+				a.scrollList.SetAutoScroll(true)
+			}
+			a.scrollFocusedIntoView()
+		}
 	} else {
 		// Wrap to first expandable message
 		a.focusedIndex = expandableIndices[0]
+		if a.scrollList != nil {
+			a.scrollList.SetAutoScroll(false)
+			a.scrollFocusedIntoView()
+		}
 	}
 }
 
@@ -723,6 +777,14 @@ func (a *AgentOutput) findExpandableIndices() []int {
 		}
 	}
 	return indices
+}
+
+// scrollFocusedIntoView scrolls the ScrollList so the currently focused message is visible.
+func (a *AgentOutput) scrollFocusedIntoView() {
+	if a.scrollList == nil || a.focusedIndex < 0 || a.focusedIndex >= len(a.scrollList.items) {
+		return
+	}
+	a.scrollList.ScrollToItem(a.focusedIndex)
 }
 
 // InputValue returns the current text in the input field.

@@ -52,6 +52,7 @@ type App struct {
 // NewApp creates a new TUI application with the given session store and NATS connection.
 func NewApp(ctx context.Context, store *session.Store, sessionName string, nc *nats.Conn, sendChan chan string) *App {
 	agent := NewAgentOutput()
+	sidebar := NewSidebar()
 	return &App{
 		store:          store,
 		sessionName:    sessionName,
@@ -60,14 +61,14 @@ func NewApp(ctx context.Context, store *session.Store, sessionName string, nc *n
 		sendChan:       sendChan,
 		activeView:     ViewDashboard,
 		sidebarVisible: false, // Sidebar hidden by default in compact mode
-		dashboard:      NewDashboard(agent),
+		dashboard:      NewDashboard(agent, sidebar),
 		logs:           NewLogViewer(),
 		notes:          NewNotesPanel(),
 		agent:          agent,
 		header:         NewHeader(sessionName),
 		footer:         NewFooter(),
 		status:         NewStatusBar(),
-		sidebar:        NewSidebar(),
+		sidebar:        sidebar,
 		dialog:         NewDialog(),
 		taskModal:      NewTaskModal(),
 		noteModal:      NewNoteModal(),
