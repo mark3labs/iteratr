@@ -10,6 +10,7 @@ As a developer, I want to understand project layout so I can navigate effectivel
 
 ## Requirements
 
+- DO NOT COMMIT ANYTHING IN THIS TEST SPEC!!!!!!
 - List directories at various levels
 - Search for patterns in files
 - Count files by type
@@ -20,18 +21,6 @@ As a developer, I want to understand project layout so I can navigate effectivel
 N/A - read-only exploration tasks
 
 ## Tasks
-
-### 1. Directory exploration
-- [ ] List top-level directories in the repo
-- [ ] List contents of cmd/ directory
-
-### 2. File pattern search
-- [ ] Find all Go files in the project
-- [ ] Search for "func main" across the codebase
-- [ ] Count total lines in README files
-
-### 3. Code Analysis
-- [ ] Read a few .go files and display your favorite function
 
 ### 4. Edit
 - [ ] Create a random .go file
@@ -51,3 +40,7 @@ N/A
 ## Open Questions
 
 None
+
+## Final Notes
+
+- DO NOT COMMIT ANYTHING IN THIS TEST SPEC!!!!!!
