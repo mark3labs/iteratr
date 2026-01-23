@@ -109,13 +109,7 @@ var (
 
 // Style definitions
 var (
-	// Header styles
-	styleHeader = lipgloss.NewStyle().
-			Foreground(colorTextBright).
-			Background(colorBgHeader).
-			Bold(true).
-			Padding(0, 1)
-
+	// Session info styles (used in status bar)
 	styleHeaderTitle = lipgloss.NewStyle().
 				Foreground(colorPrimary).
 				Bold(true)
