@@ -225,6 +225,7 @@ func (s *Sidebar) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 		if len(tasks) > 0 && s.cursor < len(tasks)-1 {
 			s.cursor++
 			s.updateContent() // Rebuild content with new cursor position
+			s.tasksScrollList.ScrollToItem(s.cursor)
 		}
 		return nil
 	case "k", "up":
@@ -232,6 +233,7 @@ func (s *Sidebar) handleKeyPress(msg tea.KeyPressMsg) tea.Cmd {
 		if s.cursor > 0 {
 			s.cursor--
 			s.updateContent() // Rebuild content with new cursor position
+			s.tasksScrollList.ScrollToItem(s.cursor)
 		}
 		return nil
 	case "enter":
