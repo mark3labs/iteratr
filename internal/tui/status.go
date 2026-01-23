@@ -79,12 +79,59 @@ func (s *StatusBar) buildLeft() string {
 		left += sep + styleHeaderInfo.Render(iterInfo)
 	}
 
+	// Add task stats if tasks exist
+	if stats := s.buildTaskStats(); stats != "" {
+		left += sep + stats
+	}
+
 	// Add spinner when working
 	if s.working {
 		left += " " + s.spinner.View()
 	}
 
 	return left
+}
+
+// buildTaskStats builds a compact task status summary.
+// Format: ✓3 ●1 ○5 ✗1 (only non-zero counts shown)
+func (s *StatusBar) buildTaskStats() string {
+	if s.state == nil || len(s.state.Tasks) == 0 {
+		return ""
+	}
+
+	var completed, inProgress, remaining, blocked int
+	for _, task := range s.state.Tasks {
+		switch task.Status {
+		case "completed":
+			completed++
+		case "in_progress":
+			inProgress++
+		case "blocked":
+			blocked++
+		default:
+			remaining++
+		}
+	}
+
+	var parts []string
+	if completed > 0 {
+		parts = append(parts, styleStatusCompleted.Render(fmt.Sprintf("✓%d", completed)))
+	}
+	if inProgress > 0 {
+		parts = append(parts, styleStatusInProgress.Render(fmt.Sprintf("●%d", inProgress)))
+	}
+	if remaining > 0 {
+		parts = append(parts, styleStatusRemaining.Render(fmt.Sprintf("○%d", remaining)))
+	}
+	if blocked > 0 {
+		parts = append(parts, styleStatusBlocked.Render(fmt.Sprintf("✗%d", blocked)))
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // buildRight builds the right side with keybinding hints.
