@@ -18,60 +18,37 @@ func TestNewApp(t *testing.T) {
 	if app.sessionName != "test-session" {
 		t.Errorf("session name: got %s, want test-session", app.sessionName)
 	}
-	if app.activeView != ViewDashboard {
-		t.Errorf("active view: got %v, want ViewDashboard", app.activeView)
-	}
 	if app.dashboard == nil {
 		t.Error("expected non-nil dashboard")
 	}
 	if app.logs == nil {
 		t.Error("expected non-nil logs")
 	}
-	if app.notes == nil {
-		t.Error("expected non-nil notes")
-	}
 	if app.agent == nil {
 		t.Error("expected non-nil agent")
 	}
 }
 
-func TestApp_HandleKeyPress_ViewSwitching(t *testing.T) {
-	tests := []struct {
-		name         string
-		key          string
-		expectedView ViewType
-	}{
-		{
-			name:         "switch to dashboard",
-			key:          "1",
-			expectedView: ViewDashboard,
-		},
-		{
-			name:         "switch to logs",
-			key:          "2",
-			expectedView: ViewLogs,
-		},
-		{
-			name:         "switch to notes",
-			key:          "3",
-			expectedView: ViewNotes,
-		},
+func TestApp_HandleKeyPress_LogsToggle(t *testing.T) {
+	ctx := context.Background()
+	app := NewApp(ctx, nil, "test-session", nil, nil)
+
+	// Initially logs not visible
+	if app.logsVisible {
+		t.Error("logs should not be visible initially")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			app := NewApp(ctx, nil, "test-session", nil, nil)
-			app.activeView = ViewDashboard // Start at dashboard
+	// ctrl+l toggles logs
+	msg := tea.KeyPressMsg{Text: "ctrl+l"}
+	app.handleKeyPress(msg)
+	if !app.logsVisible {
+		t.Error("logs should be visible after ctrl+l")
+	}
 
-			msg := tea.KeyPressMsg{Code: rune(tt.key[0]), Text: tt.key}
-			updatedModel, _ := app.handleKeyPress(msg)
-			app = updatedModel.(*App)
-
-			if app.activeView != tt.expectedView {
-				t.Errorf("active view: got %v, want %v", app.activeView, tt.expectedView)
-			}
-		})
+	// ctrl+l again hides
+	app.handleKeyPress(msg)
+	if app.logsVisible {
+		t.Error("logs should be hidden after second ctrl+l")
 	}
 }
 
@@ -79,10 +56,9 @@ func TestApp_HandleKeyPress_Quit(t *testing.T) {
 	ctx := context.Background()
 	app := NewApp(ctx, nil, "test-session", nil, nil)
 
-	// Test 'q' key
-	msg := tea.KeyPressMsg{Code: 'q', Text: "q"}
-	updatedModel, cmd := app.handleKeyPress(msg)
-	app = updatedModel.(*App)
+	// Test ctrl+c
+	msg := tea.KeyPressMsg{Text: "ctrl+c"}
+	_, cmd := app.handleKeyPress(msg)
 
 	if !app.quitting {
 		t.Error("expected quitting to be true")
@@ -233,21 +209,21 @@ func TestApp_HandleKeyPress_SidebarToggle(t *testing.T) {
 		t.Error("expected sidebar to be hidden initially")
 	}
 
-	// Press 's' to toggle sidebar visible
-	msg := tea.KeyPressMsg{Code: 's', Text: "s"}
+	// Press ctrl+s to toggle sidebar visible
+	msg := tea.KeyPressMsg{Text: "ctrl+s"}
 	updatedModel, _ := app.handleKeyPress(msg)
 	app = updatedModel.(*App)
 
 	if !app.sidebarVisible {
-		t.Error("expected sidebar to be visible after pressing 's'")
+		t.Error("expected sidebar to be visible after ctrl+s")
 	}
 
-	// Press 's' again to toggle sidebar hidden
-	msg = tea.KeyPressMsg{Code: 's', Text: "s"}
+	// Press ctrl+s again to toggle sidebar hidden
+	msg = tea.KeyPressMsg{Text: "ctrl+s"}
 	updatedModel, _ = app.handleKeyPress(msg)
 	app = updatedModel.(*App)
 
 	if app.sidebarVisible {
-		t.Error("expected sidebar to be hidden after pressing 's' again")
+		t.Error("expected sidebar to be hidden after second ctrl+s")
 	}
 }

@@ -8,37 +8,31 @@ import (
 	"github.com/mark3labs/iteratr/internal/session"
 )
 
-// TestIntegration_KeyboardNavigation tests keyboard navigation between views
+// TestIntegration_KeyboardNavigation tests keyboard shortcuts
 func TestIntegration_KeyboardNavigation(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", nil, nil)
 	app.width = 120
 	app.height = 40
 	app.layout = CalculateLayout(120, 40)
 
-	tests := []struct {
-		name     string
-		key      string
-		wantView ViewType
-	}{
-		{"switch to dashboard", "1", ViewDashboard},
-		{"switch to logs", "2", ViewLogs},
-		{"switch to notes", "3", ViewNotes},
+	// ctrl+l toggles logs modal
+	msg := tea.KeyPressMsg{Text: "ctrl+l"}
+	_, _ = app.Update(msg)
+	if !app.logsVisible {
+		t.Error("ctrl+l should toggle logs visible")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Reset to dashboard
-			app.activeView = ViewDashboard
+	// ctrl+l again hides logs
+	_, _ = app.Update(msg)
+	if app.logsVisible {
+		t.Error("ctrl+l again should hide logs")
+	}
 
-			// Send key press
-			msg := tea.KeyPressMsg{Text: tt.key}
-			_, _ = app.Update(msg)
-
-			if app.activeView != tt.wantView {
-				t.Errorf("After pressing '%s', activeView = %v, want %v",
-					tt.key, app.activeView, tt.wantView)
-			}
-		})
+	// ctrl+c quits
+	quitMsg := tea.KeyPressMsg{Text: "ctrl+c"}
+	_, _ = app.Update(quitMsg)
+	if !app.quitting {
+		t.Error("ctrl+c should quit")
 	}
 }
 
@@ -115,8 +109,8 @@ func TestIntegration_ViewportScrolling(t *testing.T) {
 		app.logs.AddEvent(event)
 	}
 
-	// Switch to logs view
-	app.activeView = ViewLogs
+	// Open logs modal
+	app.logsVisible = true
 
 	// Get initial scroll position
 	initialOffset := app.logs.viewport.YOffset()
@@ -198,31 +192,20 @@ func TestIntegration_FocusManagement(t *testing.T) {
 	app.layout = CalculateLayout(120, 40)
 
 	// Test focus on dashboard
-	app.activeView = ViewDashboard
 	app.dashboard.SetFocus(true)
 	if !app.dashboard.IsFocused() {
 		t.Error("Dashboard should be focused")
 	}
 
-	// Switch to logs
-	app.activeView = ViewLogs
+	// Test logs focus
 	app.dashboard.SetFocus(false)
 	app.logs.SetFocus(true)
 	if app.dashboard.IsFocused() {
-		t.Error("Dashboard should not be focused after switching")
+		t.Error("Dashboard should not be focused")
 	}
 	if !app.logs.IsFocused() {
 		t.Error("Logs should be focused")
 	}
-
-	// Switch to notes
-	app.activeView = ViewNotes
-	app.logs.SetFocus(false)
-	app.notes.SetFocus(true)
-	if !app.notes.IsFocused() {
-		t.Error("Notes should be focused")
-	}
-
 }
 
 // TestIntegration_ResizeHandling tests that resize updates all components
@@ -284,8 +267,8 @@ func TestIntegration_CompactModeToggle(t *testing.T) {
 		t.Error("Sidebar should not be visible initially")
 	}
 
-	// Press 's' to toggle sidebar
-	msg := tea.KeyPressMsg{Text: "s"}
+	// Press ctrl+s to toggle sidebar
+	msg := tea.KeyPressMsg{Text: "ctrl+s"}
 	_, _ = app.Update(msg)
 
 	// Sidebar should now be visible
@@ -293,7 +276,7 @@ func TestIntegration_CompactModeToggle(t *testing.T) {
 		t.Error("Sidebar should be visible after toggle")
 	}
 
-	// Press 's' again to hide
+	// Press ctrl+s again to hide
 	_, _ = app.Update(msg)
 
 	// Sidebar should be hidden

@@ -42,10 +42,8 @@ func TestApp_TaskModal_ESCKey(t *testing.T) {
 // TestApp_TaskModal_BlocksKeysWhenVisible tests that modal blocks keyboard input
 func TestApp_TaskModal_BlocksKeysWhenVisible(t *testing.T) {
 	app := &App{
-		taskModal:  NewTaskModal(),
-		dialog:     NewDialog(),
-		activeView: ViewDashboard,
-		footer:     NewFooter(),
+		taskModal: NewTaskModal(),
+		dialog:    NewDialog(),
 	}
 
 	// Open modal
@@ -55,14 +53,13 @@ func TestApp_TaskModal_BlocksKeysWhenVisible(t *testing.T) {
 	}
 	app.taskModal.SetTask(task)
 
-	// Try to change view with "1" key (should be blocked)
-	initialView := app.activeView
-	keyMsg := tea.KeyPressMsg{Text: "1"}
+	// Try pressing a key (should be blocked by modal)
+	keyMsg := tea.KeyPressMsg{Text: "x"}
 	_, _ = app.handleKeyPress(keyMsg)
 
-	// View should not change when modal is open
-	if app.activeView != initialView {
-		t.Error("View should not change when modal is open")
+	// App should not quit when modal is open
+	if app.quitting {
+		t.Error("App should not quit when modal is open")
 	}
 }
 
@@ -167,11 +164,9 @@ func TestApp_TaskModal_RenderPerformance(t *testing.T) {
 // TestApp_TaskModal_NoKeysPassThrough tests that no keys pass through when modal is open
 func TestApp_TaskModal_NoKeysPassThrough(t *testing.T) {
 	app := &App{
-		taskModal:  NewTaskModal(),
-		dialog:     NewDialog(),
-		activeView: ViewDashboard,
-		footer:     NewFooter(),
-		quitting:   false,
+		taskModal: NewTaskModal(),
+		dialog:    NewDialog(),
+		quitting:  false,
 	}
 
 	// Open modal
@@ -182,22 +177,21 @@ func TestApp_TaskModal_NoKeysPassThrough(t *testing.T) {
 	app.taskModal.SetTask(task)
 
 	// Test various keys that should be blocked
-	testKeys := []string{"1", "2", "3", "4", "s", "j", "k", "enter", "tab"}
+	testKeys := []string{"x", "j", "k", "enter", "tab"}
 
 	for _, key := range testKeys {
 		t.Run("Key_"+key, func(t *testing.T) {
-			initialView := app.activeView
 			keyMsg := tea.KeyPressMsg{Text: key}
 			_, _ = app.handleKeyPress(keyMsg)
-
-			// View should not change
-			if app.activeView != initialView {
-				t.Errorf("View changed when modal is open (key: %s)", key)
-			}
 
 			// Should still be in non-quitting state
 			if app.quitting {
 				t.Error("App should not quit when modal is open")
+			}
+
+			// Modal should still be visible
+			if !app.taskModal.IsVisible() {
+				t.Error("Modal should remain visible")
 			}
 		})
 	}
@@ -219,11 +213,11 @@ func TestApp_TaskModal_QuitAfterClose(t *testing.T) {
 	app.taskModal.SetTask(task)
 	app.taskModal.Close()
 
-	// Now q key should quit
-	qMsg := tea.KeyPressMsg{Text: "q"}
+	// Now ctrl+c should quit
+	qMsg := tea.KeyPressMsg{Text: "ctrl+c"}
 	_, _ = app.handleKeyPress(qMsg)
 
 	if !app.quitting {
-		t.Error("App should quit when 'q' pressed and modal closed")
+		t.Error("App should quit when ctrl+c pressed and modal closed")
 	}
 }

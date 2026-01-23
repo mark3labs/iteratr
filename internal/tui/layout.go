@@ -12,8 +12,6 @@ const (
 	SidebarWidthDesktop = 45
 	// StatusHeight is the height of the status bar in rows
 	StatusHeight = 1
-	// FooterHeight is the height of the footer in rows
-	FooterHeight = 1
 )
 
 // LayoutMode represents the layout mode based on terminal size
@@ -34,7 +32,6 @@ type Layout struct {
 	Main    uv.Rectangle
 	Sidebar uv.Rectangle
 	Status  uv.Rectangle
-	Footer  uv.Rectangle
 }
 
 // IsCompact returns true if the layout is in compact mode
@@ -55,11 +52,8 @@ func CalculateLayout(width, height int) Layout {
 		Max: uv.Position{X: width, Y: height},
 	}
 
-	// Split vertically: content | footer+status
-	contentRect, rest2 := uv.SplitVertical(area, uv.Fixed(area.Dy()-StatusHeight-FooterHeight))
-
-	// Split footer+status: status | footer
-	statusRect, footerRect := uv.SplitVertical(rest2, uv.Fixed(StatusHeight))
+	// Split vertically: content | status
+	contentRect, statusRect := uv.SplitVertical(area, uv.Fixed(area.Dy()-StatusHeight))
 
 	// Split content horizontally: main | sidebar (desktop mode only)
 	var mainRect, sidebarRect uv.Rectangle
@@ -72,7 +66,7 @@ func CalculateLayout(width, height int) Layout {
 
 		// Split horizontally: main (flexible) | gap (1 char) | sidebar (fixed width)
 		mainRect, sidebarRect = uv.SplitHorizontal(contentRect, uv.Fixed(contentRect.Dx()-sidebarWidth))
-		mainRect.Max.X -= 1 // 1-char gap so header rules don't visually merge
+		mainRect.Max.X -= 1 // 1-char gap between main and sidebar
 	} else {
 		// Compact mode: no sidebar
 		mainRect = contentRect
@@ -86,6 +80,5 @@ func CalculateLayout(width, height int) Layout {
 		Main:    mainRect,
 		Sidebar: sidebarRect,
 		Status:  statusRect,
-		Footer:  footerRect,
 	}
 }

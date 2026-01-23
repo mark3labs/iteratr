@@ -25,11 +25,6 @@ func TestCalculateLayout_Minimum(t *testing.T) {
 		t.Errorf("Status height mismatch: got %d, want %d", layout.Status.Dy(), StatusHeight)
 	}
 
-	// Verify footer height
-	if layout.Footer.Dy() != FooterHeight {
-		t.Errorf("Footer height mismatch: got %d, want %d", layout.Footer.Dy(), FooterHeight)
-	}
-
 	// In compact mode, sidebar should be empty (no dedicated area)
 	if layout.Sidebar.Dx() > 0 || layout.Sidebar.Dy() > 0 {
 		t.Errorf("Sidebar should be empty in compact mode, got %dx%d",
@@ -43,7 +38,7 @@ func TestCalculateLayout_Minimum(t *testing.T) {
 	}
 
 	// Verify content area is properly sized
-	expectedContentHeight := height - StatusHeight - FooterHeight
+	expectedContentHeight := height - StatusHeight
 	if layout.Content.Dy() != expectedContentHeight {
 		t.Errorf("Content height mismatch: got %d, want %d",
 			layout.Content.Dy(), expectedContentHeight)
@@ -66,12 +61,9 @@ func TestCalculateLayout_Standard(t *testing.T) {
 			layout.Area.Dx(), layout.Area.Dy(), width, height)
 	}
 
-	// Verify status and footer heights
+	// Verify status height
 	if layout.Status.Dy() != StatusHeight {
 		t.Errorf("Status height mismatch: got %d, want %d", layout.Status.Dy(), StatusHeight)
-	}
-	if layout.Footer.Dy() != FooterHeight {
-		t.Errorf("Footer height mismatch: got %d, want %d", layout.Footer.Dy(), FooterHeight)
 	}
 
 	// In desktop mode, sidebar should have width
@@ -92,7 +84,7 @@ func TestCalculateLayout_Standard(t *testing.T) {
 	}
 
 	// Verify content area is properly sized
-	expectedContentHeight := height - StatusHeight - FooterHeight
+	expectedContentHeight := height - StatusHeight
 	if layout.Content.Dy() != expectedContentHeight {
 		t.Errorf("Content height mismatch: got %d, want %d",
 			layout.Content.Dy(), expectedContentHeight)
@@ -141,7 +133,7 @@ func TestCalculateLayout_Large(t *testing.T) {
 	}
 
 	// Verify all vertical sections add up to total height
-	totalHeight := layout.Content.Dy() + layout.Status.Dy() + layout.Footer.Dy()
+	totalHeight := layout.Content.Dy() + layout.Status.Dy()
 	if totalHeight != height {
 		t.Errorf("Vertical sections don't add up: got %d, want %d", totalHeight, height)
 	}
@@ -229,15 +221,10 @@ func TestCalculateLayout_NoOverlaps(t *testing.T) {
 				t.Errorf("Status should start where content ends")
 			}
 
-			// Footer should be below status
-			if layout.Footer.Min.Y != layout.Status.Max.Y {
-				t.Errorf("Footer should start where status ends")
-			}
-
-			// Footer should end at total height
-			if layout.Footer.Max.Y != size.height {
-				t.Errorf("Footer should end at total height %d, got %d",
-					size.height, layout.Footer.Max.Y)
+			// Status should end at total height
+			if layout.Status.Max.Y != size.height {
+				t.Errorf("Status should end at total height %d, got %d",
+					size.height, layout.Status.Max.Y)
 			}
 
 			// In desktop mode, main and sidebar should be side-by-side with 1-char gap

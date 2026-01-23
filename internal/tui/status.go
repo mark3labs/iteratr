@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
@@ -9,7 +10,7 @@ import (
 	"github.com/mark3labs/iteratr/internal/session"
 )
 
-// StatusBar displays session info (left) and connection status (right).
+// StatusBar displays session info (left) and keybinding hints (right).
 type StatusBar struct {
 	width       int
 	height      int
@@ -33,7 +34,7 @@ func NewStatusBar(sessionName string) *StatusBar {
 }
 
 // Draw renders the status bar to the screen.
-// Format: iteratr | session | Iteration #N     [spinner] ● connected
+// Format: iteratr | session | Iteration #N [spinner]     ^c quit
 func (s *StatusBar) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	if area.Dx() <= 0 || area.Dy() <= 0 {
 		return nil
@@ -42,7 +43,7 @@ func (s *StatusBar) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	// Build left side: session info
 	left := s.buildLeft()
 
-	// Build right side: spinner + connection status
+	// Build right side: keybinding hints
 	right := s.buildRight()
 
 	// Calculate spacing to fill width
@@ -55,12 +56,7 @@ func (s *StatusBar) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		padding = 1
 	}
 
-	spacer := ""
-	for i := 0; i < padding; i++ {
-		spacer += " "
-	}
-
-	content := left + spacer + right
+	content := left + strings.Repeat(" ", padding) + right
 
 	// Render with style
 	DrawStyled(scr, area, styleStatusBar, content)
@@ -83,22 +79,22 @@ func (s *StatusBar) buildLeft() string {
 		left += sep + styleHeaderInfo.Render(iterInfo)
 	}
 
+	// Add spinner when working
+	if s.working {
+		left += " " + s.spinner.View()
+	}
+
 	return left
 }
 
-// buildRight builds the right side of the status bar with connection status.
+// buildRight builds the right side with keybinding hints.
 func (s *StatusBar) buildRight() string {
-	var right string
+	hintKey := lipgloss.NewStyle().Foreground(colorSubtext0)
+	hintDesc := lipgloss.NewStyle().Foreground(colorOverlay0)
+	sep := "  "
 
-	// Add spinner only when working
-	if s.working {
-		right += s.spinner.View() + " "
-	}
-
-	// Add connection status
-	right += s.getConnectionStatus()
-
-	return right
+	return hintKey.Render("ctrl+l") + hintDesc.Render(" logs") + sep +
+		hintKey.Render("ctrl+c") + hintDesc.Render(" quit")
 }
 
 // SetSize updates the component dimensions.
@@ -148,24 +144,6 @@ func (s *StatusBar) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	return nil
-}
-
-// getConnectionStatus returns the connection status indicator.
-// ● = connected, ○ = disconnected
-func (s *StatusBar) getConnectionStatus() string {
-	if s.layoutMode == LayoutCompact {
-		// Compact mode: just show the dot
-		if s.connected {
-			return lipgloss.NewStyle().Foreground(colorSuccess).Render("●")
-		}
-		return lipgloss.NewStyle().Foreground(colorError).Render("○")
-	}
-
-	// Desktop mode: show full text
-	if s.connected {
-		return lipgloss.NewStyle().Foreground(colorSuccess).Render("●") + " connected"
-	}
-	return lipgloss.NewStyle().Foreground(colorError).Render("○") + " disconnected"
 }
 
 // hasInProgressTasks checks if there are any in_progress tasks.

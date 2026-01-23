@@ -14,14 +14,11 @@ import (
 )
 
 // App is the main Bubbletea model that manages the TUI application.
-// It contains all view components and handles routing between them.
 type App struct {
 	// View components
 	dashboard *Dashboard
 	logs      *LogViewer
-	notes     *NotesPanel
 	agent     *AgentOutput
-	footer    *Footer
 	status    *StatusBar
 	sidebar   *Sidebar
 	dialog    *Dialog
@@ -32,10 +29,8 @@ type App struct {
 	layout      Layout
 	layoutDirty bool
 
-	// Mouse interaction (coordinate-based hit detection, no zone manager needed)
-
 	// State
-	activeView     ViewType
+	logsVisible    bool // Toggle for logs modal overlay
 	sidebarVisible bool // Toggle for sidebar visibility in compact mode
 	store          *session.Store
 	sessionName    string
@@ -58,13 +53,10 @@ func NewApp(ctx context.Context, store *session.Store, sessionName string, nc *n
 		nc:             nc,
 		ctx:            ctx,
 		sendChan:       sendChan,
-		activeView:     ViewDashboard,
 		sidebarVisible: false, // Sidebar hidden by default in compact mode
 		dashboard:      NewDashboard(agent, sidebar),
 		logs:           NewLogViewer(),
-		notes:          NewNotesPanel(),
 		agent:          agent,
-		footer:         NewFooter(),
 		status:         NewStatusBar(sessionName),
 		sidebar:        sidebar,
 		dialog:         NewDialog(),
@@ -133,7 +125,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sidebar.SetState(msg.State)
 		a.dashboard.UpdateState(msg.State)
 		a.logs.SetState(msg.State)
-		a.notes.UpdateState(msg.State)
 		return a, nil
 
 	case EventMsg:
@@ -193,18 +184,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sidebarCmd = a.sidebar.Update(msg)
 	}
 
-	// Delegate to active view component
-	var cmd tea.Cmd
-	switch a.activeView {
-	case ViewDashboard:
-		cmd = a.dashboard.Update(msg)
-	case ViewLogs:
-		cmd = a.logs.Update(msg)
-	case ViewNotes:
-		cmd = a.notes.Update(msg)
+	// Delegate to dashboard and logs if visible
+	dashCmd := a.dashboard.Update(msg)
+	var logsCmd tea.Cmd
+	if a.logsVisible {
+		logsCmd = a.logs.Update(msg)
 	}
 
-	return a, tea.Batch(statusCmd, sidebarCmd, cmd)
+	return a, tea.Batch(statusCmd, sidebarCmd, dashCmd, logsCmd)
 }
 
 // handleKeyPress processes keyboard input using hierarchical priority routing.
@@ -243,23 +230,25 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// 2. Global keys (highest priority)
+	// 2. Logs modal captures keys when visible
+	if a.logsVisible {
+		switch msg.String() {
+		case "esc", "ctrl+l":
+			a.logsVisible = false
+			return a, nil
+		default:
+			// Forward scroll keys to log viewport
+			return a, a.logs.Update(msg)
+		}
+	}
+
+	// 3. Global keys (highest priority)
 	if cmd := a.handleGlobalKeys(msg); cmd != nil {
 		return a, cmd
 	}
 
-	// 2. View-level keys (switching views)
-	if cmd := a.handleViewKeys(msg); cmd != nil {
-		return a, cmd
-	}
-
-	// 3. Focus-specific keys (tab navigation, etc.)
-	if cmd := a.handleFocusKeys(msg); cmd != nil {
-		return a, cmd
-	}
-
-	// 4. Delegate to active component
-	return a, a.delegateToActive(msg)
+	// 4. Delegate to dashboard
+	return a, a.dashboard.Update(msg)
 }
 
 // handleMouse processes mouse click events using coordinate-based hit detection.
@@ -318,14 +307,10 @@ func (a *App) handleMouse(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// Check if a footer button was clicked
-	if action := a.footer.ActionAtPosition(mouse.X, mouse.Y); action != "" {
-		return a, a.handleFooterAction(action)
-	}
-
 	// Check if input area was clicked (focus text input)
-	if a.activeView == ViewDashboard && a.agent.IsInputAreaClick(mouse.X, mouse.Y) {
-		// Set input focus via dashboard
+	if a.agent.IsInputAreaClick(mouse.X, mouse.Y) {
+		// Set input focus via dashboard (same as pressing 'i')
+		a.dashboard.focusPane = FocusInput
 		a.dashboard.inputFocused = true
 		if a.agent != nil {
 			a.agent.SetInputFocused(true)
@@ -341,89 +326,18 @@ func (a *App) handleMouse(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// handleFooterAction processes a footer button click action.
-func (a *App) handleFooterAction(action FooterAction) tea.Cmd {
-	switch action {
-	case FooterActionDashboard:
-		a.activeView = ViewDashboard
-		a.footer.SetActiveView(ViewDashboard)
-	case FooterActionLogs:
-		a.activeView = ViewLogs
-		a.footer.SetActiveView(ViewLogs)
-	case FooterActionNotes:
-		a.activeView = ViewNotes
-		a.footer.SetActiveView(ViewNotes)
-	case FooterActionSidebar:
-		a.sidebarVisible = !a.sidebarVisible
-	case FooterActionQuit:
-		a.quitting = true
-		return tea.Quit
-	}
-	return func() tea.Msg { return nil }
-}
-
 // handleGlobalKeys processes global keyboard shortcuts (highest priority).
-// Returns tea.Quit for quit commands, nil for unhandled keys.
 func (a *App) handleGlobalKeys(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
-	case "q", "Q", "ctrl+c":
+	case "ctrl+c":
 		a.quitting = true
 		return tea.Quit
-	case "?":
-		// TODO: Toggle help view (Phase 14+)
+	case "ctrl+l":
+		a.logsVisible = !a.logsVisible
 		return nil
-	}
-	return nil
-}
-
-// handleViewKeys processes view switching shortcuts.
-// Returns non-nil cmd if key was handled, nil otherwise.
-func (a *App) handleViewKeys(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "1":
-		a.activeView = ViewDashboard
-		a.footer.SetActiveView(ViewDashboard)
-		return func() tea.Msg { return nil }
-	case "2":
-		a.activeView = ViewLogs
-		a.footer.SetActiveView(ViewLogs)
-		return func() tea.Msg { return nil }
-	case "3":
-		a.activeView = ViewNotes
-		a.footer.SetActiveView(ViewNotes)
-		return func() tea.Msg { return nil }
-	case "s":
-		// Toggle sidebar visibility (only relevant in compact mode)
+	case "ctrl+s":
 		a.sidebarVisible = !a.sidebarVisible
-		return func() tea.Msg { return nil }
-	}
-	return nil
-}
-
-// handleFocusKeys processes focus navigation shortcuts (tab, shift+tab).
-// Returns non-nil cmd if key was handled, nil otherwise.
-func (a *App) handleFocusKeys(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "tab":
-		// TODO: Cycle focus forward (Phase 14+)
 		return nil
-	case "shift+tab":
-		// TODO: Cycle focus backward (Phase 14+)
-		return nil
-	}
-	return nil
-}
-
-// delegateToActive forwards key messages to the active view component.
-// This allows components to handle their own keyboard shortcuts (scrolling, etc).
-func (a *App) delegateToActive(msg tea.KeyPressMsg) tea.Cmd {
-	switch a.activeView {
-	case ViewDashboard:
-		return a.dashboard.Update(msg)
-	case ViewLogs:
-		return a.logs.Update(msg)
-	case ViewNotes:
-		return a.notes.Update(msg)
 	}
 	return nil
 }
@@ -470,25 +384,18 @@ func (a *App) View() tea.View {
 func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	var cursor *tea.Cursor
 
-	// Draw all regions using the calculated layout
-	cursor = a.drawActiveView(scr, a.layout.Main)
+	// Draw main content (always dashboard)
+	cursor = a.dashboard.Draw(scr, a.layout.Main)
 	a.status.Draw(scr, a.layout.Status)
-	a.footer.Draw(scr, a.layout.Footer)
 
-	// Draw sidebar based on mode:
-	// - Desktop mode: always show sidebar on the right
-	// - Compact mode: show sidebar only if toggled visible (overlay on main content)
+	// Draw sidebar based on mode
 	if a.layout.Mode == LayoutDesktop {
-		// Desktop mode: sidebar is always visible in dedicated area
 		a.sidebar.Draw(scr, a.layout.Sidebar)
 	} else if a.sidebarVisible {
-		// Compact mode: sidebar overlays main content when toggled visible
-		// Use sidebar width from desktop mode
 		sidebarWidth := SidebarWidthDesktop
 		if a.layout.Main.Dx()/2 < sidebarWidth {
 			sidebarWidth = a.layout.Main.Dx() / 2
 		}
-		// Position sidebar on the right side of main area
 		sidebarRect := uv.Rect(
 			a.layout.Main.Max.X-sidebarWidth,
 			a.layout.Main.Min.Y,
@@ -498,7 +405,10 @@ func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		a.sidebar.Draw(scr, sidebarRect)
 	}
 
-	// Draw overlays on top (modals, then dialog)
+	// Draw overlays
+	if a.logsVisible {
+		a.logs.Draw(scr, area)
+	}
 	if a.taskModal.IsVisible() {
 		a.taskModal.Draw(scr, area)
 	}
@@ -510,19 +420,6 @@ func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	}
 
 	return cursor
-}
-
-// drawActiveView renders the currently active view component to the screen.
-func (a *App) drawActiveView(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
-	switch a.activeView {
-	case ViewDashboard:
-		return a.dashboard.Draw(scr, area)
-	case ViewLogs:
-		return a.logs.Draw(scr, area)
-	case ViewNotes:
-		return a.notes.Draw(scr, area)
-	}
-	return nil
 }
 
 // waitForEvents listens on the event channel and converts events to messages.
@@ -649,20 +546,13 @@ type UserInputMsg struct {
 // propagateSizes updates component sizes based on the current layout.
 // This is called when the layout changes (on window resize or mode switch).
 func (a *App) propagateSizes() {
-	// Propagate sizes to footer and status bar
-	a.footer.SetSize(a.layout.Footer.Dx(), a.layout.Footer.Dy())
+	// Propagate sizes to status bar
 	a.status.SetSize(a.layout.Status.Dx(), a.layout.Status.Dy())
-
-	// Propagate layout mode to footer and status bar
-	a.footer.SetLayoutMode(a.layout.Mode)
 	a.status.SetLayoutMode(a.layout.Mode)
-	a.footer.SetActiveView(a.activeView)
 
 	// Propagate sizes to main content components
-	// Note: dashboard owns the agent output component, so we only size the dashboard
 	a.dashboard.SetSize(a.layout.Main.Dx(), a.layout.Main.Dy())
-	a.logs.SetSize(a.layout.Main.Dx(), a.layout.Main.Dy())
-	a.notes.SetSize(a.layout.Main.Dx(), a.layout.Main.Dy())
+	a.logs.SetSize(a.width, a.height)
 
 	// Propagate sidebar size based on layout mode
 	if a.layout.Mode == LayoutDesktop {

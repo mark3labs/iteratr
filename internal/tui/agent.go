@@ -173,8 +173,9 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		return nil
 	}
 
-	// Split layout vertically: viewport gets remaining space, input area gets 3 lines at bottom
-	viewportHeight := area.Dy() - 3
+	// Split layout vertically: viewport gets remaining space, input area gets 5 lines at bottom
+	// (top margin + separator + input + help text + bottom margin)
+	viewportHeight := area.Dy() - 5
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
@@ -211,19 +212,23 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	// Draw separator line and input only if input area has valid dimensions
 	if inputArea.Dx() > 0 && inputArea.Dy() > 1 {
-		separatorY := inputArea.Min.Y
-		separatorLine := strings.Repeat("─", inputArea.Dx())
-		separatorArea := uv.Rect(inputArea.Min.X, separatorY, inputArea.Dx(), 1)
-		uv.NewStyledString(separatorLine).Draw(scr, separatorArea)
+		// Left padding to match status bar indentation
+		leftPad := 2
 
-		// Draw input field below separator (line 2 of input area)
+		// Top margin: skip first row
+		separatorY := inputArea.Min.Y + 1
+		separatorLine := strings.Repeat(" ", leftPad) + strings.Repeat("─", inputArea.Dx()-leftPad)
+		separatorArea := uv.Rect(inputArea.Min.X, separatorY, inputArea.Dx(), 1)
+		uv.NewStyledString(styleDim.Render(separatorLine)).Draw(scr, separatorArea)
+
+		// Draw input field below separator
 		inputView := a.input.View()
 		inputY := separatorY + 1
-		inputContentArea := uv.Rect(inputArea.Min.X, inputY, inputArea.Dx(), 1)
+		inputContentArea := uv.Rect(inputArea.Min.X+leftPad, inputY, inputArea.Dx()-leftPad, 1)
 		uv.NewStyledString(inputView).Draw(scr, inputContentArea)
 
-		// Draw help text below input (line 3 of input area)
-		if inputArea.Dy() >= 3 {
+		// Draw help text below input
+		if inputArea.Dy() >= 4 {
 			var helpText string
 			if a.input.Focused() {
 				helpText = styleDim.Render("Enter to send · Esc to cancel")
@@ -231,9 +236,10 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 				helpText = styleDim.Render("Press i to type a message")
 			}
 			helpY := inputY + 1
-			helpArea := uv.Rect(inputArea.Min.X, helpY, inputArea.Dx(), 1)
+			helpArea := uv.Rect(inputArea.Min.X+leftPad, helpY, inputArea.Dx()-leftPad, 1)
 			uv.NewStyledString(helpText).Draw(scr, helpArea)
 		}
+		// Bottom margin: last row left empty
 
 		// Return cursor position if input is focused
 		if a.input.Focused() {

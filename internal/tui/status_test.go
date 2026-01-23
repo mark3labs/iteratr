@@ -80,20 +80,12 @@ func TestStatusBar_SpinnerAnimation(t *testing.T) {
 			sb.Draw(canvas, area)
 			content := canvas.Render()
 
-			// Check for spinner presence
-			if tt.expectSpinner {
-				// When working, spinner should be visible (not idle)
-				// Just verify connection status is shown
-				if !strings.Contains(content, "connected") {
-					t.Errorf("Expected connection status, got: %s", content)
-				}
-			} else {
-				// When idle, no spinner - just connection status
-				// Should NOT have an idle dot before the connection dot
-				// Content should start with connection status
-				if !strings.Contains(content, "connected") {
-					t.Errorf("Expected connection status when idle, got: %s", content)
-				}
+			// Verify content includes session info and keybinding hints
+			if !strings.Contains(content, "iteratr") {
+				t.Errorf("Expected session title, got: %s", content)
+			}
+			if !strings.Contains(content, "quit") {
+				t.Errorf("Expected keybinding hints, got: %s", content)
 			}
 		})
 	}

@@ -21,8 +21,7 @@ func TestApp_AnimationsPauseWhenNotVisible(t *testing.T) {
 		t.Fatal("Expected desktop layout mode")
 	}
 
-	// Start on dashboard view
-	app.activeView = ViewDashboard
+	// Dashboard is always the active view
 
 	// Create a PulseMsg
 	pulseMsg := PulseMsg{ID: "test"}
@@ -83,7 +82,7 @@ func TestApp_SidebarUpdatesWhenVisible(t *testing.T) {
 			app.height = 40
 			app.layout.Mode = tt.layoutMode
 			app.sidebarVisible = tt.sidebarVisible
-			app.activeView = ViewDashboard
+			// Dashboard is always the active view
 
 			// Trigger an Update that would normally update sidebar
 			msg := tea.KeyPressMsg{Code: 'x', Text: "x"}

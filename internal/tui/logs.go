@@ -32,20 +32,69 @@ func NewLogViewer() *LogViewer {
 	}
 }
 
-// Draw renders the log viewer to the screen buffer.
+// Draw renders the log viewer as a modal overlay.
 func (l *LogViewer) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
-	// Draw panel border with title
-	inner := DrawPanel(scr, area, "Event Log", l.focused)
-
-	// Draw viewport content
-	content := l.viewport.View()
-	DrawText(scr, inner, content)
-
-	// Draw scroll indicator if content overflows
-	if l.viewport.TotalLineCount() > l.viewport.Height() {
-		percent := l.viewport.ScrollPercent()
-		DrawScrollIndicator(scr, area, percent)
+	// Calculate modal dimensions (80% of screen, with margins)
+	modalWidth := area.Dx() - 4
+	modalHeight := area.Dy() - 4
+	if modalWidth < 40 {
+		modalWidth = area.Dx()
 	}
+	if modalHeight < 10 {
+		modalHeight = area.Dy()
+	}
+
+	// Update viewport size to match modal
+	contentWidth := modalWidth - 4   // Account for border + padding
+	contentHeight := modalHeight - 4 // Account for border + title + padding
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	l.viewport.SetWidth(contentWidth)
+	l.viewport.SetHeight(contentHeight)
+
+	// Build modal content: title + separator + viewport
+	title := renderModalTitle("Event Log", contentWidth)
+	separator := styleModalSeparator.Render(strings.Repeat("─", contentWidth))
+	vpContent := l.viewport.View()
+
+	// Hint at bottom
+	hint := styleModalHint.Render("esc close • ↑/↓ scroll • ctrl+l close")
+
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		title,
+		separator,
+		vpContent,
+		hint,
+	)
+
+	// Style the modal
+	modalStyle := styleModalContainer.Copy().
+		Width(modalWidth).
+		Height(modalHeight)
+
+	modalContent := modalStyle.Render(content)
+
+	// Center on screen
+	renderedWidth := lipgloss.Width(modalContent)
+	renderedHeight := lipgloss.Height(modalContent)
+	x := (area.Dx() - renderedWidth) / 2
+	y := (area.Dy() - renderedHeight) / 2
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+
+	modalArea := uv.Rectangle{
+		Min: uv.Position{X: area.Min.X + x, Y: area.Min.Y + y},
+		Max: uv.Position{X: area.Min.X + x + renderedWidth, Y: area.Min.Y + y + renderedHeight},
+	}
+	uv.NewStyledString(modalContent).Draw(scr, modalArea)
 
 	return nil
 }
