@@ -590,6 +590,9 @@ func (o *Orchestrator) startTUI() error {
 		if _, err := o.tuiProgram.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 		}
+		// Reset terminal state in case Bubble Tea didn't clean up properly.
+		// Exits alt screen, disables mouse tracking (cell motion + SGR), disables focus reporting.
+		fmt.Fprint(os.Stdout, "\033[?1049l\033[?1002l\033[?1006l\033[?1004l")
 	}()
 
 	// Monitor TUI quit and cancel orchestrator context
