@@ -224,12 +224,16 @@ Displays version, commit hash, and build date.
 
 When running with the TUI (default), use these keys:
 
-- **`1`**: Dashboard view - agent output with task/note sidebar
-- **`2`**: Logs view - scrollable event history
-- **`3`**: Notes view - learnings, tips, blockers, decisions
-- **`j/k`**: Navigate lists (tasks, logs, etc.)
-- **`↑/↓`**: Scroll viewports
-- **`q` or `Ctrl+C`**: Quit
+- **`Ctrl+C`**: Quit
+- **`Ctrl+L`**: Toggle logs overlay
+- **`Ctrl+S`**: Toggle sidebar (compact mode)
+- **`Tab`**: Cycle focus between Agent → Tasks → Notes panes
+- **`i`**: Focus input field (type messages to the agent)
+- **`Enter`**: Submit input message (when input focused)
+- **`Esc`**: Exit input field / close modal
+- **`j/k`**: Navigate lists (when sidebar focused)
+
+Footer buttons (mouse-clickable) switch between Dashboard, Logs, and Notes views.
 
 ## Session State
 
