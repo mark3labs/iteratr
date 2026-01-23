@@ -3,6 +3,7 @@ package tui
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/mark3labs/iteratr/internal/session"
 )
 
@@ -208,3 +209,128 @@ func TestNewDashboard(t *testing.T) {
 
 // TestDashboard_RenderTaskStats removed - renderTaskStats() method no longer exists
 // Task stats are shown in Sidebar component and renderProgressIndicator()
+
+func TestDashboard_UserInputMsgOnEnter(t *testing.T) {
+	// Create a new agent output and dashboard
+	agentOutput := NewAgentOutput()
+	d := NewDashboard(agentOutput)
+	d.UpdateSize(100, 50)
+
+	// Set focus to input pane
+	d.focusPane = FocusInput
+	d.agentOutput.SetInputFocused(true)
+
+	// Set some input text
+	d.agentOutput.input.SetValue("test message")
+
+	// Verify input has text
+	if d.agentOutput.InputValue() != "test message" {
+		t.Errorf("expected input value 'test message', got %q", d.agentOutput.InputValue())
+	}
+
+	// Simulate Enter key press
+	enterKey := tea.KeyPressMsg{Code: tea.KeyEnter}
+	cmdFunc := d.Update(enterKey)
+
+	// Verify cmd is not nil (UserInputMsg is returned)
+	if cmdFunc == nil {
+		t.Fatal("expected cmd to be non-nil (UserInputMsg should be emitted)")
+	}
+
+	// Execute the command to get the message
+	msg := cmdFunc()
+
+	// Verify the message is UserInputMsg
+	userMsg, ok := msg.(UserInputMsg)
+	if !ok {
+		t.Fatalf("expected UserInputMsg, got %T", msg)
+	}
+
+	// Verify the message contains the input text
+	if userMsg.Text != "test message" {
+		t.Errorf("expected UserInputMsg.Text 'test message', got %q", userMsg.Text)
+	}
+
+	// Verify input was reset
+	if d.agentOutput.InputValue() != "" {
+		t.Errorf("expected input to be reset, got %q", d.agentOutput.InputValue())
+	}
+
+	// Verify focus was returned to agent
+	if d.focusPane != FocusAgent {
+		t.Errorf("expected focusPane to be FocusAgent, got %d", d.focusPane)
+	}
+
+	// Verify input is unfocused
+	if d.agentOutput.input.Focused() {
+		t.Error("expected input to be unfocused after Enter")
+	}
+}
+
+func TestDashboard_UserInputMsgQueuedWhenBusy(t *testing.T) {
+	// Create a new agent output and dashboard
+	agentOutput := NewAgentOutput()
+	d := NewDashboard(agentOutput)
+	d.UpdateSize(100, 50)
+
+	// Set agent as busy
+	d.agentBusy = true
+
+	// Set focus to input pane
+	d.focusPane = FocusInput
+	d.agentOutput.SetInputFocused(true)
+
+	// Set some input text
+	d.agentOutput.input.SetValue("queued message")
+
+	// Simulate Enter key press
+	enterKey := tea.KeyPressMsg{Code: tea.KeyEnter}
+	cmdFunc := d.Update(enterKey)
+
+	// Verify cmd is nil (message is queued, not emitted)
+	if cmdFunc != nil {
+		t.Error("expected cmd to be nil when agent is busy (message should be queued)")
+	}
+
+	// Verify message was queued
+	if d.queuedMsg != "queued message" {
+		t.Errorf("expected queuedMsg 'queued message', got %q", d.queuedMsg)
+	}
+
+	// Verify input was reset
+	if d.agentOutput.InputValue() != "" {
+		t.Errorf("expected input to be reset, got %q", d.agentOutput.InputValue())
+	}
+
+	// Verify focus was returned to agent
+	if d.focusPane != FocusAgent {
+		t.Errorf("expected focusPane to be FocusAgent, got %d", d.focusPane)
+	}
+}
+
+func TestDashboard_EmptyInputNoMessage(t *testing.T) {
+	// Create a new agent output and dashboard
+	agentOutput := NewAgentOutput()
+	d := NewDashboard(agentOutput)
+	d.UpdateSize(100, 50)
+
+	// Set focus to input pane
+	d.focusPane = FocusInput
+	d.agentOutput.SetInputFocused(true)
+
+	// Leave input empty (no text)
+
+	// Simulate Enter key press
+	enterKey := tea.KeyPressMsg{Code: tea.KeyEnter}
+	cmdFunc := d.Update(enterKey)
+
+	// Verify cmd is nil (no message emitted for empty input)
+	if cmdFunc != nil {
+		t.Error("expected cmd to be nil for empty input")
+	}
+
+	// Verify focus remains on input (empty input doesn't exit)
+	if d.focusPane != FocusInput {
+		t.Errorf("expected focusPane to remain FocusInput, got %d", d.focusPane)
+	}
+}
