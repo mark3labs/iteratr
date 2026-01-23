@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/mark3labs/iteratr/internal/nats"
-	"github.com/rs/xid"
 )
 
 // NoteAddParams represents the parameters for adding a note.
@@ -38,8 +37,14 @@ func (s *Store) NoteAdd(ctx context.Context, session string, params NoteAddParam
 		return nil, fmt.Errorf("invalid type: %s (must be learning, stuck, tip, or decision)", params.Type)
 	}
 
-	// Generate unique ID and timestamp
-	id := xid.New().String()
+	// Load current state to get next note counter
+	state, err := s.LoadState(ctx, session)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load state for ID generation: %w", err)
+	}
+
+	// Generate sequential ID and timestamp
+	id := fmt.Sprintf("NOT-%d", state.NoteCounter+1)
 	now := time.Now()
 
 	// Create event metadata
@@ -59,7 +64,7 @@ func (s *Store) NoteAdd(ctx context.Context, session string, params NoteAddParam
 		Meta:      meta,
 	}
 
-	_, err := s.PublishEvent(ctx, event)
+	_, err = s.PublishEvent(ctx, event)
 	if err != nil {
 		return nil, err
 	}

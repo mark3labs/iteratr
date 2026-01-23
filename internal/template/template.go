@@ -12,6 +12,14 @@ import (
 	"github.com/mark3labs/iteratr/internal/session"
 )
 
+// shortID returns an ID truncated to 8 characters for display, or the full ID if shorter.
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}
+
 // Variables holds the data to be injected into template placeholders.
 type Variables struct {
 	Session   string // Session name
@@ -182,7 +190,7 @@ func formatInbox(state *session.State) string {
 	sb.WriteString(fmt.Sprintf("## Inbox\n%d unread message(s):\n", len(unread)))
 	for _, msg := range unread {
 		sb.WriteString(fmt.Sprintf("- [%s] %s (%s)\n",
-			msg.ID[:8],
+			shortID(msg.ID),
 			msg.Content,
 			msg.CreatedAt.Format(time.RFC3339),
 		))
@@ -260,19 +268,14 @@ func formatTasks(state *session.State) string {
 			// Format dependency info
 			depInfo := ""
 			if len(task.DependsOn) > 0 {
-				// Collect short IDs of dependencies
 				depIDs := make([]string, len(task.DependsOn))
 				for i, depID := range task.DependsOn {
-					if len(depID) >= 8 {
-						depIDs[i] = depID[:8]
-					} else {
-						depIDs[i] = depID
-					}
+					depIDs[i] = depID
 				}
 				depInfo = fmt.Sprintf(" (depends on: %s)", strings.Join(depIDs, ", "))
 			}
 
-			sb.WriteString(fmt.Sprintf("  - %s[%s] %s%s%s\n", priorityPrefix, task.ID[:8], task.Content, iterInfo, depInfo))
+			sb.WriteString(fmt.Sprintf("  - %s[%s] %s%s%s\n", priorityPrefix, task.ID, task.Content, iterInfo, depInfo))
 		}
 	}
 

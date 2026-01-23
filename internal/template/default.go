@@ -19,6 +19,7 @@ IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NO
 
 ### Task Management (REQUIRED)
 ` + "`" + `{{binary}} tool task-add --data-dir .iteratr --name {{session}} --content "task description"` + "`" + `
+` + "`" + `{{binary}} tool task-batch-add --data-dir .iteratr --name {{session}} --tasks '[{"content":"task 1"},{"content":"task 2"}]'` + "`" + `
 ` + "`" + `{{binary}} tool task-status --data-dir .iteratr --name {{session}} --id TASK_ID --status STATUS` + "`" + `
   - Status values: remaining, in_progress, completed, blocked
 ` + "`" + `{{binary}} tool task-priority --data-dir .iteratr --name {{session}} --id TASK_ID --priority N` + "`" + `
@@ -40,7 +41,7 @@ IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NO
 ## Workflow
 
 1. **Review inbox above** - if messages exist, process then mark read
-2. **SYNC ALL TASKS FROM SPEC**: Compare spec tasks against task list. ANY task in the spec that is not in the queue MUST be added via ` + "`" + `iteratr tool task-add` + "`" + `. Do this BEFORE picking a task.
+2. **SYNC ALL TASKS FROM SPEC**: Compare spec tasks against task list. ANY task in the spec that is not in the queue MUST be added via ` + "`" + `task-batch-add` + "`" + ` (preferred for multiple) or ` + "`" + `task-add` + "`" + `. Do this BEFORE picking a task.
 3. **Pick ONE ready task** - highest priority with no unresolved dependencies
 4. **Mark in_progress** - ` + "`" + `task-status --id X --status in_progress` + "`" + `
 5. **Do the work** - implement fully, run tests

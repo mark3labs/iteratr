@@ -173,11 +173,8 @@ func TestTaskOperations(t *testing.T) {
 			t.Fatalf("TaskAdd failed: %v", err)
 		}
 
-		// Use prefix (at least 8 chars)
-		if len(task.ID) < 8 {
-			t.Skip("task ID too short for prefix test")
-		}
-		prefix := task.ID[:8]
+		// Use prefix (at least 3 chars) - TAS-N IDs support prefix "TAS-"
+		prefix := "TAS-"
 
 		// Update using prefix
 		err = store.TaskStatus(ctx, prefixSession, TaskStatusParams{
@@ -203,7 +200,7 @@ func TestTaskOperations(t *testing.T) {
 
 	t.Run("TaskStatus rejects short prefix", func(t *testing.T) {
 		err := store.TaskStatus(ctx, session, TaskStatusParams{
-			ID:        "1234567", // Only 7 chars
+			ID:        "12", // Only 2 chars, minimum is 3
 			Status:    "completed",
 			Iteration: 1,
 		})

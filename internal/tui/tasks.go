@@ -288,11 +288,7 @@ func (t *TaskList) renderGroup(title string, tasks []*session.Task, statusStyle 
 
 // renderTask renders a single task with ID prefix and content.
 func (t *TaskList) renderTask(task *session.Task, statusStyle lipgloss.Style, isSelected bool) string {
-	// Get 8 character ID prefix
 	idPrefix := task.ID
-	if len(idPrefix) > 8 {
-		idPrefix = idPrefix[:8]
-	}
 
 	// Render ID and content
 	id := styleTaskID.Render(fmt.Sprintf("[%s]", idPrefix))

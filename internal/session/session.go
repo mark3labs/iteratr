@@ -80,12 +80,14 @@ func (s *Store) PublishEvent(ctx context.Context, event Event) (*jetstream.PubAc
 // State represents the current state of a session, reconstructed from events.
 // It implements the reduce pattern by applying events to build up the current state.
 type State struct {
-	Session    string           `json:"session"`
-	Tasks      map[string]*Task `json:"tasks"`      // Task ID -> Task
-	Notes      []*Note          `json:"notes"`      // Chronological list of notes
-	Inbox      []*Message       `json:"inbox"`      // Inbox messages
-	Iterations []*Iteration     `json:"iterations"` // Iteration history
-	Complete   bool             `json:"complete"`   // Session marked complete
+	Session     string           `json:"session"`
+	Tasks       map[string]*Task `json:"tasks"`        // Task ID -> Task
+	TaskCounter int              `json:"task_counter"` // Incrementing counter for TAS-N IDs
+	Notes       []*Note          `json:"notes"`        // Chronological list of notes
+	NoteCounter int              `json:"note_counter"` // Incrementing counter for NOT-N IDs
+	Inbox       []*Message       `json:"inbox"`        // Inbox messages
+	Iterations  []*Iteration     `json:"iterations"`   // Iteration history
+	Complete    bool             `json:"complete"`     // Session marked complete
 }
 
 // Task represents a task in the task system.
@@ -188,6 +190,7 @@ func (st *State) applyTaskEvent(event Event) {
 			Iteration: meta.Iteration,
 		}
 		st.Tasks[event.ID] = task
+		st.TaskCounter++
 
 	case "status":
 		// Parse metadata for task ID and new status
@@ -270,6 +273,7 @@ func (st *State) applyNoteEvent(event Event) {
 			Iteration: meta.Iteration,
 		}
 		st.Notes = append(st.Notes, note)
+		st.NoteCounter++
 	}
 }
 

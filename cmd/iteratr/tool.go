@@ -32,6 +32,7 @@ func init() {
 
 	// Add subcommands for each tool operation
 	toolCmd.AddCommand(taskAddCmd)
+	toolCmd.AddCommand(taskBatchAddCmd)
 	toolCmd.AddCommand(taskStatusCmd)
 	toolCmd.AddCommand(taskPriorityCmd)
 	toolCmd.AddCommand(taskDependsCmd)
@@ -146,6 +147,73 @@ var taskAddCmd = &cobra.Command{
 func init() {
 	taskAddCmd.Flags().String("content", "", "Task content (required)")
 	taskAddCmd.Flags().String("status", "remaining", "Initial status")
+}
+
+// task-batch-add command
+var taskBatchAddCmd = &cobra.Command{
+	Use:   "task-batch-add",
+	Short: "Add multiple tasks at once",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if toolFlags.name == "" {
+			return fmt.Errorf("session name is required (--name)")
+		}
+
+		tasksJSON, _ := cmd.Flags().GetString("tasks")
+		if tasksJSON == "" {
+			return fmt.Errorf("tasks JSON array is required")
+		}
+
+		// Parse JSON array of task objects
+		var taskInputs []struct {
+			Content string `json:"content"`
+			Status  string `json:"status,omitempty"`
+		}
+		if err := json.Unmarshal([]byte(tasksJSON), &taskInputs); err != nil {
+			return fmt.Errorf("invalid tasks JSON: %w", err)
+		}
+
+		if len(taskInputs) == 0 {
+			return fmt.Errorf("at least one task is required")
+		}
+
+		store, cleanup, err := connectToSession()
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		// Convert to TaskAddParams
+		params := make([]session.TaskAddParams, len(taskInputs))
+		for i, input := range taskInputs {
+			params[i] = session.TaskAddParams{
+				Content: input.Content,
+				Status:  input.Status,
+			}
+		}
+
+		ctx := context.Background()
+		tasks, err := store.TaskBatchAdd(ctx, toolFlags.name, params)
+		if err != nil {
+			return err
+		}
+
+		// Output JSON array for parsing
+		var output []map[string]string
+		for _, t := range tasks {
+			output = append(output, map[string]string{
+				"id":      t.ID,
+				"status":  t.Status,
+				"content": t.Content,
+			})
+		}
+		result, _ := json.Marshal(output)
+		fmt.Println(string(result))
+		return nil
+	},
+}
+
+func init() {
+	taskBatchAddCmd.Flags().String("tasks", "", `JSON array of tasks, e.g. [{"content":"Task 1"},{"content":"Task 2","status":"in_progress"}]`)
 }
 
 // task-status command
@@ -306,7 +374,7 @@ var taskListCmd = &cobra.Command{
 			}
 			lines = append(lines, fmt.Sprintf("%s:", strings.Title(strings.ReplaceAll(status, "_", " "))))
 			for _, t := range tasks {
-				lines = append(lines, fmt.Sprintf("  [%s] %s", t.ID[:8], t.Content))
+				lines = append(lines, fmt.Sprintf("  [%s] %s", t.ID, t.Content))
 			}
 		}
 
@@ -358,7 +426,7 @@ var noteAddCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Note added: [%s] %s\n", note.Type, note.ID[:8])
+		fmt.Printf("Note added: [%s] %s\n", note.Type, note.ID)
 		return nil
 	},
 }

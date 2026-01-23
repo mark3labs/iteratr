@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mark3labs/iteratr/internal/nats"
-	"github.com/rs/xid"
 )
 
 // TaskAddParams represents the parameters for adding a task.
@@ -20,7 +19,7 @@ type TaskAddParams struct {
 
 // TaskStatusParams represents the parameters for updating task status.
 type TaskStatusParams struct {
-	ID        string `json:"id"`     // Task ID or prefix (8+ chars)
+	ID        string `json:"id"`     // Task ID or prefix (3+ chars)
 	Status    string `json:"status"` // remaining, in_progress, completed, blocked
 	Iteration int    `json:"iteration"`
 }
@@ -52,8 +51,14 @@ func (s *Store) TaskAdd(ctx context.Context, session string, params TaskAddParam
 		return nil, fmt.Errorf("invalid status: %s (must be remaining, in_progress, completed, or blocked)", status)
 	}
 
-	// Generate unique ID and timestamp
-	id := xid.New().String()
+	// Load current state to get next task counter
+	state, err := s.LoadState(ctx, session)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load state for ID generation: %w", err)
+	}
+
+	// Generate sequential ID and timestamp
+	id := fmt.Sprintf("TAS-%d", state.TaskCounter+1)
 	now := time.Now()
 
 	// Create event metadata
@@ -73,7 +78,7 @@ func (s *Store) TaskAdd(ctx context.Context, session string, params TaskAddParam
 		Meta:      meta,
 	}
 
-	_, err := s.PublishEvent(ctx, event)
+	_, err = s.PublishEvent(ctx, event)
 	if err != nil {
 		return nil, err
 	}
@@ -91,8 +96,74 @@ func (s *Store) TaskAdd(ctx context.Context, session string, params TaskAddParam
 	return task, nil
 }
 
+// TaskBatchAdd creates multiple tasks in a single operation.
+// Loads state once and generates sequential IDs efficiently.
+func (s *Store) TaskBatchAdd(ctx context.Context, session string, tasks []TaskAddParams) ([]*Task, error) {
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("at least one task is required")
+	}
+
+	// Load state once to get the current counter
+	state, err := s.LoadState(ctx, session)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load state for ID generation: %w", err)
+	}
+
+	counter := state.TaskCounter
+	now := time.Now()
+	result := make([]*Task, 0, len(tasks))
+
+	for _, params := range tasks {
+		if params.Content == "" {
+			return nil, fmt.Errorf("content is required for all tasks")
+		}
+
+		status := params.Status
+		if status == "" {
+			status = "remaining"
+		}
+		if !isValidTaskStatus(status) {
+			return nil, fmt.Errorf("invalid status: %s (must be remaining, in_progress, completed, or blocked)", status)
+		}
+
+		counter++
+		id := fmt.Sprintf("TAS-%d", counter)
+
+		meta, _ := json.Marshal(map[string]any{
+			"status":    status,
+			"iteration": params.Iteration,
+		})
+
+		event := Event{
+			ID:        id,
+			Timestamp: now,
+			Session:   session,
+			Type:      nats.EventTypeTask,
+			Action:    "add",
+			Data:      params.Content,
+			Meta:      meta,
+		}
+
+		_, err := s.PublishEvent(ctx, event)
+		if err != nil {
+			return nil, fmt.Errorf("failed to publish task %q: %w", params.Content, err)
+		}
+
+		result = append(result, &Task{
+			ID:        id,
+			Content:   params.Content,
+			Status:    status,
+			CreatedAt: now,
+			UpdatedAt: now,
+			Iteration: params.Iteration,
+		})
+	}
+
+	return result, nil
+}
+
 // TaskStatus updates the status of an existing task.
-// The ID parameter supports prefix matching (minimum 8 characters).
+// The ID parameter supports prefix matching (minimum 3 characters).
 func (s *Store) TaskStatus(ctx context.Context, session string, params TaskStatusParams) error {
 	// Validate required fields
 	if params.ID == "" {
@@ -341,7 +412,7 @@ func (s *Store) TaskNext(ctx context.Context, session string) (*Task, error) {
 }
 
 // resolveTaskID resolves a task ID or prefix to a full task ID.
-// Supports prefix matching with minimum 8 characters.
+// Supports prefix matching with minimum 3 characters.
 // Returns an error if the prefix is ambiguous or not found.
 func resolveTaskID(state *State, idOrPrefix string) (string, error) {
 	// If exact match exists, return it
@@ -350,8 +421,8 @@ func resolveTaskID(state *State, idOrPrefix string) (string, error) {
 	}
 
 	// Check prefix length requirement
-	if len(idOrPrefix) < 8 {
-		return "", fmt.Errorf("task ID prefix must be at least 8 characters (got %d)", len(idOrPrefix))
+	if len(idOrPrefix) < 3 {
+		return "", fmt.Errorf("task ID prefix must be at least 3 characters (got %d)", len(idOrPrefix))
 	}
 
 	// Find matching tasks by prefix
