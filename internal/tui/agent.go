@@ -206,9 +206,14 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		inputContentArea := uv.Rect(inputArea.Min.X, inputY, inputArea.Dx(), 1)
 		uv.NewStyledString(inputView).Draw(scr, inputContentArea)
 
-		// Draw help text below input when focused (line 3 of input area)
-		if a.input.Focused() && inputArea.Dy() >= 3 {
-			helpText := styleDim.Render("Enter to send · Esc to cancel")
+		// Draw help text below input (line 3 of input area)
+		if inputArea.Dy() >= 3 {
+			var helpText string
+			if a.input.Focused() {
+				helpText = styleDim.Render("Enter to send · Esc to cancel")
+			} else {
+				helpText = styleDim.Render("Press i to type a message")
+			}
 			helpY := inputY + 1
 			helpArea := uv.Rect(inputArea.Min.X, helpY, inputArea.Dx(), 1)
 			uv.NewStyledString(helpText).Draw(scr, helpArea)
