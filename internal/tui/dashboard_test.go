@@ -334,3 +334,122 @@ func TestDashboard_EmptyInputNoMessage(t *testing.T) {
 		t.Errorf("expected focusPane to remain FocusInput, got %d", d.focusPane)
 	}
 }
+
+func TestDashboard_InputFocusWithIKey(t *testing.T) {
+	// Create a new agent output and dashboard
+	agentOutput := NewAgentOutput()
+	d := NewDashboard(agentOutput)
+	d.UpdateSize(100, 50)
+
+	// Initially focus should be on agent
+	if d.focusPane != FocusAgent {
+		t.Errorf("expected initial focusPane to be FocusAgent, got %d", d.focusPane)
+	}
+	if d.agentOutput.input.Focused() {
+		t.Error("expected input to be unfocused initially")
+	}
+
+	// Press 'i' key to focus input
+	iKey := tea.KeyPressMsg{Text: "i"}
+	d.Update(iKey)
+
+	// Verify focus moved to input
+	if d.focusPane != FocusInput {
+		t.Errorf("expected focusPane to be FocusInput after 'i', got %d", d.focusPane)
+	}
+	if !d.agentOutput.input.Focused() {
+		t.Error("expected input to be focused after 'i'")
+	}
+	if !d.inputFocused {
+		t.Error("expected inputFocused to be true after 'i'")
+	}
+}
+
+func TestDashboard_InputFocusFromTasksPane(t *testing.T) {
+	// Create a new agent output and dashboard
+	agentOutput := NewAgentOutput()
+	d := NewDashboard(agentOutput)
+	d.UpdateSize(100, 50)
+
+	// Set focus to tasks pane
+	d.focusPane = FocusTasks
+
+	// Press 'i' key from tasks pane
+	iKey := tea.KeyPressMsg{Text: "i"}
+	d.Update(iKey)
+
+	// Verify focus moved to input
+	if d.focusPane != FocusInput {
+		t.Errorf("expected focusPane to be FocusInput after 'i' from tasks, got %d", d.focusPane)
+	}
+	if !d.agentOutput.input.Focused() {
+		t.Error("expected input to be focused after 'i' from tasks")
+	}
+}
+
+func TestDashboard_InputBlurWithEscape(t *testing.T) {
+	// Create a new agent output and dashboard
+	agentOutput := NewAgentOutput()
+	d := NewDashboard(agentOutput)
+	d.UpdateSize(100, 50)
+
+	// Focus input
+	d.focusPane = FocusInput
+	d.agentOutput.SetInputFocused(true)
+	d.inputFocused = true
+
+	// Add some text to input
+	d.agentOutput.input.SetValue("some text")
+
+	// Verify input is focused
+	if !d.agentOutput.input.Focused() {
+		t.Fatal("expected input to be focused before Escape")
+	}
+
+	// Press Escape key
+	escKey := tea.KeyPressMsg{Text: "esc"}
+	d.Update(escKey)
+
+	// Verify focus returned to agent
+	if d.focusPane != FocusAgent {
+		t.Errorf("expected focusPane to be FocusAgent after Escape, got %d", d.focusPane)
+	}
+	if d.agentOutput.input.Focused() {
+		t.Error("expected input to be unfocused after Escape")
+	}
+	if d.inputFocused {
+		t.Error("expected inputFocused to be false after Escape")
+	}
+
+	// Verify input text is preserved (Escape doesn't clear input)
+	if d.agentOutput.InputValue() != "some text" {
+		t.Errorf("expected input value 'some text' after Escape, got %q", d.agentOutput.InputValue())
+	}
+}
+
+func TestDashboard_InputFocusIdempotent(t *testing.T) {
+	// Create a new agent output and dashboard
+	agentOutput := NewAgentOutput()
+	d := NewDashboard(agentOutput)
+	d.UpdateSize(100, 50)
+
+	// Focus input once
+	iKey := tea.KeyPressMsg{Text: "i"}
+	d.Update(iKey)
+
+	// Verify input is focused
+	if d.focusPane != FocusInput {
+		t.Fatal("expected focusPane to be FocusInput")
+	}
+
+	// Press 'i' again while already focused - should be idempotent
+	d.Update(iKey)
+
+	// Verify focus remains on input
+	if d.focusPane != FocusInput {
+		t.Errorf("expected focusPane to remain FocusInput, got %d", d.focusPane)
+	}
+	if !d.agentOutput.input.Focused() {
+		t.Error("expected input to remain focused")
+	}
+}
