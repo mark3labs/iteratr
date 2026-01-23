@@ -10,6 +10,7 @@ import (
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
+	udiff "github.com/aymanbagabas/go-udiff"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -205,9 +206,11 @@ func (t *ThinkingMessageItem) ToggleExpanded() {
 type ToolMessageItem struct {
 	id           string
 	toolName     string
+	kind         string // "edit", "execute", "read", etc.
 	status       ToolStatus
 	input        map[string]any
 	output       string
+	fileDiff     *FileDiff
 	expanded     bool
 	maxLines     int // default 10
 	cachedRender string
@@ -256,17 +259,31 @@ func (t *ToolMessageItem) Render(width int) string {
 	}
 
 	// Build header: [indent] [icon] [name] [params]
-	header := "  " + iconStyle.Render(icon) + " " + styleToolName.Render(t.toolName)
+	// Capitalize tool name for display
+	displayName := t.toolName
+	if displayName != "" {
+		displayName = strings.ToUpper(displayName[:1]) + displayName[1:]
+	}
+	header := "  " + iconStyle.Render(icon) + " " + styleToolName.Render(displayName)
 
 	// Add formatted params if present
 	if len(t.input) > 0 {
+		// For edit tools, only show filePath in header (diff body shows the rest)
+		paramInput := t.input
+		if t.kind == "edit" {
+			paramInput = make(map[string]any)
+			if fp, ok := t.input["filePath"]; ok {
+				paramInput["filePath"] = fp
+			}
+		}
+
 		// Reserve space for icon, name, and spacing
-		usedWidth := 2 + len(t.toolName) + 1 // "● " + name + " "
+		usedWidth := 2 + len(displayName) + 1 // "● " + name + " "
 		paramWidth := width - usedWidth
 		if paramWidth < 10 {
 			paramWidth = 10
 		}
-		params := formatToolParams(t.input, paramWidth)
+		params := formatToolParams(paramInput, paramWidth)
 		if params != "" {
 			header += " " + styleToolParams.Render(params)
 		}
@@ -282,21 +299,34 @@ func (t *ToolMessageItem) Render(width int) string {
 		outputWidth = 1
 	}
 
-	// Check for Edit tool with diff data (oldString/newString in input)
+	// Check for Edit tool with diff data
 	isEditDiff := false
-	if t.toolName == "Edit" && t.status == ToolStatusSuccess {
-		oldStr, hasOld := t.input["oldString"]
-		newStr, hasNew := t.input["newString"]
-		if hasOld && hasNew {
+	if t.kind == "edit" && t.status == ToolStatusSuccess {
+		if t.fileDiff != nil && t.fileDiff.Before != "" && t.fileDiff.After != "" {
+			// Use full file before/after for proper diff with context
 			isEditDiff = true
 			result.WriteString("\n\n")
-			diffRendered := renderDiffBlock(
-				fmt.Sprintf("%v", oldStr),
-				fmt.Sprintf("%v", newStr),
-				outputWidth,
-			)
+			filePath := t.fileDiff.File
+			if fp, ok := t.input["filePath"]; ok {
+				filePath = fmt.Sprintf("%v", fp)
+			}
+			diffRendered := renderDiffBlock(t.fileDiff.Before, t.fileDiff.After, filePath, outputWidth)
 			result.WriteString(diffRendered)
 			result.WriteString("\n")
+		} else if oldStr, hasOld := t.input["oldString"]; hasOld {
+			// Fallback: use rawInput oldString/newString
+			if newStr, hasNew := t.input["newString"]; hasNew {
+				isEditDiff = true
+				result.WriteString("\n\n")
+				diffRendered := renderDiffBlock(
+					fmt.Sprintf("%v", oldStr),
+					fmt.Sprintf("%v", newStr),
+					"",
+					outputWidth,
+				)
+				result.WriteString(diffRendered)
+				result.WriteString("\n")
+			}
 		}
 	}
 
@@ -747,67 +777,193 @@ func renderCodeBlock(content, fileName string, width int) string {
 	return strings.Join(result, "\n")
 }
 
-// renderDiffBlock renders a side-by-side diff of oldString vs newString from
-// an Edit tool call. Shows deleted lines on the left (red) and inserted lines
-// on the right (green), with line numbers on each side.
-func renderDiffBlock(oldStr, newStr string, width int) string {
-	oldLines := strings.Split(oldStr, "\n")
-	newLines := strings.Split(newStr, "\n")
+// splitLine represents one row in a side-by-side diff view.
+type splitLine struct {
+	beforeNum  int    // 0 means no line on this side
+	afterNum   int    // 0 means no line on this side
+	beforeText string // content for before side
+	afterText  string // content for after side
+	beforeKind udiff.OpKind
+	afterKind  udiff.OpKind
+}
 
-	// Calculate panel widths: each side gets half the available width minus divider
-	const indent = "  " // 2-char indent to match tool header
-	divider := "│"
+// renderDiffBlock renders a side-by-side diff using go-udiff.
+// Shows context lines around changes with proper file line numbers.
+func renderDiffBlock(before, after, filePath string, width int) string {
+	// Ensure trailing newlines for proper diff computation
+	if before != "" && !strings.HasSuffix(before, "\n") {
+		before += "\n"
+	}
+	if after != "" && !strings.HasSuffix(after, "\n") {
+		after += "\n"
+	}
+
+	// Compute edits
+	edits := udiff.Strings(before, after)
+	if len(edits) == 0 {
+		return "" // No changes
+	}
+
+	// Convert to unified diff with context
+	unified, err := udiff.ToUnifiedDiff("a", "b", before, edits, 3)
+	if err != nil || len(unified.Hunks) == 0 {
+		return ""
+	}
+
+	// Convert hunks to split lines
+	var lines []splitLine
+	for _, h := range unified.Hunks {
+		beforeLine := h.FromLine
+		afterLine := h.ToLine
+
+		// Add hunk separator if not first hunk
+		if len(lines) > 0 {
+			lines = append(lines, splitLine{beforeKind: -1, afterKind: -1}) // sentinel for separator
+		}
+
+		// Process hunk lines, pairing deletes with inserts
+		i := 0
+		for i < len(h.Lines) {
+			l := h.Lines[i]
+			switch l.Kind {
+			case udiff.Equal:
+				lines = append(lines, splitLine{
+					beforeNum:  beforeLine,
+					afterNum:   afterLine,
+					beforeText: l.Content,
+					afterText:  l.Content,
+					beforeKind: udiff.Equal,
+					afterKind:  udiff.Equal,
+				})
+				beforeLine++
+				afterLine++
+				i++
+
+			case udiff.Delete:
+				// Collect consecutive deletes
+				var deletes []udiff.Line
+				for i < len(h.Lines) && h.Lines[i].Kind == udiff.Delete {
+					deletes = append(deletes, h.Lines[i])
+					i++
+				}
+				// Collect consecutive inserts that follow
+				var inserts []udiff.Line
+				for i < len(h.Lines) && h.Lines[i].Kind == udiff.Insert {
+					inserts = append(inserts, h.Lines[i])
+					i++
+				}
+				// Pair them side-by-side
+				maxPairs := len(deletes)
+				if len(inserts) > maxPairs {
+					maxPairs = len(inserts)
+				}
+				for j := 0; j < maxPairs; j++ {
+					sl := splitLine{}
+					if j < len(deletes) {
+						sl.beforeNum = beforeLine
+						sl.beforeText = deletes[j].Content
+						sl.beforeKind = udiff.Delete
+						beforeLine++
+					}
+					if j < len(inserts) {
+						sl.afterNum = afterLine
+						sl.afterText = inserts[j].Content
+						sl.afterKind = udiff.Insert
+						afterLine++
+					}
+					lines = append(lines, sl)
+				}
+
+			case udiff.Insert:
+				lines = append(lines, splitLine{
+					afterNum:  afterLine,
+					afterText: l.Content,
+					afterKind: udiff.Insert,
+				})
+				afterLine++
+				i++
+			}
+		}
+	}
+
+	// Calculate layout widths
+	const indent = "  "
 	availableWidth := width - 2            // subtract indent
 	panelWidth := (availableWidth - 3) / 2 // -3 for " │ " divider
 	if panelWidth < 20 {
 		panelWidth = 20
 	}
 
-	// Calculate gutter width based on max line count
-	maxLines := len(oldLines)
-	if len(newLines) > maxLines {
-		maxLines = len(newLines)
+	// Calculate gutter width from max line numbers
+	maxLineNum := 1
+	for _, l := range lines {
+		if l.beforeNum > maxLineNum {
+			maxLineNum = l.beforeNum
+		}
+		if l.afterNum > maxLineNum {
+			maxLineNum = l.afterNum
+		}
 	}
-	gutterWidth := len(fmt.Sprintf("%d", maxLines))
-	if gutterWidth < 2 {
-		gutterWidth = 2
+	gutterWidth := len(fmt.Sprintf("%d", maxLineNum))
+	if gutterWidth < 3 {
+		gutterWidth = 3
 	}
-	codeWidth := panelWidth - gutterWidth - 2 // -2 for gutter padding + code padding
+	codeWidth := panelWidth - gutterWidth - 3 // gutter + " - " or " + " prefix
 	if codeWidth < 10 {
 		codeWidth = 10
 	}
 
-	// Render rows: pair old and new lines side by side
+	// Render each line
 	var result []string
-
-	for i := 0; i < maxLines; i++ {
-		// Left side (deletions)
-		var leftGutter, leftCode string
-		if i < len(oldLines) {
-			leftGutter = fmt.Sprintf("%*d", gutterWidth, i+1)
-			leftCode = padRight(truncateLine(oldLines[i], codeWidth), codeWidth)
-		} else {
-			leftGutter = padRight("", gutterWidth)
-			leftCode = padRight("", codeWidth)
+	for _, sl := range lines {
+		// Separator line between hunks
+		if sl.beforeKind == -1 {
+			sep := indent + styleDiffDivider.Render(padRight("···", panelWidth)) +
+				" " + styleDiffDivider.Render("│") + " " +
+				styleDiffDivider.Render(padRight("···", panelWidth))
+			result = append(result, sep)
+			continue
 		}
 
-		// Right side (insertions)
-		var rightGutter, rightCode string
-		if i < len(newLines) {
-			rightGutter = fmt.Sprintf("%*d", gutterWidth, i+1)
-			rightCode = padRight(truncateLine(newLines[i], codeWidth), codeWidth)
-		} else {
-			rightGutter = padRight("", gutterWidth)
-			rightCode = padRight("", codeWidth)
+		// Left panel (before)
+		var left string
+		beforeText := strings.TrimRight(sl.beforeText, "\n")
+		switch {
+		case sl.beforeNum > 0 && sl.beforeKind == udiff.Delete:
+			gutter := fmt.Sprintf("%*d", gutterWidth, sl.beforeNum)
+			code := padRight(truncateLine(beforeText, codeWidth), codeWidth)
+			left = styleDiffLineNumDelete.Render(gutter) +
+				styleDiffContentDelete.Render(" - "+code)
+		case sl.beforeNum > 0 && sl.beforeKind == udiff.Equal:
+			gutter := fmt.Sprintf("%*d", gutterWidth, sl.beforeNum)
+			code := padRight(truncateLine(beforeText, codeWidth), codeWidth)
+			left = styleDiffLineNumEqual.Render(gutter) +
+				styleDiffContentEqual.Render("   "+code)
+		default:
+			// Empty left side
+			left = styleDiffContentMissing.Render(padRight("", panelWidth))
 		}
 
-		// Style each part inline (no Width to avoid multi-line wrapping)
-		left := styleDiffLineNumDelete.Render(leftGutter+" ") +
-			styleDiffContentDelete.Render(" "+leftCode)
-		right := styleDiffLineNumInsert.Render(rightGutter+" ") +
-			styleDiffContentInsert.Render(" "+rightCode)
+		// Right panel (after)
+		var right string
+		afterText := strings.TrimRight(sl.afterText, "\n")
+		switch {
+		case sl.afterNum > 0 && sl.afterKind == udiff.Insert:
+			gutter := fmt.Sprintf("%*d", gutterWidth, sl.afterNum)
+			code := padRight(truncateLine(afterText, codeWidth), codeWidth)
+			right = styleDiffLineNumInsert.Render(gutter) +
+				styleDiffContentInsert.Render(" + "+code)
+		case sl.afterNum > 0 && sl.afterKind == udiff.Equal:
+			gutter := fmt.Sprintf("%*d", gutterWidth, sl.afterNum)
+			code := padRight(truncateLine(afterText, codeWidth), codeWidth)
+			right = styleDiffLineNumEqual.Render(gutter) +
+				styleDiffContentEqual.Render("   "+code)
+		default:
+			// Empty right side
+			right = styleDiffContentMissing.Render(padRight("", panelWidth))
+		}
 
-		row := indent + left + " " + styleDiffDivider.Render(divider) + " " + right
+		row := indent + left + " " + styleDiffDivider.Render("│") + " " + right
 		result = append(result, row)
 	}
 

@@ -345,8 +345,10 @@ var (
 				MarginLeft(2)
 
 	// Diff view styles (for Edit tool output)
-	colorDiffInsertBg = lipgloss.Color("#303a30") // Green-tinted background for insertions
-	colorDiffDeleteBg = lipgloss.Color("#3a3030") // Red-tinted background for deletions
+	colorDiffInsertBg  = lipgloss.Color("#303a30") // Green-tinted background for insertions
+	colorDiffDeleteBg  = lipgloss.Color("#3a3030") // Red-tinted background for deletions
+	colorDiffEqualBg   = lipgloss.Color("#1e1e2e") // Neutral background for context lines
+	colorDiffMissingBg = lipgloss.Color("#181825") // Dim background for empty sides
 
 	styleDiffLineNumInsert = lipgloss.NewStyle().
 				Foreground(colorOverlay0).
@@ -356,12 +358,23 @@ var (
 				Foreground(colorOverlay0).
 				Background(colorDiffDeleteBg)
 
+	styleDiffLineNumEqual = lipgloss.NewStyle().
+				Foreground(colorOverlay0).
+				Background(colorDiffEqualBg)
+
 	styleDiffContentInsert = lipgloss.NewStyle().
 				Background(colorDiffInsertBg)
 
 	styleDiffContentDelete = lipgloss.NewStyle().
 				Background(colorDiffDeleteBg).
 				Strikethrough(true)
+
+	styleDiffContentEqual = lipgloss.NewStyle().
+				Foreground(colorSubtext0).
+				Background(colorDiffEqualBg)
+
+	styleDiffContentMissing = lipgloss.NewStyle().
+				Background(colorDiffMissingBg)
 
 	styleDiffDivider = lipgloss.NewStyle().
 				Foreground(colorSurface2)

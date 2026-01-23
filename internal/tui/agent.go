@@ -338,9 +338,11 @@ func (a *AgentOutput) AppendToolCall(msg AgentToolCallMsg) tea.Cmd {
 		newMsg := &ToolMessageItem{
 			id:       msg.ToolCallID,
 			toolName: msg.Title,
+			kind:     msg.Kind,
 			status:   status,
 			input:    msg.Input,
 			output:   msg.Output,
+			fileDiff: msg.FileDiff,
 			maxLines: 10,
 		}
 		a.messages = append(a.messages, newMsg)
@@ -350,11 +352,17 @@ func (a *AgentOutput) AppendToolCall(msg AgentToolCallMsg) tea.Cmd {
 		// Update existing tool call in-place
 		if toolMsg, ok := a.messages[idx].(*ToolMessageItem); ok {
 			toolMsg.status = mapToolStatus(msg.Status)
+			if msg.Kind != "" {
+				toolMsg.kind = msg.Kind
+			}
 			if len(msg.Input) > 0 {
 				toolMsg.input = msg.Input
 			}
 			if msg.Output != "" {
 				toolMsg.output = msg.Output
+			}
+			if msg.FileDiff != nil {
+				toolMsg.fileDiff = msg.FileDiff
 			}
 			// Invalidate cache - ScrollList will re-render on next View() call
 			toolMsg.cachedWidth = 0

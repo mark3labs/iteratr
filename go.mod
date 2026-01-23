@@ -7,12 +7,12 @@ require (
 	charm.land/bubbletea/v2 v2.0.0-rc.2
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251114164805-d267651963ad
 	github.com/alecthomas/chroma/v2 v2.14.0
+	github.com/aymanbagabas/go-udiff v0.3.1
 	github.com/charmbracelet/glamour v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/ultraviolet v0.0.0-20251116181749-377898bcce38
 	github.com/nats-io/nats-server/v2 v2.10.0
 	github.com/nats-io/nats.go v1.36.0
-	github.com/rs/xid v1.6.0
 	github.com/spf13/cobra v1.10.2
 )
 

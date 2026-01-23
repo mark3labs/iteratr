@@ -501,12 +501,23 @@ type AgentOutputMsg struct {
 	Content string
 }
 
+// FileDiff contains before/after file content from an edit tool call.
+type FileDiff struct {
+	File      string // Absolute file path
+	Before    string // Full file content before edit
+	After     string // Full file content after edit
+	Additions int    // Number of added lines
+	Deletions int    // Number of deleted lines
+}
+
 type AgentToolCallMsg struct {
 	ToolCallID string
 	Title      string
 	Status     string
+	Kind       string
 	Input      map[string]any
 	Output     string
+	FileDiff   *FileDiff
 }
 
 type AgentThinkingMsg struct {

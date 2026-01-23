@@ -1397,7 +1397,7 @@ func TestRenderDiffBlock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderDiffBlock(tt.oldStr, tt.newStr, tt.width)
+			result := renderDiffBlock(tt.oldStr, tt.newStr, "", tt.width)
 			if result == "" {
 				t.Error("renderDiffBlock returned empty string")
 			}
@@ -1504,7 +1504,8 @@ func TestToolMessageEditDiffRendering(t *testing.T) {
 	// Edit tool with oldString/newString should render a diff
 	item := ToolMessageItem{
 		id:       "edit-1",
-		toolName: "Edit",
+		toolName: "edit",
+		kind:     "edit",
 		status:   ToolStatusSuccess,
 		input: map[string]any{
 			"filePath":  "/path/to/file.go",
@@ -1578,7 +1579,8 @@ func TestToolMessageEditWithDiagnostics(t *testing.T) {
 	// Edit tool that has both diff data AND diagnostics in output
 	item := ToolMessageItem{
 		id:       "edit-diag",
-		toolName: "Edit",
+		toolName: "edit",
+		kind:     "edit",
 		status:   ToolStatusSuccess,
 		input: map[string]any{
 			"filePath":  "/path/to/file.go",

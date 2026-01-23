@@ -340,6 +340,10 @@ func (c *acpConn) prompt(ctx context.Context, sessionID, text string, onText fun
 					if (tcu.Status == "completed" || tcu.Status == "error") && len(tcu.Content) > 0 {
 						event.Output = tcu.Content[0].Content.Text
 					}
+					// Extract filediff from rawOutput metadata for edit tools
+					if tcu.Status == "completed" && tcu.Kind == "edit" {
+						event.FileDiff = extractFileDiff(tcu.RawOutput)
+					}
 					onToolCall(event)
 				}
 
@@ -388,6 +392,39 @@ func (c *acpConn) prompt(ctx context.Context, sessionID, text string, onText fun
 }
 
 // JSON-RPC 2.0 message envelope
+// extractFileDiff parses rawOutput.metadata.filediff from a completed edit tool call.
+func extractFileDiff(rawOutput map[string]any) *FileDiff {
+	if rawOutput == nil {
+		return nil
+	}
+	metadata, ok := rawOutput["metadata"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	fd, ok := metadata["filediff"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	result := &FileDiff{}
+	if f, ok := fd["file"].(string); ok {
+		result.File = f
+	}
+	if b, ok := fd["before"].(string); ok {
+		result.Before = b
+	}
+	if a, ok := fd["after"].(string); ok {
+		result.After = a
+	}
+	if a, ok := fd["additions"].(float64); ok {
+		result.Additions = int(a)
+	}
+	if d, ok := fd["deletions"].(float64); ok {
+		result.Deletions = int(d)
+	}
+	return result
+}
+
 type jsonRPCRequest struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`

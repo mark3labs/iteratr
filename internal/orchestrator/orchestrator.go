@@ -224,13 +224,24 @@ func (o *Orchestrator) Run() error {
 				o.tuiProgram.Send(tui.AgentOutputMsg{Content: content})
 			},
 			OnToolCall: func(event agent.ToolCallEvent) {
-				o.tuiProgram.Send(tui.AgentToolCallMsg{
+				msg := tui.AgentToolCallMsg{
 					ToolCallID: event.ToolCallID,
 					Title:      event.Title,
 					Status:     event.Status,
+					Kind:       event.Kind,
 					Input:      event.RawInput,
 					Output:     event.Output,
-				})
+				}
+				if event.FileDiff != nil {
+					msg.FileDiff = &tui.FileDiff{
+						File:      event.FileDiff.File,
+						Before:    event.FileDiff.Before,
+						After:     event.FileDiff.After,
+						Additions: event.FileDiff.Additions,
+						Deletions: event.FileDiff.Deletions,
+					}
+				}
+				o.tuiProgram.Send(msg)
 			},
 			OnThinking: func(content string) {
 				o.tuiProgram.Send(tui.AgentThinkingMsg{Content: content})
