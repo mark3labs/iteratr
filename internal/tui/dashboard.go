@@ -66,7 +66,8 @@ func (d *Dashboard) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		// Global 'i' key: focus input from any state
-		if msg.String() == "i" && !d.inputFocused {
+		if msg.String() == "i" && d.focusPane != FocusInput {
+			d.focusPane = FocusInput
 			d.inputFocused = true
 			if d.agentOutput != nil {
 				d.agentOutput.SetInputFocused(true)
@@ -74,8 +75,8 @@ func (d *Dashboard) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 
-		// When input is focused, handle Enter and Escape
-		if d.inputFocused {
+		// When input is focused (FocusInput), handle Enter and Escape
+		if d.focusPane == FocusInput {
 			switch msg.String() {
 			case "enter":
 				// Handle user input submission
@@ -89,7 +90,6 @@ func (d *Dashboard) Update(msg tea.Msg) tea.Cmd {
 							d.inputFocused = false
 							d.agentOutput.SetInputFocused(false)
 							d.focusPane = FocusAgent
-							// TODO: Show "(queued)" indicator (TAS-78)
 						} else {
 							// Agent is not busy - emit message immediately
 							d.agentOutput.ResetInput()
@@ -154,7 +154,7 @@ func (d *Dashboard) Update(msg tea.Msg) tea.Cmd {
 func (d *Dashboard) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	// Draw panel border with title
 	// Show accent border when FocusAgent (unless input is focused - in which case input gets the highlight)
-	agentPanelFocused := d.focusPane == FocusAgent && !d.inputFocused
+	agentPanelFocused := d.focusPane == FocusAgent && d.focusPane != FocusInput
 	inner := DrawPanel(scr, area, "Agent Output", agentPanelFocused)
 
 	// Delegate to AgentOutput.Draw for content rendering
@@ -308,13 +308,13 @@ func (d *Dashboard) SetAgentBusy(busy bool) tea.Cmd {
 func (d *Dashboard) updateScrollListFocus() {
 	// Agent output ScrollList (only focused when FocusAgent and input not focused)
 	if d.agentOutput != nil {
-		d.agentOutput.SetScrollFocused(d.focusPane == FocusAgent && !d.inputFocused)
+		d.agentOutput.SetScrollFocused(d.focusPane == FocusAgent && d.focusPane != FocusInput)
 	}
 
 	// Sidebar ScrollLists
 	if d.sidebar != nil {
-		d.sidebar.SetTasksScrollFocused(d.focusPane == FocusTasks && !d.inputFocused)
-		d.sidebar.SetNotesScrollFocused(d.focusPane == FocusNotes && !d.inputFocused)
+		d.sidebar.SetTasksScrollFocused(d.focusPane == FocusTasks && d.focusPane != FocusInput)
+		d.sidebar.SetNotesScrollFocused(d.focusPane == FocusNotes && d.focusPane != FocusInput)
 	}
 }
 
