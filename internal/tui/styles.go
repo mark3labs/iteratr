@@ -350,25 +350,19 @@ var (
 	colorDiffEqualBg   = lipgloss.Color("#1e1e2e") // Neutral background for context lines
 	colorDiffMissingBg = lipgloss.Color("#181825") // Dim background for empty sides
 
-	// Write file block styles (green-tinted, same as diff insert)
+	// Write file block styles (green-tinted content, gutter matches read blocks)
 	styleWriteLineNum = lipgloss.NewStyle().
 				Foreground(colorOverlay0).
-				Background(colorDiffInsertBg).
+				Background(colorGutterBg).
 				PaddingRight(1)
 
 	styleWriteLineNumZero = lipgloss.NewStyle().
-				Foreground(colorDiffInsertBg).
-				Background(colorDiffInsertBg)
+				Foreground(colorGutterBg).
+				Background(colorGutterBg)
 
 	styleWriteContent = lipgloss.NewStyle().
 				Background(colorDiffInsertBg).
 				PaddingLeft(1)
-
-	styleWriteTruncation = lipgloss.NewStyle().
-				Foreground(colorSubtext0).
-				Background(colorDiffInsertBg).
-				Italic(true).
-				MarginLeft(2)
 
 	// Diff view styles (for Edit tool output)
 

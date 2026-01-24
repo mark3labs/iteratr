@@ -138,7 +138,7 @@ tasks:
     desc: Run e2e test spec (no-commit, temp files only)
     deps: [build]
     cmds:
-      - ./{{.BINARY_NAME}} build -s specs/test-spec.md -t .iteratr.test.template
+      - ./{{.BINARY_NAME}} build --reset -s specs/test-spec.md -t .iteratr.test.template
 
   doctor:
     desc: Run iteratr doctor to check dependencies

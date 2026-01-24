@@ -330,9 +330,10 @@ func (t *ToolMessageItem) Render(width int) string {
 		}
 	}
 
-	// Check for Write file tool with content
+	// Check for Write file tool with content (write tools also have kind "edit"
+	// but use "content" input instead of "oldString"/"newString")
 	isWriteFile := false
-	if t.kind != "edit" && t.status == ToolStatusSuccess {
+	if !isEditDiff && t.status == ToolStatusSuccess {
 		if content, hasContent := t.input["content"]; hasContent {
 			if fp, hasFP := t.input["filePath"]; hasFP {
 				isWriteFile = true
@@ -342,22 +343,23 @@ func (t *ToolMessageItem) Render(width int) string {
 
 				// Apply truncation like read file blocks
 				contentLines := strings.Split(contentStr, "\n")
+				totalLines := len(contentLines)
 				var hiddenCount int
-				if !t.expanded && len(contentLines) > t.maxLines {
-					hiddenCount = len(contentLines) - t.maxLines
+				if !t.expanded && totalLines > t.maxLines {
+					hiddenCount = totalLines - t.maxLines
 					contentLines = contentLines[:t.maxLines]
 					contentStr = strings.Join(contentLines, "\n")
 				}
 
-				writeRendered := renderWriteBlock(contentStr, fileName, outputWidth)
-				result.WriteString(writeRendered)
-
+				var footer string
 				if hiddenCount > 0 {
-					truncMsg := fmt.Sprintf("…(%d more lines, click to expand)", hiddenCount)
-					hint := styleWriteTruncation.Width(outputWidth - 2).Render(truncMsg)
-					result.WriteString("\n")
-					result.WriteString(hint)
+					footer = fmt.Sprintf("…(%d more lines, click to expand)", hiddenCount)
+				} else {
+					footer = fmt.Sprintf("(End of file - total %d lines)", totalLines)
 				}
+
+				writeRendered := renderWriteBlock(contentStr, fileName, footer, outputWidth)
+				result.WriteString(writeRendered)
 				result.WriteString("\n")
 			}
 		}
@@ -812,7 +814,7 @@ func renderCodeBlock(content, fileName string, width int) string {
 
 // renderWriteBlock renders raw file content as a code block with line numbers
 // and syntax highlighting, using green-tinted background (matching diff insert style).
-func renderWriteBlock(content, fileName string, width int) string {
+func renderWriteBlock(content, fileName, footer string, width int) string {
 	lines := strings.Split(content, "\n")
 
 	// Generate line numbers with zero-padded width
@@ -868,6 +870,18 @@ func renderWriteBlock(content, fileName string, width int) string {
 			Render(codePart)
 
 		result = append(result, codeIndent+lipgloss.JoinHorizontal(lipgloss.Top, gutter, styledCode))
+	}
+
+	// Render footer line with empty gutter
+	if footer != "" {
+		emptyGutter := styleWriteLineNum.
+			Width(gutterWidth).
+			Render("")
+		footerContent := styleWriteContent.
+			Width(codeWidth).
+			Foreground(colorSubtext0).
+			Render(footer)
+		result = append(result, codeIndent+lipgloss.JoinHorizontal(lipgloss.Top, emptyGutter, footerContent))
 	}
 
 	return strings.Join(result, "\n")
@@ -1200,6 +1214,7 @@ func truncateLine(line string, maxWidth int) string {
 //
 // It uses the fileName to detect the language, falling back to content analysis,
 // and finally to a plain text lexer. The output uses true color (24-bit) ANSI codes.
+// Only foreground colors are emitted; backgrounds are cleared so lipgloss can handle them.
 func syntaxHighlight(source, fileName string) string {
 	// Try to detect lexer from filename
 	lexer := lexers.Match(fileName)
@@ -1223,17 +1238,16 @@ func syntaxHighlight(source, fileName string) string {
 		return styleToolOutput.Render(source)
 	}
 
-	// Use monokai style (dark theme, similar to our UI palette)
-	baseStyle := styles.Get("monokai")
+	// Use catppuccin-mocha style (matches our UI color palette)
+	baseStyle := styles.Get("catppuccin-mocha")
 	if baseStyle == nil {
 		baseStyle = styles.Fallback
 	}
 
-	// Transform all token backgrounds to match our code block background (colorSurface0).
-	// Without this, chroma's monokai theme uses #272822 which clashes with our #313244.
-	bgColour := chroma.MustParseColour(string(colorSurface0))
+	// Clear all token backgrounds so the formatter emits only foreground ANSI codes.
+	// The containing block's lipgloss style handles the background fill uniformly.
 	style, err := baseStyle.Builder().Transform(func(entry chroma.StyleEntry) chroma.StyleEntry {
-		entry.Background = bgColour
+		entry.Background = 0
 		return entry
 	}).Build()
 	if err != nil {
@@ -1252,6 +1266,9 @@ func syntaxHighlight(source, fileName string) string {
 		return styleToolOutput.Render(source)
 	}
 
-	// Return the highlighted output, trimming any trailing newline
-	return strings.TrimRight(buf.String(), "\n")
+	// Replace full ANSI resets (\x1b[0m) with foreground-only resets so they
+	// don't clear the background color set by the containing lipgloss style.
+	// Resets: 39=default fg, 22=no bold, 23=no italic, 24=no underline.
+	result := strings.ReplaceAll(buf.String(), "\x1b[0m", "\x1b[39;22;23;24m")
+	return strings.TrimRight(result, "\n")
 }
