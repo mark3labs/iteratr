@@ -210,7 +210,7 @@ This is a test spec for iteration loop testing.
 	if err := orch.Start(); err != nil {
 		t.Fatalf("failed to start orchestrator: %v", err)
 	}
-	defer orch.Stop()
+	defer func() { _ = orch.Stop() }()
 
 	// Run the iteration loop
 	// This will fail because opencode is not available, but we can verify
@@ -285,7 +285,7 @@ Resumable session test.
 			t.Fatalf("failed to complete iteration 2: %v", err)
 		}
 
-		orch.Stop()
+		_ = orch.Stop()
 	}
 
 	// Second orchestrator - load same session and verify it would start at iteration 3

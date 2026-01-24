@@ -128,7 +128,7 @@ func (o *Orchestrator) Start() error {
 		fmt.Print("Do you want to restart it? [y/N]: ")
 
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response)
 
 		if response != "y" && response != "Y" {
 			fmt.Println("Session not restarted.")
@@ -603,7 +603,7 @@ func (o *Orchestrator) startTUI() error {
 		}
 		// Reset terminal state in case Bubble Tea didn't clean up properly.
 		// Exits alt screen, disables mouse tracking (cell motion + SGR), disables focus reporting.
-		fmt.Fprint(os.Stdout, "\033[?1049l\033[?1002l\033[?1006l\033[?1004l")
+		_, _ = fmt.Fprint(os.Stdout, "\033[?1049l\033[?1002l\033[?1006l\033[?1004l")
 	}()
 
 	// Monitor TUI quit and cancel orchestrator context
