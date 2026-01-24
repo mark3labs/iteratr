@@ -1,3 +1,7 @@
+## Architecture
+
+See `component-tree.md` for the full TUI component tree, message flow, keyboard routing, layout management, and rendering pipeline.
+
 ## Feature Specifications
 
 Feature specs are stored in the `specs/` directory. See `specs/README.md` for the index.
