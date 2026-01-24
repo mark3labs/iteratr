@@ -151,7 +151,6 @@ func (s *ScrollList) View() string {
 		// Add newline between items (if not the last visible item)
 		if linesRendered < s.height && i < len(s.items)-1 {
 			result.WriteString("\n")
-			linesRendered++
 		}
 	}
 

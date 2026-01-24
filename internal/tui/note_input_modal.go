@@ -86,7 +86,10 @@ func (m *NoteInputModal) reset() {
 
 // cycleFocusForward moves focus to the next element in the cycle:
 // type selector → textarea → submit button → type selector (wraps)
-func (m *NoteInputModal) cycleFocusForward() {
+// Returns a command to focus the textarea if it becomes the active element.
+func (m *NoteInputModal) cycleFocusForward() tea.Cmd {
+	oldFocus := m.focus
+
 	switch m.focus {
 	case focusTypeSelector:
 		m.focus = focusTextarea
@@ -95,11 +98,16 @@ func (m *NoteInputModal) cycleFocusForward() {
 	case focusSubmitButton:
 		m.focus = focusTypeSelector
 	}
+
+	return m.updateTextareaFocus(oldFocus)
 }
 
 // cycleFocusBackward moves focus to the previous element in the cycle:
 // button → textarea → type selector → button (wraps)
-func (m *NoteInputModal) cycleFocusBackward() {
+// Returns a command to focus the textarea if it becomes the active element.
+func (m *NoteInputModal) cycleFocusBackward() tea.Cmd {
+	oldFocus := m.focus
+
 	switch m.focus {
 	case focusTypeSelector:
 		m.focus = focusSubmitButton
@@ -108,6 +116,25 @@ func (m *NoteInputModal) cycleFocusBackward() {
 	case focusSubmitButton:
 		m.focus = focusTextarea
 	}
+
+	return m.updateTextareaFocus(oldFocus)
+}
+
+// updateTextareaFocus manages the textarea's focus/blur state based on focus changes.
+// If focus moved TO textarea, it calls Focus(). If focus moved AWAY from textarea, it calls Blur().
+// Returns the Focus() command if textarea should be focused, nil otherwise.
+func (m *NoteInputModal) updateTextareaFocus(oldFocus focusZone) tea.Cmd {
+	// Focus moved TO textarea
+	if m.focus == focusTextarea && oldFocus != focusTextarea {
+		return m.textarea.Focus()
+	}
+
+	// Focus moved AWAY from textarea
+	if m.focus != focusTextarea && oldFocus == focusTextarea {
+		m.textarea.Blur()
+	}
+
+	return nil
 }
 
 // Update handles keyboard input for the modal.
@@ -139,12 +166,10 @@ func (m *NoteInputModal) Update(msg tea.Msg) tea.Cmd {
 			return m.submit(content)
 		case "tab":
 			// Tab cycles focus forward: type selector → textarea → button
-			m.cycleFocusForward()
-			return nil
+			return m.cycleFocusForward()
 		case "shift+tab":
 			// Shift+Tab cycles focus backward: button → textarea → type selector
-			m.cycleFocusBackward()
-			return nil
+			return m.cycleFocusBackward()
 		}
 	}
 
