@@ -1,5 +1,11 @@
 # iteratr
 
+[![CI](https://github.com/mark3labs/iteratr/actions/workflows/ci.yml/badge.svg)](https://github.com/mark3labs/iteratr/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mark3labs/iteratr)](https://github.com/mark3labs/iteratr/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mark3labs/iteratr)](https://goreportcard.com/report/github.com/mark3labs/iteratr)
+[![Go Reference](https://pkg.go.dev/badge/github.com/mark3labs/iteratr.svg)](https://pkg.go.dev/github.com/mark3labs/iteratr)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 <p align="center">
   <img src="iteratr.gif" alt="iteratr demo" />
 </p>
