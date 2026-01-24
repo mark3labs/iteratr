@@ -22,14 +22,15 @@ const (
 // NoteInputModal is an interactive modal for creating new notes.
 // It displays a textarea for content input and allows the user to submit notes.
 type NoteInputModal struct {
-	visible   bool
-	textarea  textarea.Model
-	noteType  string    // Current selected type (derived from types[typeIndex])
-	types     []string  // Available note types: ["learning", "stuck", "tip", "decision"]
-	typeIndex int       // Current index in types array
-	focus     focusZone // Which UI element currently has keyboard focus
-	width     int
-	height    int
+	visible    bool
+	textarea   textarea.Model
+	noteType   string    // Current selected type (derived from types[typeIndex])
+	types      []string  // Available note types: ["learning", "stuck", "tip", "decision"]
+	typeIndex  int       // Current index in types array
+	focus      focusZone // Which UI element currently has keyboard focus
+	width      int
+	height     int
+	buttonArea uv.Rectangle // Hit area for mouse click on submit button
 }
 
 // NewNoteInputModal creates a new NoteInputModal component.
@@ -486,6 +487,27 @@ func (m *NoteInputModal) Draw(scr uv.Screen, area uv.Rectangle) {
 	}
 	if y < 0 {
 		y = 0
+	}
+
+	// Calculate button area for mouse click detection
+	// Button is on line: title(1) + empty(1) + badges(1) + empty(1) + textarea(N) + empty(1) = N+5
+	// Within the modal content area (accounting for container padding)
+	buttonLineY := 5 + availableHeight // 5 fixed lines before button + textarea height
+
+	// Get button text to calculate its width
+	buttonText := m.renderButton()
+	buttonWidth := lipgloss.Width(buttonText)
+
+	// Button is right-aligned within modal content width
+	// Modal content has padding, so actual content width is modalWidth - 4
+	contentWidth := modalWidth - 4
+	buttonX := contentWidth - buttonWidth
+
+	// Store button area in screen coordinates (relative to modal top-left)
+	// Add 2 for modal container padding (border + padding)
+	m.buttonArea = uv.Rectangle{
+		Min: uv.Position{X: area.Min.X + x + 2 + buttonX, Y: area.Min.Y + y + 2 + buttonLineY},
+		Max: uv.Position{X: area.Min.X + x + 2 + buttonX + buttonWidth, Y: area.Min.Y + y + 2 + buttonLineY + 1},
 	}
 
 	// Draw modal centered on screen
