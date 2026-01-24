@@ -235,9 +235,7 @@ func formatTasks(state *session.State) string {
 			depInfo := ""
 			if len(task.DependsOn) > 0 {
 				depIDs := make([]string, len(task.DependsOn))
-				for i, depID := range task.DependsOn {
-					depIDs[i] = depID
-				}
+				copy(depIDs, task.DependsOn)
 				depInfo = fmt.Sprintf(" (depends on: %s)", strings.Join(depIDs, ", "))
 			}
 

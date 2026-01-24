@@ -458,10 +458,8 @@ func (a *App) View() tea.View {
 
 // Draw renders all components to the screen buffer.
 func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
-	var cursor *tea.Cursor
-
 	// Draw main content (always dashboard)
-	cursor = a.dashboard.Draw(scr, a.layout.Main)
+	cursor := a.dashboard.Draw(scr, a.layout.Main)
 	a.status.Draw(scr, a.layout.Status)
 
 	// Draw sidebar based on mode

@@ -112,19 +112,12 @@ func TestIntegration_ViewportScrolling(t *testing.T) {
 	// Open logs modal
 	app.logsVisible = true
 
-	// Get initial scroll position
-	initialOffset := app.logs.viewport.YOffset()
-
 	// Simulate down arrow key (should scroll down)
 	downMsg := tea.KeyPressMsg{Text: "down"}
 	_, _ = app.Update(downMsg)
 
-	// Viewport should have scrolled
-	newOffset := app.logs.viewport.YOffset()
-	if newOffset == initialOffset {
-		// Note: Might not scroll if already at bottom or content fits
-		// This is expected behavior
-	}
+	// Note: Viewport scroll position might not change if already at bottom or content fits
+	// This is expected behavior and we don't assert on it
 
 	// Simulate up arrow key (should scroll up if possible)
 	upMsg := tea.KeyPressMsg{Text: "up"}

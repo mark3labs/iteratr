@@ -42,9 +42,7 @@ func TestApp_AnimationsPauseWhenNotVisible(t *testing.T) {
 
 	// In compact mode with sidebar not visible, sidebar should NOT be updated
 	// This test mainly verifies the code compiles and doesn't panic
-	if cmd == nil {
-		// Expected: no command when animations not active
-	}
+	_ = cmd // cmd may be nil when animations not active
 }
 
 // TestApp_SidebarUpdatesWhenVisible verifies sidebar updates in different modes
