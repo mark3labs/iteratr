@@ -86,17 +86,17 @@ func TestTaskOperations(t *testing.T) {
 
 	t.Run("TaskList groups tasks by status", func(t *testing.T) {
 		// Add a few more tasks
-		store.TaskAdd(ctx, session, TaskAddParams{
+		_, _ = store.TaskAdd(ctx, session, TaskAddParams{
 			Content:   "Task 1",
 			Status:    "remaining",
 			Iteration: 1,
 		})
-		store.TaskAdd(ctx, session, TaskAddParams{
+		_, _ = store.TaskAdd(ctx, session, TaskAddParams{
 			Content:   "Task 2",
 			Status:    "completed",
 			Iteration: 1,
 		})
-		store.TaskAdd(ctx, session, TaskAddParams{
+		_, _ = store.TaskAdd(ctx, session, TaskAddParams{
 			Content:   "Task 3",
 			Status:    "blocked",
 			Iteration: 1,
@@ -433,7 +433,7 @@ func TestTaskOperations(t *testing.T) {
 			t.Fatalf("TaskAdd failed: %v", err)
 		}
 		// Set priority to low (3)
-		store.TaskPriority(ctx, nextSession, TaskPriorityParams{
+		_ = store.TaskPriority(ctx, nextSession, TaskPriorityParams{
 			ID:        task1.ID,
 			Priority:  3,
 			Iteration: 1,
@@ -447,7 +447,7 @@ func TestTaskOperations(t *testing.T) {
 			t.Fatalf("TaskAdd failed: %v", err)
 		}
 		// Set priority to high (1)
-		store.TaskPriority(ctx, nextSession, TaskPriorityParams{
+		_ = store.TaskPriority(ctx, nextSession, TaskPriorityParams{
 			ID:        task2.ID,
 			Priority:  1,
 			Iteration: 1,
@@ -461,7 +461,7 @@ func TestTaskOperations(t *testing.T) {
 			t.Fatalf("TaskAdd failed: %v", err)
 		}
 		// Set priority to critical (0)
-		store.TaskPriority(ctx, nextSession, TaskPriorityParams{
+		_ = store.TaskPriority(ctx, nextSession, TaskPriorityParams{
 			ID:        task3.ID,
 			Priority:  0,
 			Iteration: 1,
@@ -494,7 +494,7 @@ func TestTaskOperations(t *testing.T) {
 			t.Fatalf("TaskAdd failed: %v", err)
 		}
 		// Set to high priority
-		store.TaskPriority(ctx, blockedSession, TaskPriorityParams{
+		_ = store.TaskPriority(ctx, blockedSession, TaskPriorityParams{
 			ID:        task1.ID,
 			Priority:  0,
 			Iteration: 1,
@@ -509,7 +509,7 @@ func TestTaskOperations(t *testing.T) {
 			t.Fatalf("TaskAdd failed: %v", err)
 		}
 		// Add dependency
-		store.TaskDepends(ctx, blockedSession, TaskDependsParams{
+		_ = store.TaskDepends(ctx, blockedSession, TaskDependsParams{
 			ID:        task2.ID,
 			DependsOn: task1.ID,
 			Iteration: 1,
@@ -552,7 +552,7 @@ func TestTaskOperations(t *testing.T) {
 			t.Fatalf("TaskAdd failed: %v", err)
 		}
 		// Add dependency on completed task and a non-existent task
-		store.TaskDepends(ctx, noReadySession, TaskDependsParams{
+		_ = store.TaskDepends(ctx, noReadySession, TaskDependsParams{
 			ID:        task2.ID,
 			DependsOn: task1.ID, // This is completed, OK
 			Iteration: 1,
@@ -568,7 +568,7 @@ func TestTaskOperations(t *testing.T) {
 		}
 
 		// Now mark task2 as in_progress - should have no ready tasks
-		store.TaskStatus(ctx, noReadySession, TaskStatusParams{
+		_ = store.TaskStatus(ctx, noReadySession, TaskStatusParams{
 			ID:        task2.ID,
 			Status:    "in_progress",
 			Iteration: 1,

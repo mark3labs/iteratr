@@ -145,7 +145,7 @@ func (st *State) applyTaskEvent(event Event) {
 			Priority  int    `json:"priority"`
 			Iteration int    `json:"iteration"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Default status to "remaining"
 		if meta.Status == "" {
@@ -159,7 +159,7 @@ func (st *State) applyTaskEvent(event Event) {
 		if priority == 0 && event.Meta != nil {
 			// Check if priority was explicitly set to 0 in metadata
 			var checkMeta map[string]interface{}
-			json.Unmarshal(event.Meta, &checkMeta)
+			_ = json.Unmarshal(event.Meta, &checkMeta)
 			if _, hasPriority := checkMeta["priority"]; !hasPriority {
 				priority = 2 // Default to medium
 			}
@@ -188,7 +188,7 @@ func (st *State) applyTaskEvent(event Event) {
 			Status    string `json:"status"`
 			Iteration int    `json:"iteration"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Update task status if it exists
 		if task, exists := st.Tasks[meta.TaskID]; exists {
@@ -378,7 +378,7 @@ func (s *Store) LoadState(ctx context.Context, session string) (*State, error) {
 				meta, _ := msg.Metadata()
 				logger.Warn("Skipping malformed event (seq=%d): %v", meta.Sequence.Stream, err)
 				fmt.Fprintf(os.Stderr, "Warning: Skipping malformed event (seq=%d): %v\n", meta.Sequence.Stream, err)
-				msg.Ack()
+				_ = msg.Ack()
 				continue
 			}
 
@@ -392,7 +392,7 @@ func (s *Store) LoadState(ctx context.Context, session string) (*State, error) {
 			state.Apply(event)
 
 			// Acknowledge message
-			msg.Ack()
+			_ = msg.Ack()
 		}
 
 		logger.Debug("Processed batch: %d events", msgCount)

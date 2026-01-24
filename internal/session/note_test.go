@@ -106,12 +106,12 @@ func TestNoteOperations(t *testing.T) {
 
 	t.Run("NoteList returns all notes", func(t *testing.T) {
 		// Add a few notes
-		store.NoteAdd(ctx, session, NoteAddParams{
+		_, _ = store.NoteAdd(ctx, session, NoteAddParams{
 			Content:   "Note 1",
 			Type:      "learning",
 			Iteration: 1,
 		})
-		store.NoteAdd(ctx, session, NoteAddParams{
+		_, _ = store.NoteAdd(ctx, session, NoteAddParams{
 			Content:   "Note 2",
 			Type:      "tip",
 			Iteration: 1,
@@ -129,12 +129,12 @@ func TestNoteOperations(t *testing.T) {
 
 	t.Run("NoteList filters by type", func(t *testing.T) {
 		// Add notes of different types
-		store.NoteAdd(ctx, session, NoteAddParams{
+		_, _ = store.NoteAdd(ctx, session, NoteAddParams{
 			Content:   "Learning note",
 			Type:      "learning",
 			Iteration: 2,
 		})
-		store.NoteAdd(ctx, session, NoteAddParams{
+		_, _ = store.NoteAdd(ctx, session, NoteAddParams{
 			Content:   "Decision note",
 			Type:      "decision",
 			Iteration: 2,

@@ -163,9 +163,9 @@ func TestIterationOperations(t *testing.T) {
 		iterSession := "test-iteration-persistence"
 
 		// Add iterations
-		store.IterationStart(ctx, iterSession, 1)
-		store.IterationComplete(ctx, iterSession, 1)
-		store.IterationStart(ctx, iterSession, 2)
+		_ = store.IterationStart(ctx, iterSession, 1)
+		_ = store.IterationComplete(ctx, iterSession, 1)
+		_ = store.IterationStart(ctx, iterSession, 2)
 
 		// Load state multiple times - should get same result from event log
 		state1, err := store.LoadState(ctx, iterSession)
