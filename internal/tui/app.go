@@ -32,6 +32,7 @@ type App struct {
 	// State
 	logsVisible    bool // Toggle for logs modal overlay
 	sidebarVisible bool // Toggle for sidebar visibility in compact mode
+	iteration      int  // Current iteration number (for note tagging)
 	store          *session.Store
 	sessionName    string
 	nc             *nats.Conn
@@ -116,6 +117,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(a.agent.AppendFinish(msg), queueCmd)
 
 	case IterationStartMsg:
+		a.iteration = msg.Number // Track current iteration for note creation
 		busyCmd := a.dashboard.SetAgentBusy(true)
 		return a, tea.Batch(
 			a.dashboard.SetIteration(msg.Number),
