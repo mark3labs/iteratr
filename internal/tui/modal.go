@@ -17,6 +17,11 @@ type TaskModal struct {
 	visible bool
 	width   int // Modal width
 	height  int // Modal height
+
+	// Render cache
+	cachedContent      string
+	cachedContentWidth int
+	cachedTask         *session.Task
 }
 
 // NewTaskModal creates a new TaskModal component.
@@ -32,6 +37,7 @@ func NewTaskModal() *TaskModal {
 func (m *TaskModal) SetTask(task *session.Task) {
 	m.task = task
 	m.visible = true
+	m.cachedContent = "" // Invalidate cache
 }
 
 // Close hides the modal.
@@ -107,6 +113,11 @@ func (m *TaskModal) buildContent(width int) string {
 		return ""
 	}
 
+	// Return cached content if task and width haven't changed
+	if m.cachedTask == m.task && m.cachedContentWidth == width && m.cachedContent != "" {
+		return m.cachedContent
+	}
+
 	var sections []string
 
 	// === Title Section (with diagonal hatching decoration) ===
@@ -169,7 +180,14 @@ func (m *TaskModal) buildContent(width int) string {
 	closeText := lipgloss.NewStyle().Width(width - 2).Align(lipgloss.Center).Render(closeHint)
 	sections = append(sections, closeText)
 
-	return strings.Join(sections, "\n")
+	result := strings.Join(sections, "\n")
+
+	// Cache the result
+	m.cachedContent = result
+	m.cachedContentWidth = width
+	m.cachedTask = m.task
+
+	return result
 }
 
 // renderStatusBadge renders a styled badge for the task status.
