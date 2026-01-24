@@ -3,10 +3,8 @@ package session
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/mark3labs/iteratr/internal/nats"
-	natsserver "github.com/nats-io/nats-server/v2/server"
 	natsclient "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -187,12 +185,5 @@ func TestSessionCompleteWithTasks(t *testing.T) {
 	// Verify tasks are still present
 	if len(state.Tasks) != 2 {
 		t.Errorf("Expected 2 tasks, got %d", len(state.Tasks))
-	}
-}
-
-// Helper to ensure NATS server is fully ready
-func waitForServer(srv *natsserver.Server) {
-	if !srv.ReadyForConnections(4 * time.Second) {
-		panic("NATS server failed to start")
 	}
 }

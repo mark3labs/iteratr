@@ -58,14 +58,10 @@ var (
 	// Darkest to lightest background shades for layering UI elements
 	colorBase     = lipgloss.Color("#1e1e2e") // Base background (darkest)
 	colorMantle   = lipgloss.Color("#181825") // Slightly darker than base
-	colorCrust    = lipgloss.Color("#11111b") // Darkest shade for deep backgrounds
 	colorGutterBg = lipgloss.Color("#282839") // Gutter well background (between base and surface0)
 	colorSurface0 = lipgloss.Color("#313244") // Surface overlay (light)
-	colorSurface1 = lipgloss.Color("#45475a") // Surface overlay (medium)
 	colorSurface2 = lipgloss.Color("#585b70") // Surface overlay (dark)
 	colorOverlay0 = lipgloss.Color("#6c7086") // Overlay for subtle elements
-	colorOverlay1 = lipgloss.Color("#7f849c") // Overlay medium
-	colorOverlay2 = lipgloss.Color("#9399b2") // Overlay light
 
 	// === TEXT LAYER (foreground) ===
 	// Shades for different text emphasis levels
@@ -86,17 +82,9 @@ var (
 	colorError   = lipgloss.Color("#f38ba8") // Red (error, blocked)
 	colorInfo    = lipgloss.Color("#89dceb") // Sky (info, notes)
 
-	// Additional accent colors
-	colorPeach = lipgloss.Color("#fab387") // Peach (warm accent)
-	colorTeal  = lipgloss.Color("#94e2d5") // Teal (cool accent)
-	colorPink  = lipgloss.Color("#f5c2e7") // Pink (special highlight)
-
 	// === BORDER COLORS ===
 	// Border shades for different focus states
-	colorBorderMuted   = colorOverlay0  // Unfocused borders
-	colorBorderDefault = colorSurface2  // Default borders
-	colorBorderFocused = colorPrimary   // Focused element borders
-	colorBorderActive  = colorSecondary // Active/interactive borders
+	colorBorderFocused = colorPrimary // Focused element borders
 
 	// === LEGACY ALIASES (for backward compatibility) ===
 	// These map old color names to new palette
@@ -104,7 +92,6 @@ var (
 	colorTextDim  = colorSubtext0 // Dim text
 	colorBgHeader = colorMantle   // Header background
 	colorBgFooter = colorMantle   // Footer background
-	colorBgSubtle = colorSurface0 // Subtle background highlights
 )
 
 // Style definitions
@@ -150,15 +137,6 @@ var (
 	styleStatusBlocked    = lipgloss.NewStyle().Foreground(colorError)
 
 	// General styles
-	styleTitle = lipgloss.NewStyle().
-			Foreground(colorPrimary).
-			Bold(true).
-			Underline(true)
-
-	styleSubtitle = lipgloss.NewStyle().
-			Foreground(colorSecondary).
-			Bold(true)
-
 	styleHighlight = lipgloss.NewStyle().
 			Foreground(colorPrimary).
 			Bold(true)
@@ -167,10 +145,6 @@ var (
 			Foreground(colorTextDim)
 
 	// Dashboard styles
-	styleProgressBar = lipgloss.NewStyle().
-				Foreground(colorPrimary).
-				Background(colorMuted)
-
 	styleProgressFill = lipgloss.NewStyle().
 				Foreground(colorTextBright).
 				Background(colorPrimary)
@@ -182,12 +156,6 @@ var (
 	styleStatValue = lipgloss.NewStyle().
 			Foreground(colorPrimary).
 			Bold(true)
-
-	styleCurrentTask = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorPrimary).
-				Padding(0, 1).
-				Foreground(colorTextBright)
 
 	// Task list styles
 	styleTaskSelected = lipgloss.NewStyle().
@@ -239,36 +207,6 @@ var (
 	styleNoteContent = lipgloss.NewStyle().
 				Foreground(colorText).
 				PaddingLeft(2)
-
-	styleInputField = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(colorSecondary).
-			Padding(0, 1).
-			Foreground(colorText)
-
-	styleInputPrompt = lipgloss.NewStyle().
-				Foreground(colorSecondary).
-				Bold(true)
-
-	styleInputSeparator = lipgloss.NewStyle().
-				Foreground(colorMuted)
-
-	// Agent output styles
-	styleAgentText = lipgloss.NewStyle().
-			Foreground(colorText)
-
-	styleAgentCode = lipgloss.NewStyle().
-			Foreground(colorSecondary).
-			Background(colorSurface0)
-
-	styleAgentThinking = lipgloss.NewStyle().
-				Foreground(colorTextDim).
-				Italic(true)
-
-	styleAgentOutput = lipgloss.NewStyle().
-				Border(lipgloss.ThickBorder(), false, false, false, true). // Left border only
-				BorderForeground(colorPrimary).
-				PaddingLeft(1)
 
 	// Thinking block styles
 	styleThinkingBox = lipgloss.NewStyle().
@@ -448,15 +386,6 @@ var (
 				BorderForeground(colorPrimary).
 				PaddingLeft(1)
 
-	// List styles
-	styleListItem = lipgloss.NewStyle().
-			Foreground(colorText).
-			PaddingLeft(2)
-
-	styleListBullet = lipgloss.NewStyle().
-			Foreground(colorSecondary).
-			Bold(true)
-
 	// Panel styles (no borders - focus indicated by header color)
 	stylePanelTitle = lipgloss.NewStyle().
 			Foreground(colorSubtext0).
@@ -496,13 +425,6 @@ var (
 	styleBadgeMuted = styleBadge.Copy().
 			Foreground(colorText).
 			Background(colorMuted)
-
-	// Scrollbar styles
-	styleScrollbar = lipgloss.NewStyle().
-			Foreground(colorMuted)
-
-	styleScrollbarThumb = lipgloss.NewStyle().
-				Foreground(colorSecondary)
 
 	// Empty state styles
 	styleEmptyState = lipgloss.NewStyle().

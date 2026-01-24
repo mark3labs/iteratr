@@ -156,44 +156,6 @@ func (d *Dashboard) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	return nil
 }
 
-// renderMainContent renders the main content area (session info + agent output).
-func (d *Dashboard) renderMainContent(width int) string {
-	// Build header sections (fixed height)
-	var headerSections []string
-
-	// Section 1: Session Info
-	sessionInfo := d.renderSessionInfo()
-	headerSections = append(headerSections, sessionInfo)
-
-	// Section 2: Progress Indicator
-	if d.state != nil {
-		progressInfo := d.renderProgressIndicator()
-		headerSections = append(headerSections, "") // blank line
-		headerSections = append(headerSections, progressInfo)
-	}
-
-	// Render header
-	header := lipgloss.JoinVertical(lipgloss.Left, headerSections...)
-
-	// Section 3: Agent Output (takes remaining space)
-	var agentSection string
-	if d.agentOutput != nil {
-		focusIndicator := ""
-		if d.focusPane == FocusAgent {
-			focusIndicator = " " + styleStatusInProgress.Render("●")
-		}
-		agentLabel := styleStatLabel.Render("Agent Output:") + focusIndicator
-		agentContent := d.agentOutput.Render()
-		agentSection = lipgloss.JoinVertical(lipgloss.Left, "", agentLabel, "", agentContent)
-	}
-
-	// Join header and agent sections
-	content := lipgloss.JoinVertical(lipgloss.Left, header, agentSection)
-
-	// Apply width constraint
-	return lipgloss.NewStyle().Width(width).Render(content)
-}
-
 // renderSessionInfo renders the session name and iteration number.
 func (d *Dashboard) renderSessionInfo() string {
 	var parts []string

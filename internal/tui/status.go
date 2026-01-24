@@ -250,31 +250,5 @@ func (s *StatusBar) hasInProgressTasks() bool {
 	return false
 }
 
-// truncateString truncates a string to fit within maxWidth, adding "..." if truncated.
-func truncateString(s string, maxWidth int) string {
-	if maxWidth <= 3 {
-		return "..."
-	}
-
-	width := lipgloss.Width(s)
-	if width <= maxWidth {
-		return s
-	}
-
-	// Simple truncation - count runes to handle multi-byte chars
-	runes := []rune(s)
-	targetLen := maxWidth - 3 // Reserve space for "..."
-
-	if targetLen < 0 {
-		targetLen = 0
-	}
-
-	if targetLen >= len(runes) {
-		return s
-	}
-
-	return string(runes[:targetLen]) + "..."
-}
-
 // Compile-time interface checks
 var _ FullComponent = (*StatusBar)(nil)

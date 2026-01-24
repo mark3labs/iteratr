@@ -62,7 +62,6 @@ type Logger struct {
 var (
 	// Default is the default logger instance
 	Default *Logger
-	once    sync.Once
 )
 
 func init() {

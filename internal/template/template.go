@@ -12,14 +12,6 @@ import (
 	"github.com/mark3labs/iteratr/internal/session"
 )
 
-// shortID returns an ID truncated to 8 characters for display, or the full ID if shorter.
-func shortID(id string) string {
-	if len(id) > 8 {
-		return id[:8]
-	}
-	return id
-}
-
 // Variables holds the data to be injected into template placeholders.
 type Variables struct {
 	Session   string // Session name
