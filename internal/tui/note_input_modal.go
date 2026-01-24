@@ -442,6 +442,30 @@ func (m *NoteInputModal) Draw(scr uv.Screen, area uv.Rectangle) {
 		modalHeight = 8
 	}
 
+	// Dynamically size textarea to fill available modal content area
+	// Modal layout: title (1) + empty (1) + type badges (1) + empty (1) +
+	//               textarea (N) + empty (1) + button (1) + empty (1) + hint (1)
+	// Container padding: 4 (border + padding on top/bottom)
+	contentPadding := 4
+	fixedLines := 8 // title, 2 empty, type badges, button, hint, and separators
+	availableHeight := modalHeight - contentPadding - fixedLines
+
+	// Set minimum textarea height
+	if availableHeight < 3 {
+		availableHeight = 3
+	}
+
+	// Calculate textarea width accounting for modal padding and borders
+	// Modal width - container padding (4) - content margin (0)
+	textareaWidth := modalWidth - 4
+	if textareaWidth < 20 {
+		textareaWidth = 20
+	}
+
+	// Update textarea dimensions to be responsive to terminal size
+	m.textarea.SetWidth(textareaWidth)
+	m.textarea.SetHeight(availableHeight)
+
 	// Build modal content using View()
 	content := m.View()
 
