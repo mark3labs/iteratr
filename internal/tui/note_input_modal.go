@@ -66,13 +66,22 @@ func (m *NoteInputModal) Update(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "esc":
-			// ESC closes the modal (TAS-8 will be implemented separately)
+			// ESC closes the modal
 			m.Close()
 			return nil
 		case "ctrl+enter":
-			// Ctrl+Enter submits (TAS-7 will be implemented separately)
-			// For now, just placeholder - actual CreateNoteMsg emission will come later
-			return nil
+			// Ctrl+Enter submits the note
+			// Get the content from textarea
+			content := strings.TrimSpace(m.textarea.Value())
+
+			// Don't submit if empty (validation)
+			if content == "" {
+				return nil
+			}
+
+			// Return a function that creates the CreateNoteMsg
+			// The iteration will be set by App when it receives this
+			return m.submit(content)
 		}
 	}
 
@@ -80,6 +89,19 @@ func (m *NoteInputModal) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	m.textarea, cmd = m.textarea.Update(msg)
 	return cmd
+}
+
+// submit returns a command that creates a CreateNoteMsg.
+// The App will receive this message and fill in the iteration number.
+func (m *NoteInputModal) submit(content string) tea.Cmd {
+	noteType := m.noteType
+	return func() tea.Msg {
+		return CreateNoteMsg{
+			Content:   content,
+			NoteType:  noteType,
+			Iteration: 0, // Will be filled in by App
+		}
+	}
 }
 
 // View renders the modal content (for testing and integration).

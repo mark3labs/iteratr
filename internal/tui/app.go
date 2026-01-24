@@ -185,11 +185,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CreateNoteMsg:
 		// Create a new note via Store.NoteAdd()
 		// The note will be published to NATS and picked up by event subscription
+		// Use App's iteration field (set by IterationStartMsg) instead of message field
+		iteration := a.iteration
+		if msg.Iteration != 0 {
+			iteration = msg.Iteration // Allow override if explicitly set
+		}
 		go func() {
 			_, err := a.store.NoteAdd(a.ctx, a.sessionName, session.NoteAddParams{
 				Content:   msg.Content,
 				Type:      msg.NoteType,
-				Iteration: msg.Iteration,
+				Iteration: iteration,
 			})
 			if err != nil {
 				// TODO: Add error handling/visual feedback
