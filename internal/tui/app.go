@@ -16,14 +16,15 @@ import (
 // App is the main Bubbletea model that manages the TUI application.
 type App struct {
 	// View components
-	dashboard *Dashboard
-	logs      *LogViewer
-	agent     *AgentOutput
-	status    *StatusBar
-	sidebar   *Sidebar
-	dialog    *Dialog
-	taskModal *TaskModal
-	noteModal *NoteModal
+	dashboard      *Dashboard
+	logs           *LogViewer
+	agent          *AgentOutput
+	status         *StatusBar
+	sidebar        *Sidebar
+	dialog         *Dialog
+	taskModal      *TaskModal
+	noteModal      *NoteModal
+	noteInputModal *NoteInputModal
 
 	// Layout management
 	layout      Layout
@@ -63,6 +64,7 @@ func NewApp(ctx context.Context, store *session.Store, sessionName string, nc *n
 		dialog:         NewDialog(),
 		taskModal:      NewTaskModal(),
 		noteModal:      NewNoteModal(),
+		noteInputModal: NewNoteInputModal(),
 		eventChan:      make(chan session.Event, 100), // Buffered channel for events
 		layoutDirty:    true,                          // Calculate layout on first render
 	}
@@ -416,6 +418,9 @@ func (a *App) handleGlobalKeys(msg tea.KeyPressMsg) tea.Cmd {
 	case "ctrl+s":
 		a.sidebarVisible = !a.sidebarVisible
 		return nil
+	case "ctrl+n":
+		// Open note input modal (guards will be added in later tasks)
+		return a.noteInputModal.Show()
 	}
 	return nil
 }
