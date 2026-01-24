@@ -215,7 +215,7 @@ This is a test spec for iteration loop testing.
 	// Run the iteration loop
 	// This will fail because opencode is not available, but we can verify
 	// that state is tracked correctly up to the failure point
-	err = orch.Run()
+	_ = orch.Run()
 
 	// Load the state to verify iterations were tracked
 	state, err := orch.store.LoadState(orch.ctx, "test-iteration-loop")

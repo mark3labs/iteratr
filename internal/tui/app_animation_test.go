@@ -27,7 +27,7 @@ func TestApp_AnimationsPauseWhenNotVisible(t *testing.T) {
 	pulseMsg := PulseMsg{ID: "test"}
 
 	// Update app with PulseMsg
-	_, cmd := app.Update(pulseMsg)
+	_, _ = app.Update(pulseMsg)
 
 	// In desktop mode, sidebar should be updated (visible)
 	// Inbox should NOT be updated (not active view and no pulse)
@@ -38,7 +38,7 @@ func TestApp_AnimationsPauseWhenNotVisible(t *testing.T) {
 	app.sidebarVisible = false
 
 	// Update app with PulseMsg in compact mode
-	_, cmd = app.Update(pulseMsg)
+	_, cmd := app.Update(pulseMsg)
 
 	// In compact mode with sidebar not visible, sidebar should NOT be updated
 	// This test mainly verifies the code compiles and doesn't panic

@@ -726,10 +726,7 @@ func renderCodeBlock(content, fileName string, width int) string {
 	for _, line := range lines {
 		// Try to parse "NNNNN| code" format (line number + pipe + content)
 		if idx := strings.Index(line, "| "); idx > 0 && idx <= 7 {
-			numStr := strings.TrimLeft(line[:idx], "0 ")
-			if numStr == "" {
-				numStr = "0"
-			}
+			_ = strings.TrimLeft(line[:idx], "0 ")
 			parsed = append(parsed, codeLine{
 				lineNum: line[:idx],
 				code:    line[idx+2:], // skip "| "
