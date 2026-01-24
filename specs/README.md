@@ -14,3 +14,4 @@
 | [agent-message-display](./agent-message-display.md) | Draft | Rich agent message rendering: thinking blocks, tool status, markdown, animations |
 | [user-input-acp](./user-input-acp.md) | Draft | Replace inbox with Bubbles textinput, send user messages via persistent ACP session |
 | [lint-fixes](./lint-fixes.md) | Active | Run golangci-lint and fix all reported issues |
+| [user-note-creation](./user-note-creation.md) | Draft | Ctrl+N modal to create user notes via NATS (same persistence as agent notes) |

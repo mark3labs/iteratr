@@ -425,6 +425,9 @@ func (a *App) View() tea.View {
 	view.AltScreen = true                    // Full-screen mode
 	view.MouseMode = tea.MouseModeCellMotion // Enable mouse events
 	view.ReportFocus = true                  // Enable focus events
+	view.KeyboardEnhancements = tea.KeyboardEnhancements{
+		ReportEventTypes: true, // Required for ctrl+enter and other enhanced key events
+	}
 
 	if a.quitting {
 		// Return minimal view when quitting - exit alt screen for proper terminal restoration
