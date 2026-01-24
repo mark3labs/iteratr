@@ -50,9 +50,24 @@ func (m *NoteInputModal) Show() tea.Cmd {
 	return m.textarea.Focus()
 }
 
-// Close hides the modal.
+// Close hides the modal and resets its state.
 func (m *NoteInputModal) Close() {
 	m.visible = false
+	m.reset()
+}
+
+// reset clears the textarea and resets the modal to initial state.
+// Called on both cancel (ESC) and submit to ensure clean state on next open.
+func (m *NoteInputModal) reset() {
+	// Clear textarea content
+	m.textarea.SetValue("")
+
+	// Reset noteType to default
+	// (When type selector is implemented, this will reset typeIndex to 0)
+	m.noteType = "learning"
+
+	// Blur the textarea to reset its internal state
+	m.textarea.Blur()
 }
 
 // Update handles keyboard input for the modal.

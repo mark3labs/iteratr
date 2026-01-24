@@ -346,9 +346,8 @@ func (s *Sidebar) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		return nil
 	}
 
-	// Split area vertically: Tasks gets remaining space, Notes gets fixed height
-	notesHeight := 5 // 1 header + 4 content lines
-	tasksHeight := area.Dy() - notesHeight
+	// Split area vertically: Tasks (60%) | Notes (40%)
+	tasksHeight := int(float64(area.Dy()) * 0.6)
 	if tasksHeight < 3 {
 		tasksHeight = 3
 	}
@@ -454,18 +453,22 @@ func (s *Sidebar) SetSize(width, height int) {
 	s.width = width
 	s.height = height
 
-	// Calculate section heights: Notes gets fixed height, Tasks gets the rest
-	notesHeight := 5 // 1 header + 4 content lines
-	tasksHeight := height - notesHeight
+	// Calculate section heights (Tasks 60%, Notes 40%)
+	tasksHeight := int(float64(height) * 0.6)
 	if tasksHeight < 3 {
 		tasksHeight = 3
 	}
+	notesHeight := height - tasksHeight
+	if notesHeight < 2 {
+		notesHeight = 2
+		tasksHeight = height - notesHeight
+	}
 
-	// Account for borders and headers (2 chars each side, 2 lines for header/border)
+	// Account for panel header (1 line each)
 	s.tasksScrollList.SetWidth(width - 4)
-	s.tasksScrollList.SetHeight(tasksHeight - 2) // subtract 1 for header, 1 for padding
+	s.tasksScrollList.SetHeight(tasksHeight - 1)
 	s.notesScrollList.SetWidth(width - 4)
-	s.notesScrollList.SetHeight(notesHeight - 2) // subtract 1 for header, 1 for padding
+	s.notesScrollList.SetHeight(notesHeight - 1)
 }
 
 // SetState updates the sidebar with new session state.
@@ -593,11 +596,15 @@ func (s *Sidebar) Render() string {
 		return ""
 	}
 
-	// Calculate section heights: Notes gets fixed height, Tasks gets the rest
-	notesHeight := 5 // 1 header + 4 content lines
-	tasksHeight := s.height - notesHeight
+	// Calculate section heights (Tasks 60%, Notes 40%)
+	tasksHeight := int(float64(s.height) * 0.6)
 	if tasksHeight < 3 {
 		tasksHeight = 3
+	}
+	notesHeight := s.height - tasksHeight
+	if notesHeight < 2 {
+		notesHeight = 2
+		tasksHeight = s.height - notesHeight
 	}
 
 	// Render tasks section
