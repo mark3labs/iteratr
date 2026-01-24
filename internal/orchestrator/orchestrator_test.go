@@ -305,7 +305,7 @@ Resumable session test.
 		if err := orch.Start(); err != nil {
 			t.Fatalf("failed to start second orchestrator: %v", err)
 		}
-		defer orch.Stop()
+		defer func() { _ = orch.Stop() }()
 
 		// Load state and verify starting iteration would be 3
 		state, err := orch.store.LoadState(orch.ctx, sessionName)
@@ -359,7 +359,7 @@ Test session complete signal.
 	if err := orch.Start(); err != nil {
 		t.Fatalf("failed to start orchestrator: %v", err)
 	}
-	defer orch.Stop()
+	defer func() { _ = orch.Stop() }()
 
 	// Mark session as complete before running
 	if err := orch.store.SessionComplete(orch.ctx, sessionName); err != nil {
@@ -452,7 +452,7 @@ Model configuration test.
 			if err := orch.Start(); err != nil {
 				t.Fatalf("failed to start orchestrator with model %q: %v", tt.model, err)
 			}
-			defer orch.Stop()
+			defer func() { _ = orch.Stop() }()
 
 			// Note: runner is now created in Run(), not Start()
 			// Verify that the model is stored correctly in the config for later runner creation
@@ -492,7 +492,7 @@ Headless mode test.
 	if err := orch.Start(); err != nil {
 		t.Fatalf("failed to start orchestrator in headless mode: %v", err)
 	}
-	defer orch.Stop()
+	defer func() { _ = orch.Stop() }()
 
 	// Verify TUI is not initialized in headless mode
 	if orch.tuiApp != nil {
@@ -532,7 +532,7 @@ TUI mode test.
 	if err := orch.Start(); err != nil {
 		t.Fatalf("failed to start orchestrator with TUI: %v", err)
 	}
-	defer orch.Stop()
+	defer func() { _ = orch.Stop() }()
 
 	// Verify TUI is initialized
 	if orch.tuiApp == nil {

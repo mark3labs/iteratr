@@ -17,7 +17,7 @@ var (
 
 func main() {
 	// Ensure logger is closed on exit
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	if err := rootCmd.Execute(); err != nil {
 		logger.Error("Command execution failed: %v", err)

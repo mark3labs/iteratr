@@ -204,7 +204,7 @@ func (st *State) applyTaskEvent(event Event) {
 			Priority  int    `json:"priority"`
 			Iteration int    `json:"iteration"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Update task priority if it exists
 		if task, exists := st.Tasks[meta.TaskID]; exists {
@@ -220,7 +220,7 @@ func (st *State) applyTaskEvent(event Event) {
 			DependsOn string `json:"depends_on"`
 			Iteration int    `json:"iteration"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Add dependency if task exists and dependency not already present
 		if task, exists := st.Tasks[meta.TaskID]; exists {
@@ -251,7 +251,7 @@ func (st *State) applyNoteEvent(event Event) {
 			Type      string `json:"type"`
 			Iteration int    `json:"iteration"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Create new note
 		note := &Note{
@@ -274,7 +274,7 @@ func (st *State) applyIterationEvent(event Event) {
 		var meta struct {
 			Number int `json:"number"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Create new iteration
 		iter := &Iteration{
@@ -289,7 +289,7 @@ func (st *State) applyIterationEvent(event Event) {
 		var meta struct {
 			Number int `json:"number"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Mark iteration as complete
 		for _, iter := range st.Iterations {
@@ -307,7 +307,7 @@ func (st *State) applyIterationEvent(event Event) {
 			Summary     string   `json:"summary"`
 			TasksWorked []string `json:"tasks_worked"`
 		}
-		json.Unmarshal(event.Meta, &meta)
+		_ = json.Unmarshal(event.Meta, &meta)
 
 		// Update iteration with summary and tasks worked
 		for _, iter := range st.Iterations {

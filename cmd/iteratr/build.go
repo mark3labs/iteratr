@@ -85,7 +85,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("session name too long (max 64 characters): %s", sessionName)
 	}
 	for _, r := range sessionName {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' {
 			return fmt.Errorf("invalid session name: %s (use only alphanumeric, hyphens, underscores)", sessionName)
 		}
 	}
