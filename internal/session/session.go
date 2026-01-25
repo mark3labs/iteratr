@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/mark3labs/iteratr/internal/logger"
@@ -377,7 +376,6 @@ func (s *Store) LoadState(ctx context.Context, session string) (*State, error) {
 				malformedCount++
 				meta, _ := msg.Metadata()
 				logger.Warn("Skipping malformed event (seq=%d): %v", meta.Sequence.Stream, err)
-				fmt.Fprintf(os.Stderr, "Warning: Skipping malformed event (seq=%d): %v\n", meta.Sequence.Stream, err)
 				_ = msg.Ack()
 				continue
 			}
@@ -406,7 +404,6 @@ func (s *Store) LoadState(ctx context.Context, session string) (*State, error) {
 	// Warn if we encountered malformed events
 	if malformedCount > 0 {
 		logger.Warn("Skipped %d malformed events while loading state", malformedCount)
-		fmt.Fprintf(os.Stderr, "Warning: Skipped %d malformed events while loading state\n", malformedCount)
 	}
 
 	logger.Debug("State loaded: %d total events, %d tasks, %d notes, %d iterations",

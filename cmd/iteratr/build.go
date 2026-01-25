@@ -3,11 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 
+	"github.com/mark3labs/iteratr/internal/logger"
 	"github.com/mark3labs/iteratr/internal/orchestrator"
 	"github.com/spf13/cobra"
 )
@@ -136,23 +135,12 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	// Ensure cleanup always runs using defer
 	defer func() {
 		if err := orch.Stop(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error during shutdown: %v\n", err)
+			// Log error but don't write to stderr - corrupts terminal during TUI shutdown
+			logger.Error("Error during shutdown: %v", err)
 		}
 	}()
 
-	// Setup signal handling for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		fmt.Println("\nShutting down gracefully...")
-		if err := orch.Stop(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error during shutdown: %v\n", err)
-		}
-		os.Exit(0)
-	}()
-
-	// Run iteration loop
+	// Run iteration loop (Bubbletea handles SIGINT/SIGTERM internally)
 	if err := orch.Run(); err != nil {
 		return fmt.Errorf("iteration loop failed: %w", err)
 	}

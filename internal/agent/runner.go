@@ -79,7 +79,8 @@ func (r *Runner) Start(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "opencode", "acp")
 	cmd.Dir = r.workDir
 	cmd.Env = os.Environ()
-	cmd.Stderr = os.Stderr
+	// Don't inherit stderr - it corrupts terminal state during TUI shutdown
+	// Subprocess errors are captured via the ACP protocol
 
 	// Setup stdin pipe
 	stdin, err := cmd.StdinPipe()

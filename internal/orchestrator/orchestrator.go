@@ -375,9 +375,8 @@ func (o *Orchestrator) Run() error {
 				return nil
 			}
 
-			// Log the error but continue with graceful handling
+			// Log the error (don't write to stderr - corrupts terminal during TUI shutdown)
 			logger.Error("Iteration #%d failed: %v", currentIteration, err)
-			fmt.Fprintf(os.Stderr, "Iteration #%d failed: %v\n", currentIteration, err)
 
 			// Check if it's a panic error - these are critical
 			var panicErr *ierr.PanicError
@@ -470,17 +469,16 @@ func (o *Orchestrator) Stop() error {
 		o.cancel()
 	}
 
-	// Stop TUI and wait for it to finish
+	// Wait for TUI to finish (context cancellation signals Bubbletea to shutdown)
 	if o.tuiProgram != nil {
-		logger.Debug("Stopping TUI")
-		o.tuiProgram.Quit()
-		// Wait for TUI to finish with timeout
+		logger.Debug("Waiting for TUI to finish")
 		select {
 		case <-o.tuiDone:
 			logger.Debug("TUI stopped successfully")
 		case <-time.After(2 * time.Second):
-			// TUI didn't finish in time, continue with shutdown
-			logger.Warn("TUI shutdown timed out after 2s")
+			// TUI didn't finish in time, force quit and continue
+			logger.Warn("TUI shutdown timed out after 2s, forcing quit")
+			o.tuiProgram.Quit()
 			multiErr.Append(ierr.NewTransientError("TUI shutdown", fmt.Errorf("timed out after 2s")))
 		}
 		o.tuiProgram = nil
@@ -585,25 +583,26 @@ func (o *Orchestrator) startTUI() error {
 	// Create TUI app
 	o.tuiApp = tui.NewApp(o.ctx, o.store, o.cfg.SessionName, o.nc, o.sendChan)
 
-	// Create Bubbletea program
-	o.tuiProgram = tea.NewProgram(o.tuiApp)
+	// Create Bubbletea program with context for graceful shutdown
+	o.tuiProgram = tea.NewProgram(o.tuiApp, tea.WithContext(o.ctx))
 
 	// Start TUI in background with panic recovery
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Fprintf(os.Stderr, "TUI panic: %v\n", r)
+				// Log panic but don't write to stderr - corrupts terminal during shutdown
+				logger.Error("TUI panic: %v", r)
 			}
 			// Signal TUI is done
 			close(o.tuiDone)
 		}()
 
 		if _, err := o.tuiProgram.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+			// Ignore expected shutdown errors (context cancelled, user interrupt)
+			if o.ctx.Err() == nil && !errors.Is(err, tea.ErrInterrupted) {
+				logger.Error("TUI error: %v", err)
+			}
 		}
-		// Reset terminal state in case Bubble Tea didn't clean up properly.
-		// Exits alt screen, disables mouse tracking (cell motion + SGR), disables focus reporting.
-		_, _ = fmt.Fprint(os.Stdout, "\033[?1049l\033[?1002l\033[?1006l\033[?1004l")
 	}()
 
 	// Monitor TUI quit and cancel orchestrator context

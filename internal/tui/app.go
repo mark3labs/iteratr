@@ -150,14 +150,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.checkConnectionHealth()
 
 	case SessionCompleteMsg:
-		// Show completion dialog instead of quitting
+		// Show completion dialog - user can dismiss and continue viewing or quit manually
 		a.dialog.Show(
 			"Session Complete",
 			"All tasks have been completed successfully!",
-			func() tea.Cmd {
-				a.quitting = true
-				return tea.Quit
-			},
+			nil, // Just close the modal, don't quit
 		)
 		return a, nil
 
