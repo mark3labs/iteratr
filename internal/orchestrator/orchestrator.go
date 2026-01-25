@@ -449,6 +449,40 @@ func (o *Orchestrator) Run() error {
 	return nil
 }
 
+// processUserMessages drains sendChan and processes all queued messages sequentially.
+// Called after each agent response (iteration or user message).
+// Returns when channel is empty and all messages processed.
+func (o *Orchestrator) processUserMessages() error {
+	for {
+		select {
+		case <-o.ctx.Done():
+			return o.ctx.Err()
+		case userMsg := <-o.sendChan:
+			logger.Info("Processing queued user message: %s", userMsg)
+
+			// Notify TUI that we're processing a queued message
+			// TODO: Uncomment when QueuedMessageProcessingMsg is defined in task TAS-21
+			// if o.tuiProgram != nil {
+			// 	o.tuiProgram.Send(tui.QueuedMessageProcessingMsg{Text: userMsg})
+			// }
+
+			if err := o.runner.SendMessage(o.ctx, userMsg); err != nil {
+				logger.Error("Failed to send user message: %v", err)
+				if o.tuiProgram != nil {
+					o.tuiProgram.Send(tui.AgentOutputMsg{
+						Content: fmt.Sprintf("\n[Error sending message: %v]\n", err),
+					})
+				}
+				// Continue processing remaining messages
+			}
+			// Loop continues - check for more messages
+		default:
+			// Channel empty, all messages processed
+			return nil
+		}
+	}
+}
+
 // Stop gracefully shuts down all components.
 // It collects errors from each component and returns a combined error if any fail.
 // Multiple calls to Stop() are safe and idempotent.
