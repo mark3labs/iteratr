@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -597,6 +598,28 @@ func (a *AgentOutput) AppendThinking(content string) tea.Cmd {
 	a.messages = append(a.messages, newMsg)
 	a.refreshContent()
 	return spinnerCmd
+}
+
+// AppendUserMessage adds a user message to the conversation viewport.
+// User messages appear when the agent receives them (not when user sends),
+// preserving accurate conversation order.
+func (a *AgentOutput) AppendUserMessage(text string) tea.Cmd {
+	// Generate unique ID with nanosecond timestamp
+	id := fmt.Sprintf("user-%d", time.Now().UnixNano())
+
+	// Create new UserMessageItem
+	newMsg := &UserMessageItem{
+		id:      id,
+		content: text,
+	}
+
+	// Append to messages slice
+	a.messages = append(a.messages, newMsg)
+
+	// Refresh content and scroll to bottom
+	a.refreshContent()
+
+	return nil
 }
 
 // AppendFinish marks the iteration as finished and displays completion metadata.
