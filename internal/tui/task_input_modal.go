@@ -12,6 +12,20 @@ import (
 // We reuse the focusTypeSelector value since they serve the same role (first selector in modal).
 const focusPrioritySelector = focusTypeSelector
 
+// Priority levels matching session.Task priority values.
+// The value field maps to the integer stored in the Task struct and event metadata.
+var priorities = []struct {
+	value int
+	label string
+	emoji string
+}{
+	{0, "critical", "🔴"},
+	{1, "high", "🟠"},
+	{2, "medium", "🟡"},
+	{3, "low", "🟢"},
+	{4, "backlog", "⚪"},
+}
+
 // TaskInputModal is an interactive modal for creating new tasks.
 // It displays a textarea for content input, a priority selector, and allows the user to submit tasks.
 type TaskInputModal struct {
