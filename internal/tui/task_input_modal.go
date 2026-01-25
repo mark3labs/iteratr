@@ -218,6 +218,18 @@ func (m *TaskInputModal) Update(msg tea.Msg) tea.Cmd {
 				}
 				return nil
 			}
+		case "enter", " ":
+			// Enter or Space when button is focused submits the task
+			if m.focus == focusSubmitButton {
+				content := strings.TrimSpace(m.textarea.Value())
+
+				// Don't submit if empty (validation)
+				if content == "" {
+					return nil
+				}
+
+				return m.submit(content)
+			}
 		}
 	}
 
