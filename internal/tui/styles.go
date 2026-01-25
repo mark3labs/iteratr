@@ -485,18 +485,19 @@ var (
 				Foreground(colorSurface2)
 )
 
-// renderModalTitle renders a title with diagonal hatching decoration.
-// Creates format: "Title ╱╱╱╱╱╱╱╱╱" with a gradient from primary to secondary.
+// renderModalTitle renders a title with block pattern decoration.
+// Creates format: "Title ▀▄▀▄▀▄▀▄" with a gradient from primary to secondary.
+// Uses the same block characters as the logo (▀ ▄) for visual consistency.
 func renderModalTitle(title string, width int) string {
 	styledTitle := styleModalTitle.Render(title)
 	titleWidth := lipgloss.Width(styledTitle)
 
-	remainingWidth := width - titleWidth - 1 // -1 for space before hatching
+	remainingWidth := width - titleWidth - 1 // -1 for space before pattern
 	if remainingWidth <= 0 {
 		return styledTitle
 	}
 
-	// Build gradient hatching in segments for performance
+	// Build gradient pattern in segments for performance
 	// Use ~8 color stops across the width instead of per-character
 	const maxStops = 8
 	segmentSize := remainingWidth / maxStops
@@ -504,19 +505,27 @@ func renderModalTitle(title string, width int) string {
 		segmentSize = 1
 	}
 
-	var hatching strings.Builder
+	var pattern strings.Builder
 	for i := 0; i < remainingWidth; i += segmentSize {
 		pos := float64(i) / float64(remainingWidth)
 		color := interpolateColor(string(colorPrimary), string(colorSecondary), pos)
 		charStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
 
-		// Render a segment of characters with the same color
+		// Build alternating ▀▄ pattern for this segment
 		end := i + segmentSize
 		if end > remainingWidth {
 			end = remainingWidth
 		}
-		hatching.WriteString(charStyle.Render(strings.Repeat("╱", end-i)))
+		var segmentPattern strings.Builder
+		for j := i; j < end; j++ {
+			if j%2 == 0 {
+				segmentPattern.WriteRune('▄')
+			} else {
+				segmentPattern.WriteRune('▀')
+			}
+		}
+		pattern.WriteString(charStyle.Render(segmentPattern.String()))
 	}
 
-	return styledTitle + " " + hatching.String()
+	return styledTitle + " " + pattern.String()
 }
