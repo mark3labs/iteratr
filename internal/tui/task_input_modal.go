@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss"
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
@@ -34,6 +35,14 @@ func NewTaskInputModal() *TaskInputModal {
 	// We only want the down arrow key for this action, not ctrl+t
 	// This prevents confusion since ctrl+t opens the task modal globally
 	ta.KeyMap.LineNext = key.NewBinding(key.WithKeys("down"))
+
+	// Style textarea to match modal theme using default dark styles
+	// and customizing the cursor color to match our secondary brand color
+	styles := textarea.DefaultDarkStyles()
+	styles.Cursor.Color = lipgloss.Color(colorSecondary)
+	styles.Cursor.Shape = tea.CursorBlock
+	styles.Cursor.Blink = true
+	ta.SetStyles(styles)
 
 	return &TaskInputModal{
 		visible:       false,
