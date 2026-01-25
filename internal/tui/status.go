@@ -20,6 +20,7 @@ type StatusBar struct {
 	height      int
 	sessionName string
 	startedAt   time.Time
+	stoppedAt   time.Time // When the duration timer was stopped (zero if running)
 	state       *session.State
 	connected   bool
 	working     bool
@@ -77,7 +78,14 @@ func (s *StatusBar) buildLeft() string {
 	sep := styleHeaderSeparator.Render(" | ")
 	sessionInfo := styleHeaderInfo.Render(s.sessionName)
 
-	duration := s.formatDuration(time.Since(s.startedAt))
+	// Use frozen duration if stopped, otherwise calculate from now
+	var elapsed time.Duration
+	if !s.stoppedAt.IsZero() {
+		elapsed = s.stoppedAt.Sub(s.startedAt)
+	} else {
+		elapsed = time.Since(s.startedAt)
+	}
+	duration := s.formatDuration(elapsed)
 	left := title + sep + sessionInfo + sep + styleHeaderInfo.Render(duration)
 
 	// Add iteration info if available
@@ -198,6 +206,10 @@ func (s *StatusBar) SetLayoutMode(mode LayoutMode) {
 func (s *StatusBar) Update(msg tea.Msg) tea.Cmd {
 	switch msg.(type) {
 	case DurationTickMsg:
+		// Don't reschedule if the timer has been stopped
+		if !s.stoppedAt.IsZero() {
+			return nil
+		}
 		return s.durationTick()
 	}
 
@@ -215,6 +227,11 @@ func (s *StatusBar) Update(msg tea.Msg) tea.Cmd {
 // StartDurationTick starts the 1-second duration tick loop.
 func (s *StatusBar) StartDurationTick() tea.Cmd {
 	return s.durationTick()
+}
+
+// StopDurationTick stops the duration timer, freezing the displayed time.
+func (s *StatusBar) StopDurationTick() {
+	s.stoppedAt = time.Now()
 }
 
 func (s *StatusBar) durationTick() tea.Cmd {

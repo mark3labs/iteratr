@@ -150,6 +150,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.checkConnectionHealth()
 
 	case SessionCompleteMsg:
+		// Stop the duration timer
+		a.status.StopDurationTick()
 		// Show completion dialog - user can dismiss and continue viewing or quit manually
 		a.dialog.Show(
 			"Session Complete",
