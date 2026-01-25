@@ -225,8 +225,35 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		// Draw input field below separator
 		inputView := a.input.View()
 		inputY := separatorY + 1
-		inputContentArea := uv.Rect(inputArea.Min.X+leftPad, inputY, inputArea.Dx()-leftPad, 1)
+
+		// Calculate queue indicator if messages are queued
+		var queueIndicator string
+		var queueIndicatorWidth int
+		if a.queueDepth > 0 {
+			queueIndicator = styleDim.Render(fmt.Sprintf("(%d queued)", a.queueDepth))
+			// Strip ANSI codes to measure actual width (lipgloss adds invisible codes)
+			queueIndicatorWidth = len(fmt.Sprintf("(%d queued)", a.queueDepth))
+		}
+
+		// Adjust input area to make room for queue indicator on the right
+		inputWidth := inputArea.Dx() - leftPad
+		if queueIndicatorWidth > 0 {
+			// Leave space for indicator plus 2 spaces padding
+			inputWidth = inputWidth - queueIndicatorWidth - 2
+			if inputWidth < 10 {
+				inputWidth = 10 // Minimum width for input
+			}
+		}
+
+		inputContentArea := uv.Rect(inputArea.Min.X+leftPad, inputY, inputWidth, 1)
 		uv.NewStyledString(inputView).Draw(scr, inputContentArea)
+
+		// Draw queue indicator on the right side if present
+		if queueIndicatorWidth > 0 {
+			indicatorX := inputArea.Min.X + inputArea.Dx() - queueIndicatorWidth - 1
+			indicatorArea := uv.Rect(indicatorX, inputY, queueIndicatorWidth+1, 1)
+			uv.NewStyledString(queueIndicator).Draw(scr, indicatorArea)
+		}
 
 		// Draw help text below input
 		if inputArea.Dy() >= 4 {
