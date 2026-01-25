@@ -34,8 +34,11 @@ release:
     ## Installation
 
     ```bash
-    # macOS/Linux
-    brew install iteratr
+    # Quick install (recommended)
+    curl -sSL https://raw.githubusercontent.com/mark3labs/iteratr/main/install.sh | sh
+
+    # Go install (requires Go 1.25+)
+    go install github.com/mark3labs/iteratr/cmd/iteratr@latest
 
     # Or download from assets below
     ```
