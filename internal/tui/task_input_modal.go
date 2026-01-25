@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
@@ -27,6 +28,12 @@ func NewTaskInputModal() *TaskInputModal {
 	ta.Prompt = "" // No prompt character
 	ta.SetWidth(50)
 	ta.SetHeight(6)
+
+	// Override textarea KeyMap to remove ctrl+t from LineNext
+	// By default, textarea binds ctrl+t to move cursor down (LineNext)
+	// We only want the down arrow key for this action, not ctrl+t
+	// This prevents confusion since ctrl+t opens the task modal globally
+	ta.KeyMap.LineNext = key.NewBinding(key.WithKeys("down"))
 
 	return &TaskInputModal{
 		visible:       false,
