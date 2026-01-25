@@ -26,6 +26,7 @@ type App struct {
 	taskModal      *TaskModal
 	noteModal      *NoteModal
 	noteInputModal *NoteInputModal
+	taskInputModal *TaskInputModal
 
 	// Layout management
 	layout      Layout
@@ -67,6 +68,7 @@ func NewApp(ctx context.Context, store *session.Store, sessionName string, nc *n
 		taskModal:      NewTaskModal(),
 		noteModal:      NewNoteModal(),
 		noteInputModal: NewNoteInputModal(),
+		taskInputModal: NewTaskInputModal(),
 		eventChan:      make(chan session.Event, 100), // Buffered channel for events
 		layoutDirty:    true,                          // Calculate layout on first render
 	}
