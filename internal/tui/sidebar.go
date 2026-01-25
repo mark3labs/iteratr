@@ -292,12 +292,13 @@ func (s *Sidebar) drawTasksSection(scr uv.Screen, area uv.Rectangle) {
 	pct := s.tasksScrollList.ScrollPercent()
 	indicator := fmt.Sprintf(" %d%% ", int(pct*100))
 	indicatorArea := uv.Rect(
-		area.Max.X-len(indicator)-1,
+		area.Max.X-len(indicator),
 		area.Max.Y-1,
 		len(indicator),
 		1,
 	)
-	DrawStyled(scr, indicatorArea, styleScrollIndicator, indicator)
+	styledIndicator := styleScrollIndicator.Render(indicator)
+	uv.NewStyledString(styledIndicator).Draw(scr, indicatorArea)
 }
 
 // drawNotesSection renders the notes section with header and viewport content.
@@ -316,12 +317,13 @@ func (s *Sidebar) drawNotesSection(scr uv.Screen, area uv.Rectangle) {
 	pct := s.notesScrollList.ScrollPercent()
 	indicator := fmt.Sprintf(" %d%% ", int(pct*100))
 	indicatorArea := uv.Rect(
-		area.Max.X-len(indicator)-1,
+		area.Max.X-len(indicator),
 		area.Max.Y-1,
 		len(indicator),
 		1,
 	)
-	DrawStyled(scr, indicatorArea, styleScrollIndicator, indicator)
+	styledIndicator := styleScrollIndicator.Render(indicator)
+	uv.NewStyledString(styledIndicator).Draw(scr, indicatorArea)
 }
 
 // drawLogo renders the logo box at the top of the sidebar.
