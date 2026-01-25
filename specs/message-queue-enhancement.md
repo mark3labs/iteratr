@@ -408,29 +408,153 @@ Final polish and test coverage.
 - [ ] Add test: message drop warning logged when channel full
 - [ ] Manual test: type 5 messages rapidly while agent busy → all appear in output
 
+### 9. Tracer bullet: UserMessageItem type
+
+Add user message type to display sent messages in the conversation viewport. Messages appear when agent receives them (not when user sends), preserving accurate conversation order.
+
+- [ ] Add `UserMessageItem` struct to `messages.go`: `id`, `content`, `cachedRender`, `cachedWidth`
+- [ ] Implement `ID() string` - returns unique ID
+- [ ] Implement `Render(width int) string` - right-aligned with right border
+- [ ] Implement `Height() int` - count lines in cached render
+
+```go
+type UserMessageItem struct {
+    id           string
+    content      string
+    cachedRender string
+    cachedWidth  int
+}
+```
+
+### 10. Style user messages
+
+Visual distinction from assistant messages - right-aligned, different accent.
+
+- [ ] Add `styleUserMessage` to `styles.go` - right border (instead of left), user accent color
+- [ ] Right-align message content within available width
+- [ ] Use `▐` right border vs assistant's `▌` left border
+
+```go
+func (u *UserMessageItem) Render(width int) string {
+    // Cap width, wrap text
+    effectiveWidth := min(width-2, 120)
+    wrapped := wrapText(u.content, effectiveWidth)
+    
+    // Apply user style with right border
+    styled := styleUserMessage.Render(wrapped)
+    
+    // Right-align the entire block
+    return rightAlign(styled, width)
+}
+```
+
+### 11. AppendUserMessage method
+
+Add method to append user messages to viewport.
+
+- [ ] Add `AppendUserMessage(text string) tea.Cmd` to `agent.go`
+- [ ] Generate ID: `fmt.Sprintf("user-%d", time.Now().UnixNano())`
+- [ ] Create `UserMessageItem`, append to messages slice
+- [ ] Call `refreshContent()` and scroll to bottom
+
+```go
+func (a *AgentOutput) AppendUserMessage(text string) tea.Cmd {
+    id := fmt.Sprintf("user-%d", time.Now().UnixNano())
+    msg := &UserMessageItem{
+        id:      id,
+        content: text,
+    }
+    a.messages = append(a.messages, msg)
+    a.refreshContent()
+    return nil
+}
+```
+
+### 12. Display user message on delivery
+
+Orchestrator notifies TUI when processing message; TUI appends to viewport.
+
+- [ ] Update `QueuedMessageProcessingMsg` to include message text: `struct { Text string }`
+- [ ] In `App.Update()` handle `QueuedMessageProcessingMsg`: call `agentOutput.AppendUserMessage(msg.Text)`
+- [ ] Message appears in viewport at the moment agent starts processing it
+- [ ] Agent response will appear below the user message
+
+```go
+case QueuedMessageProcessingMsg:
+    // User message delivered - show in viewport now
+    a.queueDepth--
+    if a.queueDepth < 0 {
+        a.queueDepth = 0
+    }
+    cmd := a.dashboard.agentOutput.AppendUserMessage(msg.Text)
+    return a, tea.Batch(cmd, a.dashboard.SetQueueDepth(a.queueDepth))
+```
+
+### 13. Final integration and tests
+
+- [ ] Verify message appears at correct position (when agent receives, not when user sends)
+- [ ] Verify agent response appears below user message
+- [ ] Add test: send message while agent idle → appears immediately, agent responds below
+- [ ] Add test: send message while agent busy → appears when agent processes it
+- [ ] Add test: multiple queued messages appear in order as processed
+- [ ] Manual test: full conversation flow with interleaved user/agent messages
+
 ## UI Mockup
 
-### Input area with queued messages
-
-```
-├────────────────────────────────────────────────────────────────┤
-│ > another question█                              (2 queued)    │
-│ Enter to send · Esc to cancel                                  │
-└────────────────────────────────────────────────────────────────┘
-```
-
-### Agent busy, processing queued message
+### User sends message while agent busy (message queued, not yet visible)
 
 ```
 ┌─ Agent Output ─────────────────────────────────────────────────┐
-│ Processing: "fix the type error"                                │
-│                                                                 │
-│ I'll fix the type error in main.go...                          │
-│                                                                 │
+│ ▌ Running the build process...                                  │
+│ ✓ bash: go build ./...                                          │
+│                                                                 │  ← no user message yet
 ├─────────────────────────────────────────────────────────────────┤
-│ > █                                              (1 queued)     │
+│ > █                                              (1 queued)     │  ← queue indicator only
 │ Agent is working...                                             │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+### Agent finishes, processes queued message (message appears at delivery)
+
+```
+┌─ Agent Output ─────────────────────────────────────────────────┐
+│ ▌ Build completed successfully.                                 │
+│                                                                 │
+│                                       fix the bug ▐            │  ← appears NOW
+│                                                                 │
+│ ▌ I'll fix that bug now. Looking at the error...               │  ← agent responds below
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ > █                                                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Multiple messages in conversation (accurate order)
+
+```
+┌─ Agent Output ─────────────────────────────────────────────────┐
+│ ▌ Hello! How can I help you today?                              │
+│                                                                 │
+│                           check the logs ▐                     │  ← user message
+│                                                                 │
+│ ▌ I checked the logs and found 3 errors...                      │  ← agent response
+│                                                                 │
+│                              fix them all ▐                    │  ← user message
+│                                                                 │
+│ ▌ I'll fix each error one by one...                            │  ← agent response
+│ ✓ edit: src/main.go                                             │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ > █                                                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Visual distinction: left border (assistant) vs right border (user)
+
+```
+│ ▌ Assistant message has left border                             │
+│                                                                 │
+│                    User message has right border ▐             │
 ```
 
 ## Out of Scope
