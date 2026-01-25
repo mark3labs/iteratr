@@ -29,10 +29,38 @@ archives:
 checksum:
   name_template: checksums.txt
 
+release:
+  header: |
+    ## Installation
+
+    ```bash
+    # macOS/Linux
+    brew install iteratr
+
+    # Or download from assets below
+    ```
+
 changelog:
   sort: asc
+  use: github
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
+      - "^Merge"
+      - "^merge"
+      - "^wip"
+      - "^WIP"
+  groups:
+    - title: "🚀 Features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "🐛 Bug Fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "📚 Documentation"
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: "🧰 Maintenance"
+      regexp: '^.*?(chore|refactor|style|ci|build)(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: "Other Changes"
+      order: 999
