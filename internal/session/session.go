@@ -119,6 +119,15 @@ type Iteration struct {
 	TasksWorked []string  `json:"tasks_worked,omitempty"` // Task IDs touched
 }
 
+// SessionInfo provides summary information about a session for UI display.
+type SessionInfo struct {
+	Name           string    `json:"name"`
+	Complete       bool      `json:"complete"`
+	TasksTotal     int       `json:"tasks_total"`
+	TasksCompleted int       `json:"tasks_completed"`
+	LastActivity   time.Time `json:"last_activity"`
+}
+
 // Apply applies an event to the state, implementing the reduce pattern.
 // This method mutates the state based on the event type and action.
 func (st *State) Apply(event Event) {
