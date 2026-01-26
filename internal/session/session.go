@@ -338,6 +338,84 @@ func (st *State) applyControlEvent(event Event) {
 	}
 }
 
+// ListSessions returns summary information for all sessions, sorted by last activity.
+// It queries the stream for session names, loads each session's state, and builds
+// SessionInfo structs with task counts and activity timestamps.
+func (s *Store) ListSessions(ctx context.Context) ([]SessionInfo, error) {
+	logger.Debug("Listing all sessions")
+
+	// Get unique session names from stream subjects
+	sessionNames, err := nats.ListSessions(ctx, s.stream)
+	if err != nil {
+		logger.Error("Failed to list sessions: %v", err)
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	// Build SessionInfo for each session
+	infos := make([]SessionInfo, 0, len(sessionNames))
+	for _, name := range sessionNames {
+		// Load session state to extract details
+		state, err := s.LoadState(ctx, name)
+		if err != nil {
+			logger.Warn("Failed to load state for session '%s': %v", name, err)
+			continue // Skip sessions we can't load
+		}
+
+		// Count completed tasks
+		completed := 0
+		for _, task := range state.Tasks {
+			if task.Status == "completed" {
+				completed++
+			}
+		}
+
+		// Find last activity timestamp (most recent event)
+		lastActivity := time.Time{} // Zero time
+		for _, task := range state.Tasks {
+			if task.UpdatedAt.After(lastActivity) {
+				lastActivity = task.UpdatedAt
+			}
+		}
+		if len(state.Notes) > 0 {
+			lastNote := state.Notes[len(state.Notes)-1]
+			if lastNote.CreatedAt.After(lastActivity) {
+				lastActivity = lastNote.CreatedAt
+			}
+		}
+		if len(state.Iterations) > 0 {
+			lastIter := state.Iterations[len(state.Iterations)-1]
+			if lastIter.EndedAt.After(lastActivity) {
+				lastActivity = lastIter.EndedAt
+			} else if lastIter.StartedAt.After(lastActivity) {
+				lastActivity = lastIter.StartedAt
+			}
+		}
+
+		// Build SessionInfo
+		info := SessionInfo{
+			Name:           name,
+			Complete:       state.Complete,
+			TasksTotal:     len(state.Tasks),
+			TasksCompleted: completed,
+			LastActivity:   lastActivity,
+		}
+		infos = append(infos, info)
+	}
+
+	// Sort by LastActivity descending (most recent first)
+	// Using simple bubble sort for small lists
+	for i := 0; i < len(infos); i++ {
+		for j := i + 1; j < len(infos); j++ {
+			if infos[j].LastActivity.After(infos[i].LastActivity) {
+				infos[i], infos[j] = infos[j], infos[i]
+			}
+		}
+	}
+
+	logger.Debug("Found %d sessions", len(infos))
+	return infos, nil
+}
+
 // LoadState reconstructs the current state of a session by reading and reducing
 // all events from the JetStream event log. This implements the event sourcing pattern.
 func (s *Store) LoadState(ctx context.Context, session string) (*State, error) {
