@@ -43,6 +43,11 @@ type Theme struct {
 	DiffEqualBg   string
 	DiffMissingBg string
 
+	// Border colors
+	BorderMuted   string
+	BorderDefault string
+	BorderFocused string
+
 	// Lazy-built styles
 	styles     *Styles
 	stylesOnce sync.Once

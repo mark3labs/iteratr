@@ -22,9 +22,9 @@ type Runner struct {
 	onThinking  func(string)
 	onFinish    func(FinishEvent)
 
-	// Persistent ACP session fields
+	// ACP subprocess (reused) and current session (created fresh per iteration)
 	conn      *acpConn
-	sessionID string
+	sessionID string // Current session ID (replaced each iteration for fresh context)
 	cmd       *exec.Cmd
 }
 
@@ -69,11 +69,11 @@ func extractProvider(model string) string {
 	return ""
 }
 
-// Start initializes the persistent ACP session by spawning opencode acp subprocess
-// and performing the initialize → newSession → setModel sequence.
+// Start spawns the opencode acp subprocess and initializes the ACP protocol.
+// Sessions are created fresh per iteration for clean context.
 // Must be called before RunIteration.
 func (r *Runner) Start(ctx context.Context) error {
-	logger.Debug("Starting persistent ACP session")
+	logger.Debug("Starting ACP subprocess")
 
 	// Create command - spawn opencode acp
 	cmd := exec.CommandContext(ctx, "opencode", "acp")
@@ -103,7 +103,7 @@ func (r *Runner) Start(ctx context.Context) error {
 	// Create acpConn from stdin/stdout pipes
 	conn := newACPConn(stdin, stdout)
 
-	// Call initialize → newSession → setModel sequence
+	// Initialize ACP protocol (handshake only - sessions created per iteration)
 	if err := conn.initialize(ctx); err != nil {
 		_ = conn.close()
 		_ = cmd.Process.Kill()
@@ -111,43 +111,39 @@ func (r *Runner) Start(ctx context.Context) error {
 		return fmt.Errorf("ACP initialize failed: %w", err)
 	}
 
-	sessID, err := conn.newSession(ctx, r.workDir)
-	if err != nil {
-		_ = conn.close()
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return fmt.Errorf("ACP new session failed: %w", err)
+	// Store subprocess state (no session yet - created fresh per iteration)
+	r.conn = conn
+	r.cmd = cmd
+
+	logger.Debug("ACP subprocess ready")
+	return nil
+}
+
+// RunIteration executes a single iteration with fresh context by creating a new ACP session.
+// Optional hookOutput is sent as a separate content block before the main prompt.
+// Start() must be called first to initialize the subprocess.
+func (r *Runner) RunIteration(ctx context.Context, prompt string, hookOutput string) error {
+	if r.conn == nil {
+		return fmt.Errorf("ACP subprocess not started - call Start() first")
 	}
 
-	// Set model if configured
+	// Create fresh session for this iteration (clean context)
+	logger.Debug("Creating new ACP session for iteration")
+	sessID, err := r.conn.newSession(ctx, r.workDir)
+	if err != nil {
+		return fmt.Errorf("ACP new session failed: %w", err)
+	}
+	r.sessionID = sessID
+
+	// Set model for the new session
 	if r.model != "" {
 		logger.Debug("Setting model: %s", r.model)
-		if err := conn.setModel(ctx, sessID, r.model); err != nil {
-			_ = conn.close()
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
+		if err := r.conn.setModel(ctx, sessID, r.model); err != nil {
 			return fmt.Errorf("ACP set model failed: %w", err)
 		}
 	}
 
-	// Store persistent session state
-	r.conn = conn
-	r.sessionID = sessID
-	r.cmd = cmd
-
-	logger.Debug("Persistent ACP session ready: sessionID=%s", sessID)
-	return nil
-}
-
-// RunIteration executes a single iteration by sending a prompt to the persistent ACP session.
-// Optional hookOutput is sent as a separate content block before the main prompt.
-// Start() must be called first to initialize the session.
-func (r *Runner) RunIteration(ctx context.Context, prompt string, hookOutput string) error {
-	if r.conn == nil {
-		return fmt.Errorf("ACP session not started - call Start() first")
-	}
-
-	logger.Debug("Running iteration on existing ACP session")
+	logger.Debug("Running iteration on fresh ACP session: %s", sessID)
 
 	// Build content blocks: hook output (if any) + main prompt
 	var texts []string
@@ -195,13 +191,16 @@ func (r *Runner) RunIteration(ctx context.Context, prompt string, hookOutput str
 	return nil
 }
 
-// SendMessages sends multiple user messages to the persistent ACP session as a single prompt.
+// SendMessages sends multiple user messages to the current ACP session as a single prompt.
 // Each message becomes a separate content block in the request.
 // This allows batching queued user input while keeping them logically distinct.
-// Start() must be called first to initialize the session.
+// RunIteration() must be called first to create a session.
 func (r *Runner) SendMessages(ctx context.Context, texts []string) error {
 	if r.conn == nil {
-		return fmt.Errorf("ACP session not started - call Start() first")
+		return fmt.Errorf("ACP subprocess not started - call Start() first")
+	}
+	if r.sessionID == "" {
+		return fmt.Errorf("no active session - call RunIteration() first")
 	}
 
 	if len(texts) == 0 {
@@ -247,7 +246,7 @@ func (r *Runner) SendMessages(ctx context.Context, texts []string) error {
 	return nil
 }
 
-// Stop terminates the persistent ACP session and cleans up resources.
+// Stop terminates the ACP subprocess and cleans up resources.
 // Should be called when done with the runner (e.g., on orchestrator exit).
 func (r *Runner) Stop() {
 	if r.conn != nil {
