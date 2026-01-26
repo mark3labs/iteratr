@@ -4,9 +4,10 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/mark3labs/iteratr/internal/session"
+	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
 // NoteModal displays detailed information about a single note in a centered overlay.
@@ -67,7 +68,7 @@ func (m *NoteModal) Draw(scr uv.Screen, area uv.Rectangle) {
 
 	content := m.buildContent(modalWidth - 4)
 
-	modalStyle := styleModalContainer.
+	modalStyle := theme.Current().S().ModalContainer.
 		Width(modalWidth).
 		Height(modalHeight)
 
@@ -105,23 +106,24 @@ func (m *NoteModal) buildContent(width int) string {
 	sections = append(sections, "")
 
 	// ID
-	idLine := styleModalLabel.Render("ID: ") + styleModalValue.Render(m.note.ID)
+	s := theme.Current().S()
+	idLine := s.ModalLabel.Render("ID: ") + s.ModalValue.Render(m.note.ID)
 	sections = append(sections, idLine)
 	sections = append(sections, "")
 
 	// Type badge
 	typeBadge := m.renderTypeBadge(m.note.Type)
-	typeLine := styleModalLabel.Render("Type: ") + typeBadge
+	typeLine := s.ModalLabel.Render("Type: ") + typeBadge
 	sections = append(sections, typeLine)
 	sections = append(sections, "")
 
 	// Separator
-	separator := styleModalSeparator.Render(strings.Repeat("─", width-2))
+	separator := s.ModalSeparator.Render(strings.Repeat("─", width-2))
 	sections = append(sections, separator)
 	sections = append(sections, "")
 
 	// Content (word-wrapped)
-	wrappedContent := styleModalSection.Render(m.wordWrap(m.note.Content, width-2))
+	wrappedContent := s.ModalSection.Render(m.wordWrap(m.note.Content, width-2))
 	sections = append(sections, wrappedContent)
 	sections = append(sections, "")
 
@@ -130,16 +132,16 @@ func (m *NoteModal) buildContent(width int) string {
 	sections = append(sections, "")
 
 	// Timestamp
-	createdLine := styleModalLabel.Render("Created:  ") + styleModalValue.Render(m.note.CreatedAt.Format("2006-01-02 15:04:05"))
+	createdLine := s.ModalLabel.Render("Created:  ") + s.ModalValue.Render(m.note.CreatedAt.Format("2006-01-02 15:04:05"))
 	sections = append(sections, createdLine)
 	sections = append(sections, "")
 
 	// Close instructions (key/description differentiation)
-	closeHint := styleHintKey.Render("esc") + " " +
-		styleHintDesc.Render("close") + " " +
-		styleHintSeparator.Render("•") + " " +
-		styleHintKey.Render("click outside") + " " +
-		styleHintDesc.Render("dismiss")
+	closeHint := s.HintKey.Render("esc") + " " +
+		s.HintDesc.Render("close") + " " +
+		s.HintSeparator.Render("•") + " " +
+		s.HintKey.Render("click outside") + " " +
+		s.HintDesc.Render("dismiss")
 	closeText := lipgloss.NewStyle().Width(width - 2).Align(lipgloss.Center).Render(closeHint)
 	sections = append(sections, closeText)
 
@@ -148,24 +150,25 @@ func (m *NoteModal) buildContent(width int) string {
 
 // renderTypeBadge renders a styled badge for the note type.
 func (m *NoteModal) renderTypeBadge(noteType string) string {
+	s := theme.Current().S()
 	var badge lipgloss.Style
 	var text string
 
 	switch noteType {
 	case "learning":
-		badge = styleBadgeSuccess
+		badge = s.BadgeSuccess
 		text = "* learning"
 	case "stuck":
-		badge = styleBadgeError
+		badge = s.BadgeError
 		text = "! stuck"
 	case "tip":
-		badge = styleBadgeWarning
+		badge = s.BadgeWarning
 		text = "› tip"
 	case "decision":
-		badge = styleBadgeInfo
+		badge = s.BadgeInfo
 		text = "◇ decision"
 	default:
-		badge = styleBadgeMuted
+		badge = s.BadgeMuted
 		text = "≡ " + noteType
 	}
 
