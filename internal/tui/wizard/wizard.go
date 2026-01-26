@@ -178,6 +178,21 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateCurrentStepSize()
 		return m, nil
 
+	case SessionSelectedMsg:
+		// Session selected in step 0
+		if msg.IsNew {
+			// New session selected - proceed to file picker (step 1)
+			m.step++
+			m.buttonFocused = false
+			m.initCurrentStep()
+			return m, nil
+		} else {
+			// Existing session selected - exit wizard in resume mode
+			m.result.SessionName = msg.Name
+			m.result.ResumeMode = true
+			return m, tea.Quit
+		}
+
 	case FileSelectedMsg:
 		// File selected in step 1
 		m.result.SpecPath = msg.Path
