@@ -19,6 +19,7 @@ type WizardResult struct {
 	Template    string // Full edited template content
 	SessionName string // Validated session name
 	Iterations  int    // Max iterations (0 = infinite)
+	ResumeMode  bool   // True if resuming existing session (skip spec/model/template setup)
 }
 
 // WizardModel is the main BubbleTea model for the build wizard.
