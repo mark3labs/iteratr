@@ -18,5 +18,6 @@
 | [user-task-creation](./user-task-creation.md) | Draft | Ctrl+T modal to create user tasks via NATS (mirrors notes pattern) |
 | [message-queue-enhancement](./message-queue-enhancement.md) | Draft | Replace UI-layer single-message queue with orchestrator-layer FIFO queue (crush pattern) |
 | [build-wizard](./build-wizard.md) | Draft | Interactive wizard for `iteratr build` when no spec provided |
+| [wizard-session-selector](./wizard-session-selector.md) | Draft | Resume existing sessions or start new from wizard step 0 |
 | [hooks](./hooks.md) | Active | Pre-iteration hooks for injecting dynamic context via shell commands |
 | [theme-system](./theme-system.md) | Draft | Centralized theme package for consistent colors/styles (crush pattern) |
