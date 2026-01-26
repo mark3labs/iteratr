@@ -10,17 +10,24 @@ import (
 	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/editor"
 	"github.com/mark3labs/iteratr/internal/template"
+	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
-// Style for highlighting {{variables}} in templates
-var styleTemplateVar = lipglossv2.NewStyle().
-	Foreground(lipglossv2.Color("#cba6f7")). // Primary purple (Mauve)
-	Bold(true)
+// getTemplateVarStyle returns the style for highlighting {{variables}} in templates.
+func getTemplateVarStyle() lipglossv2.Style {
+	t := theme.Current()
+	return lipglossv2.NewStyle().
+		Foreground(lipglossv2.Color(t.Primary)).
+		Bold(true)
+}
 
-// Style for markdown headers
-var styleTemplateHeader = lipglossv2.NewStyle().
-	Foreground(lipglossv2.Color("#89b4fa")). // Blue
-	Bold(true)
+// getTemplateHeaderStyle returns the style for markdown headers.
+func getTemplateHeaderStyle() lipglossv2.Style {
+	t := theme.Current()
+	return lipglossv2.NewStyle().
+		Foreground(lipglossv2.Color(t.Secondary)).
+		Bold(true)
+}
 
 // TemplateEditorStep manages the template viewer UI step with syntax highlighting.
 type TemplateEditorStep struct {
@@ -60,10 +67,13 @@ func NewTemplateEditorStep() *TemplateEditorStep {
 // highlightTemplate applies syntax highlighting to template content.
 // Highlights {{variables}} and markdown headers.
 func highlightTemplate(content string) string {
+	styleVar := getTemplateVarStyle()
+	styleHeader := getTemplateHeaderStyle()
+
 	// First highlight {{variables}}
 	varRegex := regexp.MustCompile(`\{\{[^}]+\}\}`)
 	result := varRegex.ReplaceAllStringFunc(content, func(match string) string {
-		return styleTemplateVar.Render(match)
+		return styleVar.Render(match)
 	})
 
 	// Then highlight markdown headers (lines starting with #)
@@ -73,7 +83,7 @@ func highlightTemplate(content string) string {
 		if strings.HasPrefix(trimmed, "#") {
 			// Find where the # starts
 			prefix := line[:len(line)-len(trimmed)]
-			lines[i] = prefix + styleTemplateHeader.Render(trimmed)
+			lines[i] = prefix + styleHeader.Render(trimmed)
 		}
 	}
 
