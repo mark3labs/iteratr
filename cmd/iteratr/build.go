@@ -142,41 +142,49 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("wizard failed: %w", err)
 		}
 
-		// Apply wizard results to buildFlags
-		buildFlags.spec = result.SpecPath
-		buildFlags.model = result.Model
-		buildFlags.name = result.SessionName
-		buildFlags.iterations = result.Iterations
+		// Check if resuming existing session or creating new one
+		if result.ResumeMode {
+			// Resume mode: only session name is set from wizard
+			// Spec/model/template will fall back to defaults or existing CLI flags
+			buildFlags.name = result.SessionName
+			logger.Info("Resuming existing session: %s", result.SessionName)
+		} else {
+			// New session mode: apply all wizard results to buildFlags
+			buildFlags.spec = result.SpecPath
+			buildFlags.model = result.Model
+			buildFlags.name = result.SessionName
+			buildFlags.iterations = result.Iterations
 
-		// Write template to temp file if it was edited
-		if result.Template != "" {
-			// Create temp file with secure permissions
-			tmpFile, err := os.CreateTemp("", "iteratr-template-*.txt")
-			if err != nil {
-				return fmt.Errorf("failed to create temp template file: %w", err)
+			// Write template to temp file if it was edited
+			if result.Template != "" {
+				// Create temp file with secure permissions
+				tmpFile, err := os.CreateTemp("", "iteratr-template-*.txt")
+				if err != nil {
+					return fmt.Errorf("failed to create temp template file: %w", err)
+				}
+
+				// Write template content
+				if _, err := tmpFile.WriteString(result.Template); err != nil {
+					_ = tmpFile.Close()
+					_ = os.Remove(tmpFile.Name())
+					return fmt.Errorf("failed to write template to temp file: %w", err)
+				}
+
+				// Close file
+				if err := tmpFile.Close(); err != nil {
+					_ = os.Remove(tmpFile.Name())
+					return fmt.Errorf("failed to close temp template file: %w", err)
+				}
+
+				// Set template path to temp file and track for cleanup
+				tempTemplatePath = tmpFile.Name()
+				buildFlags.template = tempTemplatePath
+				logger.Debug("Wizard template written to temp file: %s", tempTemplatePath)
 			}
 
-			// Write template content
-			if _, err := tmpFile.WriteString(result.Template); err != nil {
-				_ = tmpFile.Close()
-				_ = os.Remove(tmpFile.Name())
-				return fmt.Errorf("failed to write template to temp file: %w", err)
-			}
-
-			// Close file
-			if err := tmpFile.Close(); err != nil {
-				_ = os.Remove(tmpFile.Name())
-				return fmt.Errorf("failed to close temp template file: %w", err)
-			}
-
-			// Set template path to temp file and track for cleanup
-			tempTemplatePath = tmpFile.Name()
-			buildFlags.template = tempTemplatePath
-			logger.Debug("Wizard template written to temp file: %s", tempTemplatePath)
+			logger.Info("Wizard completed: spec=%s, model=%s, session=%s, iterations=%d",
+				result.SpecPath, result.Model, result.SessionName, result.Iterations)
 		}
-
-		logger.Info("Wizard completed: spec=%s, model=%s, session=%s, iterations=%d",
-			result.SpecPath, result.Model, result.SessionName, result.Iterations)
 	}
 
 	// Determine spec path
