@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	chroma "github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 	udiff "github.com/aymanbagabas/go-udiff"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
 // MessageItem represents a displayable message item in the agent output.
@@ -85,7 +86,7 @@ func (t *TextMessageItem) Render(width int) string {
 	rendered := renderMarkdown(t.content, effectiveWidth)
 
 	// Apply assistant border styling (left border + padding)
-	result := styleAssistantBorder.Render(rendered)
+	result := theme.Current().S().AssistantBorder.Render(rendered)
 
 	// Cache and return
 	t.cachedRender = result
@@ -135,7 +136,7 @@ func (u *UserMessageItem) Render(width int) string {
 	wrapped := wrapText(u.content, effectiveWidth)
 
 	// Apply user border styling (right border + padding)
-	styled := styleUserBorder.Render(wrapped)
+	styled := theme.Current().S().UserBorder.Render(wrapped)
 
 	// Right-align the entire styled block
 	result := rightAlign(styled, width)
@@ -203,10 +204,10 @@ func (t *ThinkingMessageItem) Render(width int) string {
 
 	// Add truncation hint if we hid lines
 	if hiddenCount > 0 {
-		hint := styleThinkingTruncationHint.Render(
+		hint := theme.Current().S().ThinkingTruncationHint.Render(
 			fmt.Sprintf("… (%d lines hidden)", hiddenCount),
 		)
-		result.WriteString(styleThinkingContent.Render(hint))
+		result.WriteString(theme.Current().S().ThinkingContent.Render(hint))
 		result.WriteString("\n")
 	}
 
@@ -215,20 +216,20 @@ func (t *ThinkingMessageItem) Render(width int) string {
 		if i > 0 || hiddenCount > 0 {
 			result.WriteString("\n")
 		}
-		result.WriteString(styleThinkingContent.Render(line))
+		result.WriteString(theme.Current().S().ThinkingContent.Render(line))
 	}
 
 	// Add footer with duration if finished
 	if t.finished && t.duration > 0 {
 		result.WriteString("\n")
 		durationStr := formatDuration(t.duration)
-		footer := styleThinkingFooter.Render("Thought for ") +
-			styleThinkingDuration.Render(durationStr)
+		footer := theme.Current().S().ThinkingFooter.Render("Thought for ") +
+			theme.Current().S().ThinkingDuration.Render(durationStr)
 		result.WriteString(footer)
 	}
 
 	// Wrap entire content in thinking box style with full-width background
-	boxed := styleThinkingBox.Width(width).Render(result.String())
+	boxed := theme.Current().S().ThinkingBox.Width(width).Render(result.String())
 
 	// Cache and return
 	t.cachedRender = boxed
@@ -298,25 +299,26 @@ func (t *ToolMessageItem) Render(width int) string {
 	// --- HEADER: [icon] [name] [params] ---
 	var icon string
 	var iconStyle lipgloss.Style
+	s := theme.Current().S()
 	switch t.status {
 	case ToolStatusPending:
 		icon = "●"
-		iconStyle = styleToolIconPending
+		iconStyle = s.ToolIconPending
 	case ToolStatusRunning:
 		icon = "●"
-		iconStyle = styleToolIconPending // Running uses same as pending
+		iconStyle = s.ToolIconPending // Running uses same as pending
 	case ToolStatusSuccess:
 		icon = "✓"
-		iconStyle = styleToolIconSuccess
+		iconStyle = s.ToolIconSuccess
 	case ToolStatusError:
 		icon = "×"
-		iconStyle = styleToolIconError
+		iconStyle = s.ToolIconError
 	case ToolStatusCanceled:
 		icon = "×"
-		iconStyle = styleToolIconCanceled
+		iconStyle = s.ToolIconCanceled
 	default:
 		icon = "●"
-		iconStyle = styleToolIconPending
+		iconStyle = s.ToolIconPending
 	}
 
 	// Build header: [indent] [icon] [name] [params]
@@ -325,7 +327,7 @@ func (t *ToolMessageItem) Render(width int) string {
 	if displayName != "" {
 		displayName = strings.ToUpper(displayName[:1]) + displayName[1:]
 	}
-	header := "  " + iconStyle.Render(icon) + " " + styleToolName.Render(displayName)
+	header := "  " + iconStyle.Render(icon) + " " + s.ToolName.Render(displayName)
 
 	// Add formatted params if present
 	if len(t.input) > 0 {
@@ -346,7 +348,7 @@ func (t *ToolMessageItem) Render(width int) string {
 		}
 		params := formatToolParams(paramInput, paramWidth)
 		if params != "" {
-			header += " " + styleToolParams.Render(params)
+			header += " " + s.ToolParams.Render(params)
 		}
 	}
 
@@ -482,7 +484,7 @@ func (t *ToolMessageItem) Render(width int) string {
 		if t.status == ToolStatusError {
 			// Error output: red styling with full-width background
 			for _, line := range visibleLines {
-				result.WriteString(styleToolError.Width(outputWidth).Render(line))
+				result.WriteString(s.ToolError.Width(outputWidth).Render(line))
 				result.WriteString("\n")
 			}
 		} else if isCodeOutput {
@@ -494,7 +496,7 @@ func (t *ToolMessageItem) Render(width int) string {
 		} else {
 			// Plain output: background styling with full-width fill
 			for _, line := range visibleLines {
-				result.WriteString(styleToolOutput.Width(outputWidth).Render(line))
+				result.WriteString(s.ToolOutput.Width(outputWidth).Render(line))
 				result.WriteString("\n")
 			}
 		}
@@ -504,10 +506,10 @@ func (t *ToolMessageItem) Render(width int) string {
 			truncMsg := fmt.Sprintf("…(%d more lines, click to expand)", hiddenCount)
 			if isCodeOutput {
 				// Code truncation: match code block background
-				hint := styleCodeTruncation.Width(outputWidth - 2).Render(truncMsg)
+				hint := s.CodeTruncation.Width(outputWidth - 2).Render(truncMsg)
 				result.WriteString(hint)
 			} else {
-				hint := styleToolTruncation.Width(outputWidth).Render(truncMsg)
+				hint := s.ToolTruncation.Width(outputWidth).Render(truncMsg)
 				result.WriteString(hint)
 			}
 			result.WriteString("\n")
@@ -575,23 +577,24 @@ func (i *InfoMessageItem) Render(width int) string {
 	durationStr := formatDuration(i.duration)
 
 	// Build the info string: ◇ Model via Provider ⏱ Duration
+	s := theme.Current().S()
 	var infoText string
 	if i.model != "" && i.provider != "" {
-		infoText = styleInfoIcon.Render("◇") + " " +
-			styleInfoModel.Render(i.model) + " " +
-			styleInfoProvider.Render("via") + " " +
-			styleInfoProvider.Render(i.provider) + " " +
-			styleInfoDuration.Render("⏱") + " " +
-			styleInfoDuration.Render(durationStr)
+		infoText = s.InfoIcon.Render("◇") + " " +
+			s.InfoModel.Render(i.model) + " " +
+			s.InfoProvider.Render("via") + " " +
+			s.InfoProvider.Render(i.provider) + " " +
+			s.InfoDuration.Render("⏱") + " " +
+			s.InfoDuration.Render(durationStr)
 	} else if i.model != "" {
-		infoText = styleInfoIcon.Render("◇") + " " +
-			styleInfoModel.Render(i.model) + " " +
-			styleInfoDuration.Render("⏱") + " " +
-			styleInfoDuration.Render(durationStr)
+		infoText = s.InfoIcon.Render("◇") + " " +
+			s.InfoModel.Render(i.model) + " " +
+			s.InfoDuration.Render("⏱") + " " +
+			s.InfoDuration.Render(durationStr)
 	} else {
-		infoText = styleInfoIcon.Render("◇") + " " +
-			styleInfoDuration.Render("⏱") + " " +
-			styleInfoDuration.Render(durationStr)
+		infoText = s.InfoIcon.Render("◇") + " " +
+			s.InfoDuration.Render("⏱") + " " +
+			s.InfoDuration.Render(durationStr)
 	}
 
 	// Add trailing horizontal rule to fill remaining width
@@ -599,7 +602,7 @@ func (i *InfoMessageItem) Render(width int) string {
 	remainingWidth := width - infoWidth - 1 // -1 for space before rule
 	if remainingWidth > 0 {
 		rule := strings.Repeat("─", remainingWidth)
-		infoText = infoText + " " + styleInfoRule.Render(rule)
+		infoText = infoText + " " + s.InfoRule.Render(rule)
 	}
 
 	// Cache and return
@@ -660,7 +663,7 @@ func (d *DividerMessageItem) Render(width int) string {
 
 	// Style the divider
 	style := lipgloss.NewStyle().
-		Foreground(colorMuted).
+		Foreground(lipgloss.Color(theme.Current().FgMuted)).
 		Bold(true).
 		MarginTop(1).
 		MarginBottom(1)
@@ -811,7 +814,7 @@ func renderCodeBlock(content, fileName string, width int) string {
 	}
 
 	if len(parsed) == 0 {
-		return styleToolOutput.Width(width).Render(content)
+		return theme.Current().S().ToolOutput.Width(width).Render(content)
 	}
 
 	// Extract just the code for syntax highlighting
@@ -831,6 +834,7 @@ func renderCodeBlock(content, fileName string, width int) string {
 
 	// Render each line: [indent] [gutter] [code with bg]
 	const codeIndent = "  " // 2-char indent to align with tool header
+	s := theme.Current().S()
 	var result []string
 	for i, p := range parsed {
 		// Style the line number gutter, with leading zeros hidden
@@ -842,12 +846,12 @@ func renderCodeBlock(content, fileName string, width int) string {
 			}
 			leadingZeros := p.lineNum[:len(p.lineNum)-len(trimmed)]
 			if leadingZeros != "" {
-				gutterContent = styleCodeLineNumZero.Render(leadingZeros) + trimmed
+				gutterContent = s.CodeLineNumZero.Render(leadingZeros) + trimmed
 			} else {
 				gutterContent = trimmed
 			}
 		}
-		gutter := styleCodeLineNum.
+		gutter := s.CodeLineNum.
 			Width(gutterWidth).
 			Render(gutterContent)
 
@@ -860,7 +864,7 @@ func renderCodeBlock(content, fileName string, width int) string {
 		}
 
 		// Apply code background with full-width fill
-		styledCode := styleCodeContent.
+		styledCode := s.CodeContent.
 			Width(codeWidth).
 			Render(codePart)
 
@@ -894,6 +898,7 @@ func renderWriteBlock(content, fileName, footer string, width int) string {
 
 	// Render each line: [indent] [gutter] [code with bg]
 	const codeIndent = "  " // 2-char indent to align with tool header
+	s := theme.Current().S()
 	var result []string
 	for i, line := range lines {
 		// Format line number with leading zeros
@@ -906,11 +911,11 @@ func renderWriteBlock(content, fileName, footer string, width int) string {
 
 		var gutterContent string
 		if leadingZeros != "" {
-			gutterContent = styleWriteLineNumZero.Render(leadingZeros) + trimmed
+			gutterContent = s.WriteLineNumZero.Render(leadingZeros) + trimmed
 		} else {
 			gutterContent = trimmed
 		}
-		gutter := styleWriteLineNum.
+		gutter := s.WriteLineNum.
 			Width(gutterWidth).
 			Render(gutterContent)
 
@@ -923,7 +928,7 @@ func renderWriteBlock(content, fileName, footer string, width int) string {
 		}
 
 		// Apply green background with full-width fill
-		styledCode := styleWriteContent.
+		styledCode := s.WriteContent.
 			Width(codeWidth).
 			Render(codePart)
 
@@ -932,12 +937,12 @@ func renderWriteBlock(content, fileName, footer string, width int) string {
 
 	// Render footer line with empty gutter
 	if footer != "" {
-		emptyGutter := styleWriteLineNum.
+		emptyGutter := s.WriteLineNum.
 			Width(gutterWidth).
 			Render("")
-		footerContent := styleWriteContent.
+		footerContent := s.WriteContent.
 			Width(codeWidth).
-			Foreground(colorSubtext0).
+			Foreground(lipgloss.Color(theme.Current().FgSubtle)).
 			Render(footer)
 		result = append(result, codeIndent+lipgloss.JoinHorizontal(lipgloss.Top, emptyGutter, footerContent))
 	}
@@ -1087,13 +1092,14 @@ func renderDiffBlock(before, after, filePath string, width int) string {
 	}
 
 	// Render each line
+	s := theme.Current().S()
 	var result []string
 	for _, sl := range lines {
 		// Separator line between hunks
 		if sl.beforeKind == -1 {
-			sep := indent + styleDiffDivider.Render(padRight("···", panelWidth)) +
-				" " + styleDiffDivider.Render("│") + " " +
-				styleDiffDivider.Render(padRight("···", panelWidth))
+			sep := indent + s.DiffDivider.Render(padRight("···", panelWidth)) +
+				" " + s.DiffDivider.Render("│") + " " +
+				s.DiffDivider.Render(padRight("···", panelWidth))
 			result = append(result, sep)
 			continue
 		}
@@ -1107,16 +1113,16 @@ func renderDiffBlock(before, after, filePath string, width int) string {
 		case sl.beforeNum > 0 && sl.beforeKind == udiff.Delete:
 			gutter := fmt.Sprintf(" %*d", gutterWidth, sl.beforeNum)
 			code := padRight(truncateLine(beforeText, contentWidth), contentWidth)
-			left = styleDiffLineNumDelete.Render(gutter) +
-				styleDiffContentDelete.Render(" - "+code)
+			left = s.DiffLineNumDelete.Render(gutter) +
+				s.DiffContentDelete.Render(" - "+code)
 		case sl.beforeNum > 0 && sl.beforeKind == udiff.Equal:
 			gutter := fmt.Sprintf(" %*d", gutterWidth, sl.beforeNum)
 			code := padRight(truncateLine(beforeText, contentWidth), contentWidth)
-			left = styleDiffLineNumEqual.Render(gutter) +
-				styleDiffContentEqual.Render("   "+code)
+			left = s.DiffLineNumEqual.Render(gutter) +
+				s.DiffContentEqual.Render("   "+code)
 		default:
-			left = styleDiffLineNumMissing.Render(padRight("", gutterWidth+1)) +
-				styleDiffContentMissing.Render(padRight("", contentWidth+3))
+			left = s.DiffLineNumMissing.Render(padRight("", gutterWidth+1)) +
+				s.DiffContentMissing.Render(padRight("", contentWidth+3))
 		}
 
 		// Right panel (after)
@@ -1125,19 +1131,19 @@ func renderDiffBlock(before, after, filePath string, width int) string {
 		case sl.afterNum > 0 && sl.afterKind == udiff.Insert:
 			gutter := fmt.Sprintf(" %*d", gutterWidth, sl.afterNum)
 			code := padRight(truncateLine(afterText, contentWidth), contentWidth)
-			right = styleDiffLineNumInsert.Render(gutter) +
-				styleDiffContentInsert.Render(" + "+code)
+			right = s.DiffLineNumInsert.Render(gutter) +
+				s.DiffContentInsert.Render(" + "+code)
 		case sl.afterNum > 0 && sl.afterKind == udiff.Equal:
 			gutter := fmt.Sprintf(" %*d", gutterWidth, sl.afterNum)
 			code := padRight(truncateLine(afterText, contentWidth), contentWidth)
-			right = styleDiffLineNumEqual.Render(gutter) +
-				styleDiffContentEqual.Render("   "+code)
+			right = s.DiffLineNumEqual.Render(gutter) +
+				s.DiffContentEqual.Render("   "+code)
 		default:
-			right = styleDiffLineNumMissing.Render(padRight("", gutterWidth+1)) +
-				styleDiffContentMissing.Render(padRight("", contentWidth+3))
+			right = s.DiffLineNumMissing.Render(padRight("", gutterWidth+1)) +
+				s.DiffContentMissing.Render(padRight("", contentWidth+3))
 		}
 
-		row := indent + left + " " + styleDiffDivider.Render("│") + " " + right
+		row := indent + left + " " + s.DiffDivider.Render("│") + " " + right
 		result = append(result, row)
 	}
 
@@ -1187,8 +1193,9 @@ func renderDiagnostics(output string, width int) string {
 	}
 
 	// Render file path header
+	s := theme.Current().S()
 	if filePath != "" {
-		result.WriteString(styleDiagFile.Render(filePath))
+		result.WriteString(s.DiagFile.Render(filePath))
 		result.WriteString("\n")
 	}
 
@@ -1212,7 +1219,7 @@ func renderDiagnostics(output string, width int) string {
 			line = strings.TrimPrefix(line, "WARNING")
 		} else {
 			// Unknown format, render as-is
-			result.WriteString("    " + styleDiagMessage.Render(line) + "\n")
+			result.WriteString("    " + s.DiagMessage.Render(line) + "\n")
 			continue
 		}
 
@@ -1236,18 +1243,18 @@ func renderDiagnostics(output string, width int) string {
 		var sevStyle lipgloss.Style
 		if severity == "ERROR" {
 			icon = "×"
-			sevStyle = styleDiagError
+			sevStyle = s.DiagError
 		} else {
 			icon = "!"
-			sevStyle = styleDiagWarning
+			sevStyle = s.DiagWarning
 		}
 
 		diagLine := "    " + sevStyle.Render(icon+" "+severity)
 		if position != "" {
-			diagLine += " " + styleDiagPosition.Render("["+position+"]")
+			diagLine += " " + s.DiagPosition.Render("["+position+"]")
 		}
 		if message != "" {
-			diagLine += " " + styleDiagMessage.Render(message)
+			diagLine += " " + s.DiagMessage.Render(message)
 		}
 
 		result.WriteString(diagLine + "\n")
@@ -1319,7 +1326,7 @@ func syntaxHighlight(source, fileName string) string {
 	}
 	if formatter == nil {
 		// Last resort: return source unchanged with background style
-		return styleToolOutput.Render(source)
+		return theme.Current().S().ToolOutput.Render(source)
 	}
 
 	// Use catppuccin-mocha style (matches our UI color palette)
@@ -1341,13 +1348,13 @@ func syntaxHighlight(source, fileName string) string {
 	// Tokenize and format
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
-		return styleToolOutput.Render(source)
+		return theme.Current().S().ToolOutput.Render(source)
 	}
 
 	var buf bytes.Buffer
 	err = formatter.Format(&buf, style, iterator)
 	if err != nil {
-		return styleToolOutput.Render(source)
+		return theme.Current().S().ToolOutput.Render(source)
 	}
 
 	// Replace full ANSI resets (\x1b[0m) with foreground-only resets so they
