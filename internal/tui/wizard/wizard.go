@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/mark3labs/iteratr/internal/session"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
@@ -21,19 +22,23 @@ type WizardResult struct {
 }
 
 // WizardModel is the main BubbleTea model for the build wizard.
-// It manages the four-step flow: file picker → model selector → template editor → config.
+// It manages the five-step flow: session selector → file picker → model selector → template editor → config.
 type WizardModel struct {
-	step      int          // Current step (0-3)
+	step      int          // Current step (0-4)
 	cancelled bool         // User cancelled via ESC
 	result    WizardResult // Accumulated result from each step
 	width     int          // Terminal width
 	height    int          // Terminal height
 
+	// Session store for session operations
+	sessionStore *session.Store
+
 	// Step components
-	filePickerStep     *FilePickerStep
-	modelSelectorStep  *ModelSelectorStep
-	templateEditorStep *TemplateEditorStep
-	configStep         *ConfigStep
+	sessionSelectorStep *SessionSelectorStep
+	filePickerStep      *FilePickerStep
+	modelSelectorStep   *ModelSelectorStep
+	templateEditorStep  *TemplateEditorStep
+	configStep          *ConfigStep
 
 	// Button bar with focus tracking
 	buttonBar     *ButtonBar // Current button bar instance
@@ -43,11 +48,12 @@ type WizardModel struct {
 // RunWizard is the entry point for the build wizard.
 // It creates a standalone BubbleTea program, runs it, and returns the result.
 // Returns nil result and error if user cancels or an error occurs.
-func RunWizard() (*WizardResult, error) {
+func RunWizard(sessionStore *session.Store) (*WizardResult, error) {
 	// Create initial model
 	m := &WizardModel{
-		step:      0,
-		cancelled: false,
+		step:         0,
+		cancelled:    false,
+		sessionStore: sessionStore,
 	}
 
 	// Create BubbleTea program
@@ -75,9 +81,9 @@ func RunWizard() (*WizardResult, error) {
 
 // Init initializes the wizard model.
 func (m *WizardModel) Init() tea.Cmd {
-	// Initialize file picker (step 0)
-	m.filePickerStep = NewFilePickerStep()
-	return nil
+	// Initialize session selector (step 0)
+	m.sessionSelectorStep = NewSessionSelectorStep(m.sessionStore)
+	return m.sessionSelectorStep.Init()
 }
 
 // Update handles messages for the wizard.
@@ -132,8 +138,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "tab":
 			// Tab moves focus to buttons (unless already there)
-			// For step 3, let config_step handle Tab internally first
-			if !m.buttonFocused && m.step != 3 {
+			// For step 4 (config), let config_step handle Tab internally first
+			if !m.buttonFocused && m.step != 4 {
 				m.buttonFocused = true
 				m.blurStepContent()
 				m.ensureButtonBar()
@@ -142,8 +148,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "shift+tab":
 			// Shift+Tab from content wraps to buttons (from the end)
-			// For step 3, let config_step handle Shift+Tab internally first
-			if !m.buttonFocused && m.step != 3 {
+			// For step 4 (config), let config_step handle Shift+Tab internally first
+			if !m.buttonFocused && m.step != 4 {
 				m.buttonFocused = true
 				m.blurStepContent()
 				m.ensureButtonBar()
@@ -172,7 +178,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case FileSelectedMsg:
-		// File selected in step 0
+		// File selected in step 1
 		m.result.SpecPath = msg.Path
 		m.step++
 		m.buttonFocused = false
@@ -180,7 +186,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.modelSelectorStep.Init()
 
 	case ModelSelectedMsg:
-		// Model selected in step 1
+		// Model selected in step 2
 		m.result.Model = msg.ModelID
 		m.step++
 		m.buttonFocused = false
@@ -188,7 +194,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.templateEditorStep.Init()
 
 	case ConfigCompleteMsg:
-		// Config complete in step 3
+		// Config complete in step 4
 		m.result.Template = m.templateEditorStep.Content()
 		m.result.SessionName = m.configStep.SessionName()
 		m.result.Iterations = m.configStep.Iterations()
@@ -221,14 +227,18 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.step {
 	case 0:
+		if m.sessionSelectorStep != nil {
+			cmd = m.sessionSelectorStep.Update(msg)
+		}
+	case 1:
 		if m.filePickerStep != nil {
 			cmd = m.filePickerStep.Update(msg)
 		}
-	case 1:
+	case 2:
 		if m.modelSelectorStep != nil {
 			cmd = m.modelSelectorStep.Update(msg)
 		}
-	case 2:
+	case 3:
 		if m.templateEditorStep != nil {
 			cmd = m.templateEditorStep.Update(msg)
 		}
@@ -240,7 +250,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.initCurrentStep()
 			return m, m.configStep.Init()
 		}
-	case 3:
+	case 4:
 		if m.configStep != nil {
 			cmd = m.configStep.Update(msg)
 		}
@@ -283,6 +293,10 @@ func (m *WizardModel) goNext() (tea.Model, tea.Cmd) {
 
 	switch m.step {
 	case 0:
+		// Session selector - will be handled by SessionSelectedMsg
+		// This is a placeholder for explicit Next button clicks
+		return m, nil
+	case 1:
 		// File picker - emit selection message
 		if m.filePickerStep != nil {
 			path := m.filePickerStep.SelectedPath()
@@ -294,7 +308,7 @@ func (m *WizardModel) goNext() (tea.Model, tea.Cmd) {
 				return m, m.modelSelectorStep.Init()
 			}
 		}
-	case 1:
+	case 2:
 		// Model selector - emit selection message
 		if m.modelSelectorStep != nil {
 			modelID := m.modelSelectorStep.SelectedModel()
@@ -306,13 +320,13 @@ func (m *WizardModel) goNext() (tea.Model, tea.Cmd) {
 				return m, m.templateEditorStep.Init()
 			}
 		}
-	case 2:
+	case 3:
 		// Template editor - move to config
 		m.step++
 		m.buttonFocused = false
 		m.initCurrentStep()
 		return m, m.configStep.Init()
-	case 3:
+	case 4:
 		// Config step - finish wizard
 		if m.configStep != nil && m.configStep.IsValid() {
 			m.result.Template = m.templateEditorStep.Content()
@@ -326,7 +340,7 @@ func (m *WizardModel) goNext() (tea.Model, tea.Cmd) {
 
 // blurStepContent removes focus from the current step's content.
 func (m *WizardModel) blurStepContent() {
-	if m.step == 3 && m.configStep != nil {
+	if m.step == 4 && m.configStep != nil {
 		// Blur the config step's text inputs
 		m.configStep.Blur()
 	}
@@ -334,7 +348,7 @@ func (m *WizardModel) blurStepContent() {
 
 // focusStepContentFirst gives focus to the current step's first focusable item.
 func (m *WizardModel) focusStepContentFirst() tea.Cmd {
-	if m.step == 3 && m.configStep != nil {
+	if m.step == 4 && m.configStep != nil {
 		return m.configStep.Focus()
 	}
 	return nil
@@ -342,7 +356,7 @@ func (m *WizardModel) focusStepContentFirst() tea.Cmd {
 
 // focusStepContentLast gives focus to the current step's last focusable item.
 func (m *WizardModel) focusStepContentLast() tea.Cmd {
-	if m.step == 3 && m.configStep != nil {
+	if m.step == 4 && m.configStep != nil {
 		return m.configStep.FocusLast()
 	}
 	return nil
@@ -354,7 +368,7 @@ func (m *WizardModel) ensureButtonBar() {
 	if modalWidth < 60 {
 		modalWidth = 60
 	}
-	if m.step != 2 && modalWidth > 100 {
+	if m.step != 3 && modalWidth > 100 {
 		modalWidth = 100
 	}
 
@@ -365,7 +379,7 @@ func (m *WizardModel) ensureButtonBar() {
 	switch m.step {
 	case 0:
 		buttons = CreateCancelNextButtons(isValid, nextLabel)
-	case 3:
+	case 4:
 		nextLabel = "Finish"
 		buttons = CreateBackNextButtons(true, isValid, nextLabel)
 	default:
@@ -380,18 +394,22 @@ func (m *WizardModel) ensureButtonBar() {
 func (m *WizardModel) initCurrentStep() {
 	switch m.step {
 	case 0:
+		if m.sessionSelectorStep == nil {
+			m.sessionSelectorStep = NewSessionSelectorStep(m.sessionStore)
+		}
+	case 1:
 		if m.filePickerStep == nil {
 			m.filePickerStep = NewFilePickerStep()
 		}
-	case 1:
+	case 2:
 		if m.modelSelectorStep == nil {
 			m.modelSelectorStep = NewModelSelectorStep()
 		}
-	case 2:
+	case 3:
 		if m.templateEditorStep == nil {
 			m.templateEditorStep = NewTemplateEditorStep()
 		}
-	case 3:
+	case 4:
 		if m.configStep == nil {
 			m.configStep = NewConfigStep(m.result.SpecPath)
 		}
@@ -406,7 +424,7 @@ func (m *WizardModel) updateCurrentStepSize() {
 	if modalWidth < 60 {
 		modalWidth = 60
 	}
-	if m.step != 2 && modalWidth > 100 {
+	if m.step != 3 && modalWidth > 100 {
 		modalWidth = 100
 	}
 
@@ -436,18 +454,22 @@ func (m *WizardModel) updateCurrentStepSize() {
 
 	switch m.step {
 	case 0:
+		if m.sessionSelectorStep != nil {
+			m.sessionSelectorStep.SetSize(contentWidth, contentHeight)
+		}
+	case 1:
 		if m.filePickerStep != nil {
 			m.filePickerStep.SetSize(contentWidth, contentHeight)
 		}
-	case 1:
+	case 2:
 		if m.modelSelectorStep != nil {
 			m.modelSelectorStep.SetSize(contentWidth, contentHeight)
 		}
-	case 2:
+	case 3:
 		if m.templateEditorStep != nil {
 			m.templateEditorStep.SetSize(contentWidth, contentHeight)
 		}
-	case 3:
+	case 4:
 		if m.configStep != nil {
 			m.configStep.SetSize(contentWidth, contentHeight)
 		}
@@ -466,18 +488,22 @@ func (m *WizardModel) View() tea.View {
 	var stepContent string
 	switch m.step {
 	case 0:
+		if m.sessionSelectorStep != nil {
+			stepContent = m.sessionSelectorStep.View()
+		}
+	case 1:
 		if m.filePickerStep != nil {
 			stepContent = m.filePickerStep.View()
 		}
-	case 1:
+	case 2:
 		if m.modelSelectorStep != nil {
 			stepContent = m.modelSelectorStep.View()
 		}
-	case 2:
+	case 3:
 		if m.templateEditorStep != nil {
 			stepContent = m.templateEditorStep.View()
 		}
-	case 3:
+	case 4:
 		if m.configStep != nil {
 			stepContent = m.configStep.View()
 		}
@@ -522,12 +548,13 @@ func (m *WizardModel) renderModal(stepContent string) string {
 
 	// Title with step indicator and step name
 	stepNames := []string{
+		"Select Session",
 		"Select Spec File",
 		"Select Model",
 		"Edit Prompt Template",
 		"Session Configuration",
 	}
-	title := fmt.Sprintf("Build Wizard - Step %d of 4: %s", m.step+1, stepNames[m.step])
+	title := fmt.Sprintf("Build Wizard - Step %d of 5: %s", m.step+1, stepNames[m.step])
 	sections = append(sections, theme.Current().S().ModalTitle.Render(title))
 	sections = append(sections, "")
 
@@ -575,7 +602,7 @@ func (m *WizardModel) createButtonBar(modalX, modalY, modalWidth, contentStartY 
 	case 0:
 		// First step: Cancel + Next
 		buttons = CreateCancelNextButtons(isValid, nextLabel)
-	case 3:
+	case 4:
 		// Last step: Back + Finish
 		nextLabel = "Finish"
 		buttons = CreateBackNextButtons(true, isValid, nextLabel)
@@ -641,21 +668,24 @@ func (m *WizardModel) createButtonBar(modalX, modalY, modalWidth, contentStartY 
 func (m *WizardModel) isStepValid() bool {
 	switch m.step {
 	case 0:
+		// Session selector: always valid (either pick a session or create new)
+		return true
+	case 1:
 		// File picker: valid if a file (not directory) is selected
 		if m.filePickerStep != nil {
 			return m.filePickerStep.SelectedPath() != ""
 		}
 		return false
-	case 1:
+	case 2:
 		// Model selector: valid if a model is selected and not loading/error
 		if m.modelSelectorStep != nil {
 			return m.modelSelectorStep.SelectedModel() != ""
 		}
 		return false
-	case 2:
+	case 3:
 		// Template editor: always valid (can have empty template)
 		return true
-	case 3:
+	case 4:
 		// Config: valid if all inputs pass validation
 		if m.configStep != nil {
 			return m.configStep.IsValid()
