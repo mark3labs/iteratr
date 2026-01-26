@@ -4,28 +4,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Color palette (Catppuccin Mocha)
+// Color palette (Catppuccin Mocha) - used by renderHintBar
 var (
-	colorPrimary       = lipgloss.Color("#cba6f7") // Mauve
-	colorBase          = lipgloss.Color("#1e1e2e") // Base
-	colorSubtext0      = lipgloss.Color("#a6adc8") // Subtext0
-	colorSubtext1      = lipgloss.Color("#bac2de") // Subtext1
-	colorSurface2      = lipgloss.Color("#585b70") // Surface2
-	colorBorderFocused = lipgloss.Color("#b4befe") // Lavender for borders
-)
-
-// Modal styles (consistent with NoteInputModal)
-var (
-	styleModalContainer = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBorderFocused).
-				Background(colorBase).
-				Padding(1, 2)
-
-	styleModalTitle = lipgloss.NewStyle().
-			Foreground(colorPrimary).
-			Bold(true).
-			Align(lipgloss.Center)
+	colorSubtext0 = lipgloss.Color("#a6adc8") // Subtext0
+	colorSubtext1 = lipgloss.Color("#bac2de") // Subtext1
+	colorSurface2 = lipgloss.Color("#585b70") // Surface2
 )
 
 // Hint bar styles
