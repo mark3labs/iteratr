@@ -863,7 +863,7 @@ var (
 	styleSidebarBorder = lipgloss.NewStyle()
 
 	styleSidebarHeader = lipgloss.NewStyle().
-				Foreground(colorSubtext0).
+				Foreground(lipgloss.Color(theme.Current().FgSubtle)).
 				Bold(true).
 				PaddingLeft(1)
 )

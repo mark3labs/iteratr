@@ -7,8 +7,9 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	lipglossv2 "charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+
+	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
 // AgentOutput displays streaming agent output with auto-scroll.
@@ -41,25 +42,8 @@ func NewAgentOutput() *AgentOutput {
 	input.Placeholder = "Send a message..."
 	input.Prompt = "> "
 
-	// Configure styles for textinput (using lipgloss v2)
-	styles := textinput.Styles{
-		Focused: textinput.StyleState{
-			Text:        lipglossv2.NewStyle().Foreground(lipglossv2.Color(string(colorText))),     // Base text color when typing
-			Placeholder: lipglossv2.NewStyle().Foreground(lipglossv2.Color(string(colorTextDim))),  // Placeholder text (dim/subtle)
-			Prompt:      lipglossv2.NewStyle().Foreground(lipglossv2.Color(string(colorTertiary))), // Prompt color (lavender accent)
-		},
-		Blurred: textinput.StyleState{
-			Text:        lipglossv2.NewStyle().Foreground(lipglossv2.Color(string(colorSubtext0))), // Dimmer when unfocused
-			Placeholder: lipglossv2.NewStyle().Foreground(lipglossv2.Color(string(colorSubtext0))), // Dim placeholder
-			Prompt:      lipglossv2.NewStyle().Foreground(lipglossv2.Color(string(colorMuted))),    // Muted prompt
-		},
-		Cursor: textinput.CursorStyle{
-			Color: lipglossv2.Color(string(colorPrimary)), // Cursor color (mauve accent)
-			Shape: tea.CursorBar,                          // Bar shape
-			Blink: true,                                   // Enable blinking
-		},
-	}
-	input.SetStyles(styles)
+	// Use theme-provided textinput styles
+	input.SetStyles(theme.Current().S().TextInputStyles)
 
 	// Disable virtual cursor (cursor handled by Dashboard Draw)
 	input.SetVirtualCursor(false)
@@ -154,7 +138,7 @@ func (a *AgentOutput) Update(msg tea.Msg) tea.Cmd {
 // Render returns the agent output view as a string.
 func (a *AgentOutput) Render() string {
 	if !a.ready {
-		return styleDim.Render("Waiting for agent output...")
+		return theme.Current().S().Dim.Render("Waiting for agent output...")
 	}
 	if a.scrollList == nil {
 		return ""
@@ -170,7 +154,7 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	if !a.ready {
 		// Show waiting message
-		waitMsg := styleDim.Render("Waiting for agent output...")
+		waitMsg := theme.Current().S().Dim.Render("Waiting for agent output...")
 		uv.NewStyledString(waitMsg).Draw(scr, area)
 		return nil
 	}
@@ -208,7 +192,7 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			1,
 		)
 
-		styledIndicator := styleScrollIndicator.Render(indicator)
+		styledIndicator := theme.Current().S().ScrollIndicator.Render(indicator)
 		uv.NewStyledString(styledIndicator).Draw(scr, indicatorArea)
 	}
 
@@ -221,7 +205,7 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		separatorY := inputArea.Min.Y + 1
 		separatorLine := strings.Repeat(" ", leftPad) + strings.Repeat("─", inputArea.Dx()-leftPad)
 		separatorArea := uv.Rect(inputArea.Min.X, separatorY, inputArea.Dx(), 1)
-		uv.NewStyledString(styleDim.Render(separatorLine)).Draw(scr, separatorArea)
+		uv.NewStyledString(theme.Current().S().Dim.Render(separatorLine)).Draw(scr, separatorArea)
 
 		// Draw input field below separator
 		inputView := a.input.View()
@@ -231,7 +215,7 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		var queueIndicator string
 		var queueIndicatorWidth int
 		if a.queueDepth > 0 {
-			queueIndicator = styleDim.Render(fmt.Sprintf("(%d queued)", a.queueDepth))
+			queueIndicator = theme.Current().S().Dim.Render(fmt.Sprintf("(%d queued)", a.queueDepth))
 			// Strip ANSI codes to measure actual width (lipgloss adds invisible codes)
 			queueIndicatorWidth = len(fmt.Sprintf("(%d queued)", a.queueDepth))
 		}
@@ -260,9 +244,9 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		if inputArea.Dy() >= 4 {
 			var helpText string
 			if a.input.Focused() {
-				helpText = styleDim.Render("Enter to send · Esc to cancel")
+				helpText = theme.Current().S().Dim.Render("Enter to send · Esc to cancel")
 			} else {
-				helpText = styleDim.Render("Press i to type a message")
+				helpText = theme.Current().S().Dim.Render("Press i to type a message")
 			}
 			helpY := inputY + 1
 			helpArea := uv.Rect(inputArea.Min.X+leftPad, helpY, inputArea.Dx()-leftPad, 1)
@@ -667,7 +651,7 @@ func (a *AgentOutput) AppendFinish(msg AgentFinishMsg) tea.Cmd {
 	// 3. If error or canceled, append styled finish reason
 	if msg.Error != "" {
 		// Error finish
-		errorText := styleFinishError.Render(fmt.Sprintf("Error: %s", msg.Error))
+		errorText := theme.Current().S().FinishError.Render(fmt.Sprintf("Error: %s", msg.Error))
 		errorItem := &TextMessageItem{
 			id:      fmt.Sprintf("finish-error-%d", len(a.messages)),
 			content: errorText,
@@ -675,7 +659,7 @@ func (a *AgentOutput) AppendFinish(msg AgentFinishMsg) tea.Cmd {
 		a.messages = append(a.messages, errorItem)
 	} else if msg.Reason == "cancelled" {
 		// Canceled finish
-		cancelText := styleFinishCanceled.Render("Iteration canceled")
+		cancelText := theme.Current().S().FinishCanceled.Render("Iteration canceled")
 		cancelItem := &TextMessageItem{
 			id:      fmt.Sprintf("finish-cancel-%d", len(a.messages)),
 			content: cancelText,
