@@ -198,6 +198,7 @@ func TestNewDashboard(t *testing.T) {
 
 	if d == nil {
 		t.Fatal("expected non-nil dashboard")
+		return // Explicit return to help static analysis
 	}
 	if d.sessionName != "" {
 		t.Errorf("expected empty session name, got %s", d.sessionName)
