@@ -25,8 +25,17 @@ version: 1
 
 hooks:
   pre_iteration:
-    command: "./scripts/context.sh {{iteration}}"
-    timeout: 30  # optional, seconds
+    - command: "git status --short"
+      timeout: 5
+    - command: "./scripts/context.sh {{iteration}}"
+      timeout: 60
+```
+
+Single command shorthand:
+```yaml
+hooks:
+  pre_iteration:
+    - command: "./scripts/context.sh"
 ```
 
 ## Technical Implementation
@@ -41,7 +50,7 @@ type Config struct {
 }
 
 type HooksConfig struct {
-    PreIteration *HookConfig `yaml:"pre_iteration"`
+    PreIteration []*HookConfig `yaml:"pre_iteration"`
 }
 
 type HookConfig struct {
@@ -52,21 +61,25 @@ type HookConfig struct {
 
 **hooks.go** - Loading and execution:
 - `LoadConfig(workDir string) (*Config, error)` - Load `.iteratr.hooks.yml`, return nil if not found
-- `Execute(ctx context.Context, hook *HookConfig, vars map[string]string) (string, error)` - Run command, expand vars, capture output
+- `Execute(ctx, hook, workDir, vars)` - Run single command, capture output
+- `ExecuteAll(ctx, hooks, workDir, vars)` - Run multiple hooks, concatenate output
 
-### Template Changes (`internal/template/template.go`)
+### ACP Changes (`internal/agent/acp.go`)
 
-1. Add `Hooks` field to `Variables` struct
-2. Add `HookOutput` field to `BuildConfig` struct  
-3. Add `{{hooks}}` to `replacements` map in `Render()`
-4. Set `vars.Hooks = cfg.HookOutput` in `BuildPrompt()`
+- `prompt()` accepts `[]string` texts instead of single string
+- Multiple texts sent as separate content blocks in same request
+
+### Runner Changes (`internal/agent/runner.go`)
+
+- `RunIteration(ctx, prompt, hookOutput)` accepts optional hook output
+- Hook output sent as first content block, main prompt as second
 
 ### Orchestrator Changes (`internal/orchestrator/orchestrator.go`)
 
 1. Add `hooksConfig *hooks.Config` field to Orchestrator
 2. Load hooks config in `Start()` (optional, log if missing)
-3. Execute pre-iteration hook before `BuildPrompt()` call (between lines 347-350)
-4. Pass hook output to `template.BuildConfig.HookOutput`
+3. Execute pre-iteration hooks before `BuildPrompt()` call
+4. Pass hook output directly to `runner.RunIteration()`
 
 ### Error Handling
 
@@ -84,32 +97,29 @@ type HookConfig struct {
 ## Tasks
 
 ### 1. Add YAML dependency
-- [ ] Add `gopkg.in/yaml.v3` to go.mod
+- [x] Add `gopkg.in/yaml.v3` to go.mod
 
 ### 2. Create hooks package
-- [ ] Create `internal/hooks/types.go` with Config structs
-- [ ] Create `internal/hooks/hooks.go` with LoadConfig and Execute functions
+- [x] Create `internal/hooks/types.go` with Config structs
+- [x] Create `internal/hooks/hooks.go` with LoadConfig, Execute, ExecuteAll
 
-### 3. Extend template system
-- [ ] Add `Hooks` field to Variables struct
-- [ ] Add `HookOutput` field to BuildConfig struct
-- [ ] Add `{{hooks}}` placeholder to Render() replacements
-- [ ] Populate vars.Hooks in BuildPrompt()
+### 3. Modify ACP layer for multiple content blocks
+- [x] Change `prompt()` to accept `[]string` texts
+- [x] Build content blocks from texts array
 
-### 4. Integrate into orchestrator
-- [ ] Add hooksConfig field to Orchestrator struct
-- [ ] Load hooks config in Start() with graceful fallback
-- [ ] Execute pre-iteration hook in Run() before BuildPrompt
-- [ ] Pass hook output to template.BuildConfig
+### 4. Update runner to accept hook output
+- [x] Add `hookOutput` parameter to `RunIteration()`
+- [x] Send hook output as separate content block before main prompt
 
-### 5. Test manually
-- [ ] Create test `.iteratr.hooks.yml` and verify hook execution
+### 5. Integrate into orchestrator
+- [x] Add hooksConfig field to Orchestrator struct
+- [x] Load hooks config in Start() with graceful fallback
+- [x] Execute pre-iteration hooks in Run() before BuildPrompt
+- [x] Pass hook output to runner.RunIteration()
 
 ## Out of Scope
 
 - Post-iteration hooks
-- Multiple pre-iteration hooks
-- Hook execution order/chaining
 - Environment variable injection in config
 - Hook-specific working directories
 
