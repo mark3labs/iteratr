@@ -33,6 +33,8 @@ iteratr is a Go CLI tool that orchestrates AI coding agents in an iterative loop
 - **ACP Integration**: Control opencode agents via Agent Control Protocol with persistent sessions
 - **Headless Mode**: Run without TUI for CI/CD environments
 - **Model Selection**: Choose which LLM model to use per session
+- **Interactive Wizard**: Guided setup when no spec file provided
+- **Pre-iteration Hooks**: Run custom scripts before each iteration for dynamic context
 
 ## Installation
 
@@ -128,6 +130,20 @@ This will:
 ### 3. Interact via TUI
 
 While iteratr is running, type messages directly in the TUI to send guidance or feedback to the agent. The agent will receive the message in its next iteration.
+
+### Alternative: Interactive Wizard
+
+Run without `--spec` to launch the interactive build wizard:
+
+```bash
+iteratr build
+```
+
+The wizard guides you through 4 steps:
+1. **File Picker** - Browse and select a spec file
+2. **Model Selector** - Choose an LLM model (fuzzy search supported)
+3. **Template Editor** - Customize the prompt template
+4. **Config** - Set session name and max iterations
 
 ## Usage
 
@@ -307,7 +323,7 @@ The agent has access to these tools during execution (via `iteratr tool` subcomm
 - `iteration-summary` - Record a summary of what was accomplished
 
 **Session Control:**
-- `session-complete` - Signal all tasks done, end iteration loop
+- `session-complete` - Signal all tasks done, end iteration loop (validates all tasks are complete)
 
 ## Prompt Templates
 
@@ -338,6 +354,37 @@ Edit the template, then use it:
 ```bash
 iteratr build --template my-template.txt
 ```
+
+## Pre-iteration Hooks
+
+Run custom scripts before each iteration to inject dynamic context into the agent prompt.
+
+### Configuration
+
+Create `.iteratr.hooks.yml` in your working directory:
+
+```yaml
+version: 1
+
+hooks:
+  pre_iteration:
+    - command: "git status --short"
+      timeout: 5
+    - command: "go vet ./..."
+      timeout: 30
+```
+
+### Hook Options
+
+- `command` - Shell command to execute (supports template variables: `{{iteration}}`, `{{session}}`)
+- `timeout` - Timeout in seconds (default: 30)
+
+Multiple hooks run sequentially; their combined output is sent to the agent before the main prompt.
+
+### Error Handling
+
+- Config not found: hooks skipped, iteration continues
+- Command failure/timeout: error included in output, iteration continues
 
 ## Environment Variables
 
@@ -560,16 +607,20 @@ task ci
 │   └── version.go        # Version command
 ├── internal/
 │   ├── agent/            # ACP client and agent runner
+│   ├── hooks/            # Pre-iteration hook execution
 │   ├── nats/             # Embedded NATS server and stream management
 │   ├── session/          # Event-sourced session state
 │   ├── template/         # Prompt template engine
 │   ├── tui/              # Bubbletea v2 TUI components
+│   │   ├── theme/        # Theme system (Catppuccin Mocha)
+│   │   └── wizard/       # Interactive build wizard
 │   ├── orchestrator/     # Iteration loop orchestration
 │   ├── logger/           # Structured logging
 │   └── errors/           # Error handling and retry
 ├── specs/                # Feature specifications
 ├── Taskfile.yml          # Task runner configuration
 ├── .iteratr/             # Session data (gitignored)
+├── .iteratr.hooks.yml    # Pre-iteration hooks config (optional)
 └── README.md
 ```
 
