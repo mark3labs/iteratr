@@ -2,6 +2,7 @@ package theme
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	lipgloss "charm.land/lipgloss/v2"
@@ -67,6 +68,12 @@ func ParseHexColor(hex string) (uint8, uint8, uint8) {
 	}
 
 	return r, g, b
+}
+
+// HexToColor converts a hex color string to a color.Color
+func HexToColor(hex string) color.Color {
+	r, g, b := ParseHexColor(hex)
+	return color.RGBA{R: r, G: g, B: b, A: 255}
 }
 
 // FormatHexColor converts RGB values to hex color string

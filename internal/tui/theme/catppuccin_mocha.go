@@ -12,6 +12,7 @@ func NewCatppuccinMocha() *Theme {
 		Tertiary:  "#b4befe", // Lavender - tertiary highlights
 
 		// Background hierarchy (dark→light)
+		BgCrust:    "#11111b", // Crust - outermost app background
 		BgBase:     "#1e1e2e", // Base - main background
 		BgMantle:   "#181825", // Mantle - header/footer background
 		BgGutter:   "#282839", // Gutter - line number background

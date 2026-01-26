@@ -11,6 +11,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/mark3labs/iteratr/internal/logger"
 	"github.com/mark3labs/iteratr/internal/session"
+	"github.com/mark3labs/iteratr/internal/tui/theme"
 	"github.com/nats-io/nats.go"
 )
 
@@ -585,6 +586,9 @@ func (a *App) View() tea.View {
 	content := canvas.Render()
 
 	view.Content = lipglossv2.NewLayer(content)
+
+	// Set global background color for the entire terminal
+	view.BackgroundColor = theme.HexToColor(theme.Current().BgCrust)
 
 	return view
 }

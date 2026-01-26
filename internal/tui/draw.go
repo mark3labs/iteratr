@@ -2,10 +2,12 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	uvscreen "github.com/charmbracelet/ultraviolet/screen"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
@@ -24,6 +26,19 @@ func DrawStyled(scr uv.Screen, area uv.Rectangle, style lipgloss.Style, text str
 func FillArea(scr uv.Screen, area uv.Rectangle, style lipgloss.Style) {
 	fill := style.Width(area.Dx()).Height(area.Dy()).Render("")
 	uv.NewStyledString(fill).Draw(scr, area)
+}
+
+// FillAreaWithColor fills an area with a solid background color using ultraviolet's native method
+func FillAreaWithColor(scr uv.Screen, area uv.Rectangle, hexColor string) {
+	r, g, b := theme.ParseHexColor(hexColor)
+	cell := &uv.Cell{
+		Content: " ",
+		Width:   1,
+		Style: uv.Style{
+			Bg: color.RGBA{R: r, G: g, B: b, A: 255},
+		},
+	}
+	uvscreen.FillArea(scr, cell, area)
 }
 
 // DrawPanel renders a panel with a title header and returns the inner content area.

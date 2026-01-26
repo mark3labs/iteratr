@@ -19,6 +19,7 @@ type Theme struct {
 	Tertiary  string
 
 	// Background hierarchy (dark→light)
+	BgCrust    string
 	BgBase     string
 	BgMantle   string
 	BgGutter   string
