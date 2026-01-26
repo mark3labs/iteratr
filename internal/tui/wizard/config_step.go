@@ -98,7 +98,28 @@ func deriveSessionName(specPath string) string {
 
 // Init initializes the config step and focuses the session input.
 func (c *ConfigStep) Init() tea.Cmd {
+	c.focusIndex = 0
 	return c.sessionInput.Focus()
+}
+
+// Focus gives focus to the config step (first input).
+func (c *ConfigStep) Focus() tea.Cmd {
+	c.focusIndex = 0
+	c.iterationsInput.Blur()
+	return c.sessionInput.Focus()
+}
+
+// FocusLast gives focus to the config step's last input.
+func (c *ConfigStep) FocusLast() tea.Cmd {
+	c.focusIndex = 1
+	c.sessionInput.Blur()
+	return c.iterationsInput.Focus()
+}
+
+// Blur removes focus from all inputs in the config step.
+func (c *ConfigStep) Blur() {
+	c.sessionInput.Blur()
+	c.iterationsInput.Blur()
 }
 
 // SetSize updates the dimensions for the config step.
@@ -117,12 +138,24 @@ func (c *ConfigStep) Update(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "tab":
-			// Cycle focus forward
+			// Cycle focus forward, or signal exit if at last input
+			if c.focusIndex == 1 {
+				// At last input - signal to move to buttons
+				return func() tea.Msg {
+					return TabExitForwardMsg{}
+				}
+			}
 			c.cycleFocusForward()
 			return nil
 
 		case "shift+tab":
-			// Cycle focus backward
+			// Cycle focus backward, or signal exit if at first input
+			if c.focusIndex == 0 {
+				// At first input - signal to move to buttons from end
+				return func() tea.Msg {
+					return TabExitBackwardMsg{}
+				}
+			}
 			c.cycleFocusBackward()
 			return nil
 
@@ -218,9 +251,8 @@ func (c *ConfigStep) View() string {
 
 	// Hint bar
 	hintBar := renderHintBar(
-		"tab", "cycle",
+		"tab", "next/buttons",
 		"enter", "finish",
-		"ctrl+enter", "finish",
 		"esc", "back",
 	)
 	b.WriteString(hintBar)
@@ -293,3 +325,11 @@ func (c *ConfigStep) Iterations() int {
 
 // ConfigCompleteMsg is sent when the config is complete and valid.
 type ConfigCompleteMsg struct{}
+
+// TabExitForwardMsg is sent when Tab is pressed on the last input.
+// Parent should move focus to buttons.
+type TabExitForwardMsg struct{}
+
+// TabExitBackwardMsg is sent when Shift+Tab is pressed on the first input.
+// Parent should move focus to buttons (from end).
+type TabExitBackwardMsg struct{}

@@ -197,13 +197,13 @@ func (t *TemplateEditorStep) View() string {
 		hintBar = renderHintBar(
 			"↑↓", "scroll",
 			"e", "edit",
-			"enter", "next",
+			"tab", "buttons",
 			"esc", "back",
 		)
 	} else {
 		hintBar = renderHintBar(
 			"↑↓", "scroll",
-			"enter", "next",
+			"tab", "buttons",
 			"esc", "back",
 		)
 	}

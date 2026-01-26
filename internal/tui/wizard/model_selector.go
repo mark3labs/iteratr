@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/mark3labs/iteratr/internal/config"
 	"github.com/mark3labs/iteratr/internal/tui"
 )
 
@@ -157,6 +158,19 @@ func parseModelsOutput(output []byte) []*ModelInfo {
 	return models
 }
 
+// selectDefaultModel finds and selects the default model in the filtered list.
+func (m *ModelSelectorStep) selectDefaultModel() {
+	for i, model := range m.filtered {
+		if model.id == config.DefaultModel {
+			m.selectedIdx = i
+			m.scrollList.SetSelected(i)
+			m.scrollList.ScrollToItem(i)
+			return
+		}
+	}
+	// Default model not found, keep current selection (index 0)
+}
+
 // filterModels filters allModels by search query using case-insensitive substring match.
 func (m *ModelSelectorStep) filterModels() {
 	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
@@ -212,6 +226,8 @@ func (m *ModelSelectorStep) Update(msg tea.Msg) tea.Cmd {
 		m.loading = false
 		m.allModels = msg.models
 		m.filterModels()
+		// Pre-select default model if available
+		m.selectDefaultModel()
 		return nil
 
 	case ModelsErrorMsg:
@@ -317,14 +333,14 @@ func (m *ModelSelectorStep) View() string {
 			b.WriteString(hintStyle.Render("Install it from: https://github.com/opencode-ai/opencode"))
 			b.WriteString("\n\n")
 			// Hint bar for not installed case
-			hintBar := renderHintBar("esc", "back")
+			hintBar := renderHintBar("tab", "buttons", "esc", "back")
 			b.WriteString(hintBar)
 		} else {
 			// Generic error message
 			b.WriteString(errorStyle.Render("Error: " + m.error))
 			b.WriteString("\n\n")
 			// Hint bar for retry case
-			hintBar := renderHintBar("r", "retry", "esc", "back")
+			hintBar := renderHintBar("r", "retry", "tab", "buttons", "esc", "back")
 			b.WriteString(hintBar)
 		}
 		return b.String()
@@ -339,7 +355,7 @@ func (m *ModelSelectorStep) View() string {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8")).Render("No models match your search"))
 		b.WriteString("\n\n")
 		// Hint bar for empty search results
-		hintBar := renderHintBar("type", "filter", "esc", "back")
+		hintBar := renderHintBar("type", "filter", "tab", "buttons", "esc", "back")
 		b.WriteString(hintBar)
 		return b.String()
 	}
@@ -355,6 +371,7 @@ func (m *ModelSelectorStep) View() string {
 		"type", "filter",
 		"↑↓/j/k", "navigate",
 		"enter", "select",
+		"tab", "buttons",
 		"esc", "back",
 	)
 	b.WriteString(hintBar)

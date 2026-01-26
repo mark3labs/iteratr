@@ -270,12 +270,14 @@ func (f *FilePickerStep) View() string {
 		// No items at all - can only go back or cancel
 		hintBar = renderHintBar(
 			"backspace", "go up",
+			"tab", "buttons",
 			"esc", "cancel",
 		)
 	} else if !hasFiles && len(f.items) > 0 {
 		// Empty directory with parent - show simplified hints
 		hintBar = renderHintBar(
 			"enter/backspace", "go up",
+			"tab", "buttons",
 			"esc", "cancel",
 		)
 	} else {
@@ -283,8 +285,8 @@ func (f *FilePickerStep) View() string {
 		hintBar = renderHintBar(
 			"↑↓/j/k", "navigate",
 			"enter", "select",
-			"backspace", "up",
-			"esc", "cancel",
+			"tab", "buttons",
+			"esc", "back",
 		)
 	}
 	b.WriteString(hintBar)
