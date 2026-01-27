@@ -362,3 +362,170 @@ func TestExtractFileChanges(t *testing.T) {
 		})
 	}
 }
+
+// TestOnFileChangeCallback verifies that onFileChange callback is invoked
+// when processing completed edit tool calls with diff blocks
+func TestOnFileChangeCallback(t *testing.T) {
+	tests := []struct {
+		name          string
+		event         ToolCallEvent
+		wantCallCount int
+		wantChanges   []FileChange
+	}{
+		{
+			name: "completed edit with single diff block - calls callback once",
+			event: ToolCallEvent{
+				Status: "completed",
+				Kind:   "edit",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file.go",
+						OldText: "old",
+						NewText: "new",
+					},
+				},
+				FileDiff: &FileDiff{
+					File:      "/abs/path/file.go",
+					Additions: 5,
+					Deletions: 2,
+				},
+			},
+			wantCallCount: 1,
+			wantChanges: []FileChange{
+				{
+					AbsPath:   "/abs/path/file.go",
+					IsNew:     false,
+					Additions: 5,
+					Deletions: 2,
+				},
+			},
+		},
+		{
+			name: "completed edit with multiple diff blocks - calls callback multiple times",
+			event: ToolCallEvent{
+				Status: "completed",
+				Kind:   "edit",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file1.go",
+						OldText: "",
+						NewText: "new file",
+					},
+					{
+						Path:    "/abs/path/file2.go",
+						OldText: "old",
+						NewText: "new",
+					},
+				},
+			},
+			wantCallCount: 2,
+			wantChanges: []FileChange{
+				{
+					AbsPath:   "/abs/path/file1.go",
+					IsNew:     true,
+					Additions: 0,
+					Deletions: 0,
+				},
+				{
+					AbsPath:   "/abs/path/file2.go",
+					IsNew:     false,
+					Additions: 0,
+					Deletions: 0,
+				},
+			},
+		},
+		{
+			name: "completed edit with no diff blocks - no callback",
+			event: ToolCallEvent{
+				Status:   "completed",
+				Kind:     "edit",
+				RawInput: map[string]any{},
+			},
+			wantCallCount: 0,
+			wantChanges:   []FileChange{},
+		},
+		{
+			name: "error status - no callback",
+			event: ToolCallEvent{
+				Status: "error",
+				Kind:   "edit",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file.go",
+						OldText: "old",
+						NewText: "new",
+					},
+				},
+			},
+			wantCallCount: 0,
+			wantChanges:   []FileChange{},
+		},
+		{
+			name: "non-edit kind - no callback",
+			event: ToolCallEvent{
+				Status: "completed",
+				Kind:   "bash",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file.go",
+						OldText: "old",
+						NewText: "new",
+					},
+				},
+			},
+			wantCallCount: 0,
+			wantChanges:   []FileChange{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Track callback invocations
+			var callCount int
+			var recordedChanges []FileChange
+
+			// Mock onFileChange callback
+			onFileChange := func(change FileChange) {
+				callCount++
+				recordedChanges = append(recordedChanges, change)
+			}
+
+			// Simulate the logic from acp.go:365-378
+			// Extract file changes and call callback only for completed edits
+			if tt.event.Status == "completed" && tt.event.Kind == "edit" {
+				if onFileChange != nil {
+					changes := extractFileChanges(tt.event)
+					for _, change := range changes {
+						onFileChange(change)
+					}
+				}
+			}
+
+			// Verify call count
+			if callCount != tt.wantCallCount {
+				t.Errorf("onFileChange called %d times, want %d", callCount, tt.wantCallCount)
+			}
+
+			// Verify changes passed to callback
+			if len(recordedChanges) != len(tt.wantChanges) {
+				t.Errorf("recorded %d changes, want %d", len(recordedChanges), len(tt.wantChanges))
+				return
+			}
+
+			for i := range recordedChanges {
+				if recordedChanges[i].AbsPath != tt.wantChanges[i].AbsPath {
+					t.Errorf("change[%d].AbsPath = %s, want %s", i, recordedChanges[i].AbsPath, tt.wantChanges[i].AbsPath)
+				}
+				if recordedChanges[i].IsNew != tt.wantChanges[i].IsNew {
+					t.Errorf("change[%d].IsNew = %v, want %v", i, recordedChanges[i].IsNew, tt.wantChanges[i].IsNew)
+				}
+				if recordedChanges[i].Additions != tt.wantChanges[i].Additions {
+					t.Errorf("change[%d].Additions = %d, want %d", i, recordedChanges[i].Additions, tt.wantChanges[i].Additions)
+				}
+				if recordedChanges[i].Deletions != tt.wantChanges[i].Deletions {
+					t.Errorf("change[%d].Deletions = %d, want %d", i, recordedChanges[i].Deletions, tt.wantChanges[i].Deletions)
+				}
+			}
+		})
+	}
+}

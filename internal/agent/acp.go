@@ -251,7 +251,7 @@ func (c *acpConn) setModel(ctx context.Context, sessionID, modelID string) error
 // prompt sends a prompt to the session and streams notifications via callbacks.
 // Accepts multiple text blocks which are sent as separate content blocks in the same request.
 // Returns the stop reason when the prompt completes or an error occurs.
-func (c *acpConn) prompt(ctx context.Context, sessionID string, texts []string, onText func(string), onToolCall func(ToolCallEvent), onThinking func(string)) (string, error) {
+func (c *acpConn) prompt(ctx context.Context, sessionID string, texts []string, onText func(string), onToolCall func(ToolCallEvent), onThinking func(string), onFileChange func(FileChange)) (string, error) {
 	// Build content blocks from texts
 	blocks := make([]contentBlock, 0, len(texts))
 	for _, text := range texts {
@@ -366,6 +366,14 @@ func (c *acpConn) prompt(ctx context.Context, sessionID string, texts []string, 
 						event.FileDiff = extractFileDiff(tcu.RawOutput)
 						// Extract diff blocks from content array
 						event.DiffBlocks = extractDiffBlocks(tcu.Content)
+
+						// Extract file changes and call onFileChange callback for each
+						if onFileChange != nil {
+							changes := extractFileChanges(event)
+							for _, change := range changes {
+								onFileChange(change)
+							}
+						}
 					}
 					onToolCall(event)
 				}

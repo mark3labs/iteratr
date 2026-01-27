@@ -157,9 +157,9 @@ func (r *Runner) RunIteration(ctx context.Context, prompt string, hookOutput str
 	texts = append(texts, prompt)
 
 	// Send prompt and stream notifications to callbacks
-	// Wire onText, onToolCall, and onThinking callbacks through to prompt()
+	// Wire onText, onToolCall, onThinking, and onFileChange callbacks through to prompt()
 	startTime := time.Now()
-	stopReason, err := r.conn.prompt(ctx, r.sessionID, texts, r.onText, r.onToolCall, r.onThinking)
+	stopReason, err := r.conn.prompt(ctx, r.sessionID, texts, r.onText, r.onToolCall, r.onThinking, r.onFileChange)
 	duration := time.Since(startTime)
 
 	if err != nil {
@@ -214,7 +214,7 @@ func (r *Runner) SendMessages(ctx context.Context, texts []string) error {
 
 	// Send prompt with all messages as separate content blocks
 	startTime := time.Now()
-	stopReason, err := r.conn.prompt(ctx, r.sessionID, texts, r.onText, r.onToolCall, r.onThinking)
+	stopReason, err := r.conn.prompt(ctx, r.sessionID, texts, r.onText, r.onToolCall, r.onThinking, r.onFileChange)
 	duration := time.Since(startTime)
 
 	if err != nil {
