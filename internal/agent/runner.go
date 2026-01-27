@@ -13,14 +13,15 @@ import (
 
 // Runner manages the execution of opencode run subprocess for each iteration.
 type Runner struct {
-	model       string
-	workDir     string
-	sessionName string
-	natsPort    int
-	onText      func(text string)
-	onToolCall  func(ToolCallEvent)
-	onThinking  func(string)
-	onFinish    func(FinishEvent)
+	model        string
+	workDir      string
+	sessionName  string
+	natsPort     int
+	onText       func(text string)
+	onToolCall   func(ToolCallEvent)
+	onThinking   func(string)
+	onFinish     func(FinishEvent)
+	onFileChange func(FileChange)
 
 	// ACP subprocess (reused) and current session (created fresh per iteration)
 	conn      *acpConn
@@ -30,27 +31,29 @@ type Runner struct {
 
 // RunnerConfig holds configuration for creating a new Runner.
 type RunnerConfig struct {
-	Model       string              // LLM model to use (e.g., "anthropic/claude-sonnet-4-5")
-	WorkDir     string              // Working directory for agent
-	SessionName string              // Session name
-	NATSPort    int                 // NATS server port for tool CLI
-	OnText      func(text string)   // Callback for text output
-	OnToolCall  func(ToolCallEvent) // Callback for tool lifecycle events
-	OnThinking  func(string)        // Callback for thinking/reasoning output
-	OnFinish    func(FinishEvent)   // Callback for iteration finish events
+	Model        string              // LLM model to use (e.g., "anthropic/claude-sonnet-4-5")
+	WorkDir      string              // Working directory for agent
+	SessionName  string              // Session name
+	NATSPort     int                 // NATS server port for tool CLI
+	OnText       func(text string)   // Callback for text output
+	OnToolCall   func(ToolCallEvent) // Callback for tool lifecycle events
+	OnThinking   func(string)        // Callback for thinking/reasoning output
+	OnFinish     func(FinishEvent)   // Callback for iteration finish events
+	OnFileChange func(FileChange)    // Callback for file modifications
 }
 
 // NewRunner creates a new Runner instance.
 func NewRunner(cfg RunnerConfig) *Runner {
 	return &Runner{
-		model:       cfg.Model,
-		workDir:     cfg.WorkDir,
-		sessionName: cfg.SessionName,
-		natsPort:    cfg.NATSPort,
-		onText:      cfg.OnText,
-		onToolCall:  cfg.OnToolCall,
-		onThinking:  cfg.OnThinking,
-		onFinish:    cfg.OnFinish,
+		model:        cfg.Model,
+		workDir:      cfg.WorkDir,
+		sessionName:  cfg.SessionName,
+		natsPort:     cfg.NATSPort,
+		onText:       cfg.OnText,
+		onToolCall:   cfg.OnToolCall,
+		onThinking:   cfg.OnThinking,
+		onFinish:     cfg.OnFinish,
+		onFileChange: cfg.OnFileChange,
 	}
 }
 
