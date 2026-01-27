@@ -274,6 +274,10 @@ func (o *Orchestrator) Run() error {
 					Duration: event.Duration,
 				})
 			},
+			OnFileChange: func(change agent.FileChange) {
+				// Record change in tracker
+				o.fileTracker.RecordChange(change.AbsPath, change.IsNew, change.Additions, change.Deletions)
+			},
 		})
 	} else {
 		// Headless mode - print to stdout
@@ -318,6 +322,10 @@ func (o *Orchestrator) Run() error {
 					fmt.Printf(" | Model: %s", event.Model)
 				}
 				fmt.Println(" ---")
+			},
+			OnFileChange: func(change agent.FileChange) {
+				// Record change in tracker
+				o.fileTracker.RecordChange(change.AbsPath, change.IsNew, change.Additions, change.Deletions)
 			},
 		})
 	}
