@@ -29,6 +29,7 @@ type ToolCallEvent struct {
 	Kind       string         // "execute", etc.
 	FileDiff   *FileDiff      // File diff data (populated on completed edit tools)
 	DiffBlocks []DiffBlock    // Diff blocks from content array (populated on completed edit tools)
+	SessionID  string         // Session ID for subagent tasks (populated on completed from rawOutput.metadata.sessionId)
 }
 
 // FinishEvent represents the completion of an agent iteration.
