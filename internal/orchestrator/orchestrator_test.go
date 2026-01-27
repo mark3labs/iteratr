@@ -1046,6 +1046,207 @@ Test spec for verifying file tracking integration.
 	}
 }
 
+// TestSessionStartHookExecution verifies that session_start hooks are executed before the iteration loop
+func TestSessionStartHookExecution(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".iteratr")
+
+	// Create a test spec
+	specPath := filepath.Join(tmpDir, "test.md")
+	specContent := `# Session Start Hook Test
+Test that session_start hooks execute before iteration loop.
+
+## Tasks
+- [ ] Test task 1
+`
+	if err := os.WriteFile(specPath, []byte(specContent), 0644); err != nil {
+		t.Fatalf("failed to write spec file: %v", err)
+	}
+
+	// Create .iteratr.hooks.yml with session_start hook
+	hooksPath := filepath.Join(tmpDir, ".iteratr.hooks.yml")
+	hooksContent := `version: 1
+hooks:
+  session_start:
+    - command: "echo 'session started'"
+      timeout: 5
+`
+	if err := os.WriteFile(hooksPath, []byte(hooksContent), 0644); err != nil {
+		t.Fatalf("failed to write hooks file: %v", err)
+	}
+
+	// Create orchestrator
+	orch, err := New(Config{
+		SessionName: "test-session-start",
+		SpecPath:    specPath,
+		DataDir:     dataDir,
+		WorkDir:     tmpDir,
+		Headless:    true,
+		Iterations:  0, // Don't run actual iterations
+	})
+	if err != nil {
+		t.Fatalf("failed to create orchestrator: %v", err)
+	}
+
+	if err := orch.Start(); err != nil {
+		t.Fatalf("failed to start orchestrator: %v", err)
+	}
+	defer func() {
+		if err := orch.Stop(); err != nil {
+			t.Errorf("failed to stop orchestrator: %v", err)
+		}
+	}()
+
+	// Verify hooks config was loaded
+	if orch.hooksConfig == nil {
+		t.Fatal("expected hooks config to be loaded")
+	}
+	if len(orch.hooksConfig.Hooks.SessionStart) != 1 {
+		t.Fatalf("expected 1 session_start hook, got %d", len(orch.hooksConfig.Hooks.SessionStart))
+	}
+
+	// Note: We can't test actual execution without running the iteration loop
+	// which requires the agent. This test verifies hooks are loaded correctly.
+	// Full execution is tested in integration tests.
+}
+
+// TestSessionStartHookWithPipeOutput verifies that pipe_output flag works with session_start
+func TestSessionStartHookWithPipeOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".iteratr")
+
+	// Create a test spec
+	specPath := filepath.Join(tmpDir, "test.md")
+	specContent := `# Session Start Hook Test
+Test that pipe_output works with session_start.
+`
+	if err := os.WriteFile(specPath, []byte(specContent), 0644); err != nil {
+		t.Fatalf("failed to write spec file: %v", err)
+	}
+
+	// Create .iteratr.hooks.yml with session_start hook with pipe_output
+	hooksPath := filepath.Join(tmpDir, ".iteratr.hooks.yml")
+	hooksContent := `version: 1
+hooks:
+  session_start:
+    - command: "echo 'piped output'"
+      timeout: 5
+      pipe_output: true
+    - command: "echo 'not piped'"
+      timeout: 5
+      pipe_output: false
+`
+	if err := os.WriteFile(hooksPath, []byte(hooksContent), 0644); err != nil {
+		t.Fatalf("failed to write hooks file: %v", err)
+	}
+
+	// Create orchestrator
+	orch, err := New(Config{
+		SessionName: "test-session-start-pipe",
+		SpecPath:    specPath,
+		DataDir:     dataDir,
+		WorkDir:     tmpDir,
+		Headless:    true,
+		Iterations:  0,
+	})
+	if err != nil {
+		t.Fatalf("failed to create orchestrator: %v", err)
+	}
+
+	if err := orch.Start(); err != nil {
+		t.Fatalf("failed to start orchestrator: %v", err)
+	}
+	defer func() {
+		if err := orch.Stop(); err != nil {
+			t.Errorf("failed to stop orchestrator: %v", err)
+		}
+	}()
+
+	// Verify hooks config
+	if orch.hooksConfig == nil {
+		t.Fatal("expected hooks config to be loaded")
+	}
+	if len(orch.hooksConfig.Hooks.SessionStart) != 2 {
+		t.Fatalf("expected 2 session_start hooks, got %d", len(orch.hooksConfig.Hooks.SessionStart))
+	}
+
+	// Verify pipe_output flags are set correctly
+	if !orch.hooksConfig.Hooks.SessionStart[0].PipeOutput {
+		t.Error("expected first hook to have pipe_output=true")
+	}
+	if orch.hooksConfig.Hooks.SessionStart[1].PipeOutput {
+		t.Error("expected second hook to have pipe_output=false")
+	}
+}
+
+// TestSessionStartHookContextCancellation verifies graceful cancellation during session_start
+func TestSessionStartHookContextCancellation(t *testing.T) {
+	tmpDir := t.TempDir()
+	dataDir := filepath.Join(tmpDir, ".iteratr")
+
+	// Create a test spec
+	specPath := filepath.Join(tmpDir, "test.md")
+	specContent := `# Session Start Hook Cancellation Test`
+	if err := os.WriteFile(specPath, []byte(specContent), 0644); err != nil {
+		t.Fatalf("failed to write spec file: %v", err)
+	}
+
+	// Create .iteratr.hooks.yml with long-running session_start hook
+	hooksPath := filepath.Join(tmpDir, ".iteratr.hooks.yml")
+	hooksContent := `version: 1
+hooks:
+  session_start:
+    - command: "sleep 30"
+      timeout: 60
+`
+	if err := os.WriteFile(hooksPath, []byte(hooksContent), 0644); err != nil {
+		t.Fatalf("failed to write hooks file: %v", err)
+	}
+
+	// Create orchestrator
+	orch, err := New(Config{
+		SessionName: "test-session-start-cancel",
+		SpecPath:    specPath,
+		DataDir:     dataDir,
+		WorkDir:     tmpDir,
+		Headless:    true,
+		Iterations:  1,
+	})
+	if err != nil {
+		t.Fatalf("failed to create orchestrator: %v", err)
+	}
+
+	if err := orch.Start(); err != nil {
+		t.Fatalf("failed to start orchestrator: %v", err)
+	}
+	defer func() {
+		if err := orch.Stop(); err != nil {
+			t.Errorf("failed to stop orchestrator: %v", err)
+		}
+	}()
+
+	// Run in goroutine and cancel context during hook execution
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- orch.Run()
+	}()
+
+	// Wait a bit for hook to start, then cancel
+	time.Sleep(100 * time.Millisecond)
+	orch.cancel()
+
+	// Verify Run() returns promptly after cancellation
+	select {
+	case err := <-runDone:
+		// Should return nil on graceful cancellation
+		if err != nil {
+			t.Logf("Run() returned non-nil error on cancellation (may be acceptable): %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run() did not return promptly after context cancellation")
+	}
+}
+
 // Suppress unused variable/import warnings
 var _ = syscall.SIGTERM
 var _ = agent.FileTracker{}

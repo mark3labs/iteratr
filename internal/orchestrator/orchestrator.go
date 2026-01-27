@@ -352,6 +352,27 @@ func (o *Orchestrator) Run() error {
 	// Ensure runner is stopped on exit
 	defer o.runner.Stop()
 
+	// Execute session_start hooks if configured (before iteration loop)
+	if o.hooksConfig != nil && len(o.hooksConfig.Hooks.SessionStart) > 0 {
+		logger.Debug("Executing %d session_start hook(s)", len(o.hooksConfig.Hooks.SessionStart))
+		hookVars := hooks.Variables{
+			Session: o.cfg.SessionName,
+		}
+		output, err := hooks.ExecuteAllPiped(o.ctx, o.hooksConfig.Hooks.SessionStart, o.cfg.WorkDir, hookVars)
+		if err != nil {
+			// Context cancelled - propagate
+			if o.ctx.Err() != nil {
+				logger.Info("Context cancelled during session_start hook execution")
+				return nil
+			}
+			logger.Error("Session_start hook execution failed: %v", err)
+		} else if output != "" {
+			// Store piped output in pending buffer for first iteration
+			logger.Debug("Session_start hook output: %d bytes (storing in pending buffer)", len(output))
+			o.appendPendingOutput(output)
+		}
+	}
+
 	// Run iteration loop
 	iterationCount := 0
 	for {
