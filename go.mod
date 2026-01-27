@@ -9,6 +9,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251114164805-d267651963ad
 	github.com/alecthomas/chroma/v2 v2.14.0
 	github.com/aymanbagabas/go-udiff v0.3.1
+	github.com/charmbracelet/fang v0.4.4
 	github.com/charmbracelet/ultraviolet v0.0.0-20251116181749-377898bcce38
 	github.com/charmbracelet/x/editor v0.2.0
 	github.com/nats-io/nats-server/v2 v2.10.0
@@ -22,6 +23,7 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.3.3 // indirect
 	github.com/charmbracelet/x/ansi v0.11.4 // indirect
+	github.com/charmbracelet/x/exp/charmtone v0.0.0-20250603201427-c31516f43444 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
@@ -38,6 +40,10 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
+	github.com/muesli/mango v0.1.0 // indirect
+	github.com/muesli/mango-cobra v1.2.0 // indirect
+	github.com/muesli/mango-pflag v0.1.0 // indirect
+	github.com/muesli/roff v0.1.0 // indirect
 	github.com/nats-io/jwt/v2 v2.5.2 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
