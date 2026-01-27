@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"sync/atomic"
 
 	"github.com/mark3labs/iteratr/internal/logger"
@@ -259,6 +261,94 @@ func (c *acpConn) LoadSession(ctx context.Context, sessionID, cwd string) (strin
 		logger.Debug("ACP session loaded: %s", result.SessionID)
 		return result.SessionID, nil
 	}
+}
+
+// SessionLoader wraps an ACP subprocess for loading and viewing subagent sessions.
+// Unlike Runner which manages the main agent loop, SessionLoader is for read-only
+// session replay in the subagent viewer modal.
+type SessionLoader struct {
+	conn *acpConn
+	cmd  *exec.Cmd
+}
+
+// NewSessionLoader spawns an opencode acp subprocess and initializes it.
+// The subprocess is ready to load sessions via LoadAndStream.
+func NewSessionLoader(ctx context.Context, workDir string) (*SessionLoader, error) {
+	logger.Debug("Starting ACP subprocess for session loading")
+
+	// Create command - spawn opencode acp
+	cmd := exec.CommandContext(ctx, "opencode", "acp")
+	cmd.Dir = workDir
+	cmd.Env = os.Environ()
+	// Don't inherit stderr - it corrupts terminal state during TUI shutdown
+	// Subprocess errors are captured via the ACP protocol
+
+	// Setup stdin pipe
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
+	}
+
+	// Setup stdout pipe
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start opencode: %w", err)
+	}
+
+	// Create acpConn from stdin/stdout pipes
+	conn := newACPConn(stdin, stdout)
+
+	// Initialize ACP protocol
+	if err := conn.initialize(ctx); err != nil {
+		_ = conn.close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, fmt.Errorf("ACP initialize failed: %w", err)
+	}
+
+	logger.Debug("ACP subprocess ready for session loading")
+	return &SessionLoader{
+		conn: conn,
+		cmd:  cmd,
+	}, nil
+}
+
+// LoadAndStream loads the specified session and returns the initial response.
+// After LoadAndStream returns, caller must continue reading notifications via ReadMessage
+// to replay the full session history until EOF.
+func (s *SessionLoader) LoadAndStream(ctx context.Context, sessionID, workDir string) error {
+	_, err := s.conn.LoadSession(ctx, sessionID, workDir)
+	return err
+}
+
+// ReadMessage reads one notification from the session stream.
+// Returns io.EOF when the session replay is complete.
+// Returns a jsonRPCResponse that can be parsed into session updates.
+func (s *SessionLoader) ReadMessage() (*jsonRPCResponse, error) {
+	return s.conn.readMessage()
+}
+
+// Close terminates the ACP subprocess and cleans up resources.
+func (s *SessionLoader) Close() error {
+	// Close connection
+	if s.conn != nil {
+		_ = s.conn.close()
+	}
+
+	// Kill subprocess
+	if s.cmd != nil && s.cmd.Process != nil {
+		if err := s.cmd.Process.Kill(); err != nil {
+			logger.Warn("Failed to kill ACP process: %v", err)
+		}
+		_ = s.cmd.Wait()
+	}
+
+	return nil
 }
 
 // setModel sets the model for the given session.

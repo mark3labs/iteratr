@@ -8,6 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/mark3labs/iteratr/internal/agent"
+	"github.com/mark3labs/iteratr/internal/logger"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
@@ -25,8 +27,7 @@ type SubagentModal struct {
 	workDir      string
 
 	// ACP subprocess (populated by Start())
-	cmd  interface{} // *exec.Cmd - will be set in Start()
-	conn interface{} // *acpConn - will be set in Start()
+	loader *agent.SessionLoader
 
 	// State
 	loading bool
@@ -62,8 +63,27 @@ func NewSubagentModal(sessionID, subagentType, workDir string) *SubagentModal {
 // Start spawns the ACP subprocess, initializes it, and begins loading the session.
 // Returns a command that will start the session loading process.
 func (m *SubagentModal) Start() tea.Cmd {
-	// This will be implemented in task TAS-16
-	return nil
+	return func() tea.Msg {
+		// Spawn SessionLoader subprocess
+		loader, err := agent.NewSessionLoader(m.ctx, m.workDir)
+		if err != nil {
+			logger.Warn("Failed to start ACP subprocess for subagent modal: %v", err)
+			return SubagentErrorMsg{Err: fmt.Errorf("failed to start ACP: %w", err)}
+		}
+		m.loader = loader
+
+		// Load the session (triggers replay)
+		if err := loader.LoadAndStream(m.ctx, m.sessionID, m.workDir); err != nil {
+			logger.Warn("Failed to load session %s: %v", m.sessionID, err)
+			return SubagentErrorMsg{Err: fmt.Errorf("session not found: %s", m.sessionID)}
+		}
+
+		// Session loading started - modal no longer in loading state
+		m.loading = false
+
+		// Start streaming notifications
+		return m.streamNext()
+	}
 }
 
 // Draw renders the modal as a full-screen overlay.
@@ -203,6 +223,13 @@ func (m *SubagentModal) HandleUpdate(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
+// streamNext reads the next message from the session stream and returns a tea.Cmd.
+// This will be implemented in task TAS-17 (continuous streaming).
+func (m *SubagentModal) streamNext() tea.Msg {
+	// Placeholder - will be implemented in TAS-17
+	return SubagentDoneMsg{}
+}
+
 // Close terminates the ACP subprocess and cleans up resources.
 // Safe to call multiple times or if Start() was never called.
 func (m *SubagentModal) Close() {
@@ -211,19 +238,11 @@ func (m *SubagentModal) Close() {
 		m.cancel()
 	}
 
-	// Close ACP connection if established
-	// conn will be *acpConn when Start() is implemented
-	if m.conn != nil {
-		// Type assertion and close will be added in TAS-16
-		// For now, this is a placeholder for the interface
-		m.conn = nil
-	}
-
-	// Kill subprocess if running
-	// cmd will be *exec.Cmd when Start() is implemented
-	if m.cmd != nil {
-		// Type assertion and process kill will be added in TAS-16
-		// Pattern: cmd.Process.Kill() then cmd.Wait()
-		m.cmd = nil
+	// Close SessionLoader if established
+	if m.loader != nil {
+		if err := m.loader.Close(); err != nil {
+			logger.Warn("Failed to close session loader: %v", err)
+		}
+		m.loader = nil
 	}
 }
