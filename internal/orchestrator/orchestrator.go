@@ -591,6 +591,28 @@ func (o *Orchestrator) Run() error {
 		}
 	}
 
+	// Execute session_end hooks if configured
+	// These run after final delivery and their output is not piped anywhere (no more iterations)
+	if o.hooksConfig != nil && len(o.hooksConfig.Hooks.SessionEnd) > 0 {
+		logger.Info("Executing %d session_end hook(s)", len(o.hooksConfig.Hooks.SessionEnd))
+		hookVars := hooks.Variables{
+			Session: o.cfg.SessionName,
+			// Iteration is not set for session_end hooks (session-level, not iteration-level)
+		}
+		_, err := hooks.ExecuteAll(o.ctx, o.hooksConfig.Hooks.SessionEnd, o.cfg.WorkDir, hookVars)
+		if err != nil {
+			// Context cancelled - just log and exit gracefully
+			if o.ctx.Err() != nil {
+				logger.Info("Context cancelled during session_end hook execution")
+				return nil
+			}
+			logger.Error("Session_end hook execution failed: %v", err)
+			// Don't fail the session - hooks are best-effort
+		} else {
+			logger.Info("Session_end hooks completed successfully")
+		}
+	}
+
 	return nil
 }
 
