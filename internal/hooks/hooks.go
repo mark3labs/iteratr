@@ -43,8 +43,11 @@ func LoadConfig(workDir string) (*Config, error) {
 
 // Variables holds template variables that can be expanded in hook commands.
 type Variables struct {
-	Session   string
-	Iteration string
+	Session     string
+	Iteration   string
+	TaskID      string
+	TaskContent string
+	Error       string
 }
 
 // Execute runs a hook command and returns its output.
@@ -166,8 +169,11 @@ func ExecuteAllPiped(ctx context.Context, hooks []*HookConfig, workDir string, v
 // expandVariables replaces {{variable}} placeholders in the command string.
 func expandVariables(command string, vars Variables) string {
 	replacements := map[string]string{
-		"{{session}}":   vars.Session,
-		"{{iteration}}": vars.Iteration,
+		"{{session}}":      vars.Session,
+		"{{iteration}}":    vars.Iteration,
+		"{{task_id}}":      vars.TaskID,
+		"{{task_content}}": vars.TaskContent,
+		"{{error}}":        vars.Error,
 	}
 
 	result := command

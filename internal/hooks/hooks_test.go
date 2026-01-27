@@ -264,3 +264,64 @@ hooks:
 		t.Errorf("SessionEnd length = %d, expected 1", len(cfg.Hooks.SessionEnd))
 	}
 }
+
+func TestExpandVariables(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		vars     Variables
+		expected string
+	}{
+		{
+			name:     "session and iteration",
+			command:  "echo {{session}} iteration {{iteration}}",
+			vars:     Variables{Session: "test-session", Iteration: "5"},
+			expected: "echo test-session iteration 5",
+		},
+		{
+			name:     "task_id and task_content",
+			command:  "./validate.sh {{task_id}} '{{task_content}}'",
+			vars:     Variables{TaskID: "TAS-123", TaskContent: "Fix the bug"},
+			expected: "./validate.sh TAS-123 'Fix the bug'",
+		},
+		{
+			name:     "error variable",
+			command:  "echo 'Error occurred: {{error}}'",
+			vars:     Variables{Error: "connection timeout"},
+			expected: "echo 'Error occurred: connection timeout'",
+		},
+		{
+			name:     "all variables",
+			command:  "{{session}}/{{iteration}}/{{task_id}}/{{task_content}}/{{error}}",
+			vars:     Variables{Session: "s", Iteration: "1", TaskID: "t", TaskContent: "c", Error: "e"},
+			expected: "s/1/t/c/e",
+		},
+		{
+			name:     "no variables",
+			command:  "echo 'hello world'",
+			vars:     Variables{},
+			expected: "echo 'hello world'",
+		},
+		{
+			name:     "empty variable values",
+			command:  "echo {{session}} {{iteration}} {{task_id}} {{task_content}} {{error}}",
+			vars:     Variables{},
+			expected: "echo     ",
+		},
+		{
+			name:     "multiple same variable",
+			command:  "{{session}}-{{session}}-{{session}}",
+			vars:     Variables{Session: "test"},
+			expected: "test-test-test",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := expandVariables(tt.command, tt.vars)
+			if result != tt.expected {
+				t.Errorf("expandVariables() = %q, expected %q", result, tt.expected)
+			}
+		})
+	}
+}
