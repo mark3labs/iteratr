@@ -706,3 +706,29 @@ func (o *Orchestrator) startTUI() error {
 
 	return nil
 }
+
+// isGitRepo checks if the given directory is inside a git repository.
+// Returns true if a .git directory exists in the given path or any parent directory.
+func isGitRepo(dir string) bool {
+	// Walk up the directory tree looking for .git
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+
+	current := absDir
+	for {
+		gitPath := filepath.Join(current, ".git")
+		if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+			return true
+		}
+
+		// Move up to parent directory
+		parent := filepath.Dir(current)
+		if parent == current {
+			// Reached root directory, no .git found
+			return false
+		}
+		current = parent
+	}
+}

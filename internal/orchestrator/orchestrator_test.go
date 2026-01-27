@@ -546,5 +546,67 @@ TUI mode test.
 	// but we verify it initializes without errors
 }
 
+// TestIsGitRepo verifies that isGitRepo correctly detects git repositories
+func TestIsGitRepo(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(dir string) error
+		expected bool
+	}{
+		{
+			name: "directory with .git",
+			setup: func(dir string) error {
+				return os.Mkdir(filepath.Join(dir, ".git"), 0755)
+			},
+			expected: true,
+		},
+		{
+			name: "subdirectory of git repo",
+			setup: func(dir string) error {
+				if err := os.Mkdir(filepath.Join(dir, ".git"), 0755); err != nil {
+					return err
+				}
+				return os.Mkdir(filepath.Join(dir, "subdir"), 0755)
+			},
+			expected: true,
+		},
+		{
+			name: "directory without .git",
+			setup: func(dir string) error {
+				return nil // No .git directory
+			},
+			expected: false,
+		},
+		{
+			name: ".git is a file not directory",
+			setup: func(dir string) error {
+				// Create .git as a file (worktree reference)
+				return os.WriteFile(filepath.Join(dir, ".git"), []byte("gitdir: ../main/.git"), 0644)
+			},
+			expected: false, // We only check for .git directory
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			if err := tt.setup(tmpDir); err != nil {
+				t.Fatalf("setup failed: %v", err)
+			}
+
+			// For subdirectory test, check the subdirectory
+			checkDir := tmpDir
+			if tt.name == "subdirectory of git repo" {
+				checkDir = filepath.Join(tmpDir, "subdir")
+			}
+
+			result := isGitRepo(checkDir)
+			if result != tt.expected {
+				t.Errorf("isGitRepo(%q) = %v, expected %v", checkDir, result, tt.expected)
+			}
+		})
+	}
+}
+
 // Suppress unused variable warning
 var _ = syscall.SIGTERM
