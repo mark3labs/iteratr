@@ -34,7 +34,7 @@ iteratr is a Go CLI tool that orchestrates AI coding agents in an iterative loop
 - **Headless Mode**: Run without TUI for CI/CD environments
 - **Model Selection**: Choose which LLM model to use per session
 - **Interactive Wizard**: Guided setup when no spec file provided
-- **Pre-iteration Hooks**: Run custom scripts before each iteration for dynamic context
+- **Lifecycle Hooks**: Run custom scripts at session start/end, before/after iterations, on task completion, and on errors
 
 ## Installation
 
@@ -355,9 +355,9 @@ Edit the template, then use it:
 iteratr build --template my-template.txt
 ```
 
-## Pre-iteration Hooks
+## Lifecycle Hooks
 
-Run custom scripts before each iteration to inject dynamic context into the agent prompt.
+Run custom scripts at different points in the session lifecycle to inject dynamic context, run validations, send notifications, or handle errors.
 
 ### Configuration
 
@@ -367,24 +367,88 @@ Create `.iteratr.hooks.yml` in your working directory:
 version: 1
 
 hooks:
-  pre_iteration:
-    - command: "git status --short"
-      timeout: 5
-    - command: "go vet ./..."
+  session_start:
+    - command: "git pull --rebase"
       timeout: 30
+    - command: "go build ./..."
+      timeout: 60
+      pipe_output: true  # Send build errors to agent
+
+  pre_iteration:
+    - command: "golangci-lint run ./..."
+      timeout: 30
+      pipe_output: true  # Agent sees lint errors and can fix them
+
+  post_iteration:
+    - command: "go test ./... -short"
+      timeout: 120
+      pipe_output: true  # Agent sees test failures next iteration
+    - command: 'curl -X POST $SLACK_WEBHOOK -d "{\"text\":\"Iteration done\"}"'
+      timeout: 5
+      # pipe_output: false (default) - just notification
+
+  session_end:
+    - command: "git push origin HEAD"
+      timeout: 30
+    - command: "./scripts/notify-complete.sh {{session}}"
+      timeout: 10
+
+  on_task_complete:
+    - command: "./scripts/validate-task.sh {{task_id}}"
+      timeout: 30
+      pipe_output: true  # Send validation results to agent
+
+  on_error:
+    - command: "git diff HEAD"
+      timeout: 10
+      pipe_output: true  # Show agent what changed before error
 ```
+
+### Hook Types
+
+| Hook | When | Use Case |
+|------|------|----------|
+| `session_start` | Once, before first iteration | Pull latest code, verify dependencies |
+| `pre_iteration` | Before each iteration | Run linters, formatters, checks |
+| `post_iteration` | After each iteration completes | Run tests, send notifications |
+| `session_end` | Once, after session completes | Push code, send completion alerts |
+| `on_task_complete` | When task status → completed | Validate task completion |
+| `on_error` | On any iteration failure | Gather diagnostics, show diff |
 
 ### Hook Options
 
-- `command` - Shell command to execute (supports template variables: `{{iteration}}`, `{{session}}`)
+- `command` - Shell command to execute (supports template variables)
 - `timeout` - Timeout in seconds (default: 30)
+- `pipe_output` - Send output to agent (default: false)
 
-Multiple hooks run sequentially; their combined output is sent to the agent before the main prompt.
+### Template Variables
+
+Available in hook commands:
+
+- `{{session}}` - Session name (all hooks)
+- `{{iteration}}` - Current iteration number (pre_iteration, post_iteration, on_error)
+- `{{task_id}}` - Completed task ID (on_task_complete)
+- `{{task_content}}` - Completed task content (on_task_complete)
+- `{{error}}` - Error message (on_error)
+
+### Output Piping
+
+When `pipe_output: true`, hook output is sent to the agent:
+
+- **session_start**: Output held until first iteration starts
+- **pre_iteration**: Output prepended to iteration prompt
+- **post_iteration**: Output held for next iteration
+- **on_task_complete**: Output accumulated and sent at next iteration
+- **on_error**: Output sent immediately in recovery prompt
+- **session_end**: Output not piped (no more iterations)
+
+This allows the agent to see test failures, lint errors, or build issues and fix them automatically.
 
 ### Error Handling
 
 - Config not found: hooks skipped, iteration continues
 - Command failure/timeout: error included in output, iteration continues
+- Hook failures never stop the session
 
 ## Environment Variables
 
