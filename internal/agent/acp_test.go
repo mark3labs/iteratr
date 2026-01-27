@@ -493,11 +493,9 @@ func TestOnFileChangeCallback(t *testing.T) {
 			// Simulate the logic from acp.go:365-378
 			// Extract file changes and call callback only for completed edits
 			if tt.event.Status == "completed" && tt.event.Kind == "edit" {
-				if onFileChange != nil {
-					changes := extractFileChanges(tt.event)
-					for _, change := range changes {
-						onFileChange(change)
-					}
+				changes := extractFileChanges(tt.event)
+				for _, change := range changes {
+					onFileChange(change)
 				}
 			}
 
