@@ -11,7 +11,7 @@ import (
 // pause when components are not visible to save resources.
 func TestApp_AnimationsPauseWhenNotVisible(t *testing.T) {
 	// Create app with mocked store
-	app := NewApp(context.Background(), nil, "test-session", nil, nil)
+	app := NewApp(context.Background(), nil, "test-session", "/tmp", nil, nil)
 	app.width = 100
 	app.height = 40
 
@@ -75,7 +75,7 @@ func TestApp_SidebarUpdatesWhenVisible(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := NewApp(context.Background(), nil, "test-session", nil, nil)
+			app := NewApp(context.Background(), nil, "test-session", "/tmp", nil, nil)
 			app.width = 100
 			app.height = 40
 			app.layout.Mode = tt.layoutMode

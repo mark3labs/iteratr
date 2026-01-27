@@ -10,7 +10,7 @@ import (
 
 func TestNewApp(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	if app == nil {
 		t.Fatal("expected non-nil app")
@@ -32,7 +32,7 @@ func TestNewApp(t *testing.T) {
 
 func TestApp_HandleKeyPress_LogsToggle(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	// Initially logs not visible
 	if app.logsVisible {
@@ -55,7 +55,7 @@ func TestApp_HandleKeyPress_LogsToggle(t *testing.T) {
 
 func TestApp_HandleKeyPress_Quit(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	// Test ctrl+c
 	msg := tea.KeyPressMsg{Text: "ctrl+c"}
@@ -74,7 +74,7 @@ func TestApp_HandleKeyPress_Quit(t *testing.T) {
 
 func TestApp_Update_WindowSize(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	msg := tea.WindowSizeMsg{
 		Width:  100,
@@ -94,7 +94,7 @@ func TestApp_Update_WindowSize(t *testing.T) {
 
 func TestApp_Update_AgentOutput(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	msg := AgentOutputMsg{
 		Content: "Test output",
@@ -107,7 +107,7 @@ func TestApp_Update_AgentOutput(t *testing.T) {
 
 func TestApp_Update_IterationStart(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	msg := IterationStartMsg{
 		Number: 5,
@@ -120,7 +120,7 @@ func TestApp_Update_IterationStart(t *testing.T) {
 
 func TestApp_Update_StateUpdate(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	state := &session.State{
 		Session: "test-session",
@@ -140,7 +140,7 @@ func TestApp_Update_StateUpdate(t *testing.T) {
 
 func TestApp_View(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 	app.width = 100
 	app.height = 50
 
@@ -162,7 +162,7 @@ func TestApp_View(t *testing.T) {
 
 func TestApp_View_Quitting(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 	app.quitting = true
 
 	view := app.View()
@@ -203,7 +203,7 @@ func TestViewType_Constants(t *testing.T) {
 
 func TestApp_HandleKeyPress_SidebarToggle(t *testing.T) {
 	ctx := context.Background()
-	app := NewApp(ctx, nil, "test-session", nil, nil)
+	app := NewApp(ctx, nil, "test-session", "/tmp", nil, nil)
 
 	// Initially sidebar should be hidden
 	if app.sidebarVisible {

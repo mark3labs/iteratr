@@ -43,6 +43,7 @@ type App struct {
 	modifiedFileCount int  // Number of files modified in current iteration
 	store             *session.Store
 	sessionName       string
+	workDir           string // Working directory for agent (needed for subagent modal)
 	nc                *nats.Conn
 	ctx               context.Context
 	width             int
@@ -53,12 +54,13 @@ type App struct {
 }
 
 // NewApp creates a new TUI application with the given session store and NATS connection.
-func NewApp(ctx context.Context, store *session.Store, sessionName string, nc *nats.Conn, sendChan chan string) *App {
+func NewApp(ctx context.Context, store *session.Store, sessionName, workDir string, nc *nats.Conn, sendChan chan string) *App {
 	agent := NewAgentOutput()
 	sidebar := NewSidebar()
 	return &App{
 		store:          store,
 		sessionName:    sessionName,
+		workDir:        workDir,
 		nc:             nc,
 		ctx:            ctx,
 		sendChan:       sendChan,
@@ -272,6 +274,31 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update status bar to reflect new count
 		a.status.SetModifiedFileCount(a.modifiedFileCount)
 		return a, a.status.Tick()
+
+	case OpenSubagentModalMsg:
+		// Close existing modal if any (shouldn't happen with full-screen modal)
+		if a.subagentModal != nil {
+			a.subagentModal.Close()
+		}
+		// Create and start new subagent modal
+		modal := NewSubagentModal(msg.SessionID, msg.SubagentType, a.workDir)
+		a.subagentModal = modal
+		return a, modal.Start() // Spawns ACP, loads session, starts streaming (TAS-16)
+
+	case SubagentTextMsg, SubagentToolCallMsg, SubagentThinkingMsg, SubagentUserMsg:
+		// Forward streaming messages to modal (TAS-17, TAS-18)
+		if a.subagentModal != nil {
+			return a, a.subagentModal.HandleUpdate(msg)
+		}
+
+	case SubagentDoneMsg:
+		// All history replayed - modal stays open for viewing until user presses ESC
+		// No action needed
+
+	case SubagentErrorMsg:
+		if a.subagentModal != nil {
+			a.subagentModal.err = msg.Err
+		}
 	}
 
 	// Update status bar (for spinner animation) - always visible
@@ -337,6 +364,18 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Task input modal gets priority when visible
 	if a.taskInputModal != nil && a.taskInputModal.IsVisible() {
 		return a, a.taskInputModal.Update(msg)
+	}
+
+	// Subagent modal gets priority when visible
+	if a.subagentModal != nil {
+		// ESC key closes the modal
+		if msg.String() == "esc" {
+			a.subagentModal.Close()
+			a.subagentModal = nil
+			return a, nil
+		}
+		// Forward scroll keys to modal
+		return a, a.subagentModal.Update(msg)
 	}
 
 	// 2. Logs modal captures keys when visible
@@ -631,6 +670,9 @@ func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	// Draw overlays
 	if a.logsVisible {
 		a.logs.Draw(scr, area)
+	}
+	if a.subagentModal != nil {
+		a.subagentModal.Draw(scr, area)
 	}
 	if a.taskModal.IsVisible() {
 		a.taskModal.Draw(scr, area)
