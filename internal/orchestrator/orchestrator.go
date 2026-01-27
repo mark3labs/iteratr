@@ -592,7 +592,7 @@ func (o *Orchestrator) Run() error {
 	}
 
 	// Execute session_end hooks if configured
-	// These run after final delivery and their output is not piped anywhere (no more iterations)
+	// These run after final delivery. pipe_output is ignored - output is not piped anywhere (no more iterations)
 	if o.hooksConfig != nil && len(o.hooksConfig.Hooks.SessionEnd) > 0 {
 		logger.Info("Executing %d session_end hook(s)", len(o.hooksConfig.Hooks.SessionEnd))
 		hookVars := hooks.Variables{
