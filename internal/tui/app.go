@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipglossv2 "charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/mark3labs/iteratr/internal/agent"
 	"github.com/mark3labs/iteratr/internal/logger"
 	"github.com/mark3labs/iteratr/internal/session"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
@@ -812,6 +813,44 @@ type FileChangeMsg struct {
 	IsNew     bool
 	Additions int
 	Deletions int
+}
+
+// OpenSubagentModalMsg is sent when the user clicks a subagent message item with a sessionID.
+type OpenSubagentModalMsg struct {
+	SessionID    string
+	SubagentType string
+}
+
+// SubagentTextMsg is sent when the subagent modal receives an agent_message_chunk during session replay.
+type SubagentTextMsg struct {
+	Text     string
+	Continue bool // True to continue streaming, false if done
+}
+
+// SubagentToolCallMsg is sent when the subagent modal receives a tool_call or tool_call_update during session replay.
+type SubagentToolCallMsg struct {
+	Event    agent.ToolCallEvent
+	Continue bool // True to continue streaming, false if done
+}
+
+// SubagentThinkingMsg is sent when the subagent modal receives an agent_thought_chunk during session replay.
+type SubagentThinkingMsg struct {
+	Content  string
+	Continue bool // True to continue streaming, false if done
+}
+
+// SubagentUserMsg is sent when the subagent modal receives a user_message_chunk during session replay.
+type SubagentUserMsg struct {
+	Text     string
+	Continue bool // True to continue streaming, false if done
+}
+
+// SubagentDoneMsg is sent when the subagent modal finishes replaying the session (EOF reached).
+type SubagentDoneMsg struct{}
+
+// SubagentErrorMsg is sent when the subagent modal encounters an error during session loading or streaming.
+type SubagentErrorMsg struct {
+	Err error
 }
 
 // propagateSizes updates component sizes based on the current layout.
