@@ -362,6 +362,10 @@ func (o *Orchestrator) Run() error {
 
 		logger.Info("=== Starting iteration #%d ===", currentIteration)
 
+		// Clear file tracker for new iteration
+		o.fileTracker.Clear()
+		logger.Debug("File tracker cleared for iteration #%d", currentIteration)
+
 		// Log iteration start
 		if err := o.store.IterationStart(o.ctx, o.cfg.SessionName, currentIteration); err != nil {
 			logger.Error("Failed to log iteration start: %v", err)
