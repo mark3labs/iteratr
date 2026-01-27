@@ -336,26 +336,58 @@ func (a *AgentOutput) AppendText(content string) tea.Cmd {
 func (a *AgentOutput) AppendToolCall(msg AgentToolCallMsg) tea.Cmd {
 	idx, exists := a.toolIndex[msg.ToolCallID]
 	if !exists {
-		// New tool call - create ToolMessageItem
 		// Map status strings to ToolStatus enum
 		status := mapToolStatus(msg.Status)
 
-		newMsg := &ToolMessageItem{
-			id:       msg.ToolCallID,
-			toolName: msg.Title,
-			kind:     msg.Kind,
-			status:   status,
-			input:    msg.Input,
-			output:   msg.Output,
-			fileDiff: msg.FileDiff,
-			maxLines: 10,
+		// Detect subagent call by checking Input["subagent_type"]
+		subagentType, isSubagent := msg.Input["subagent_type"].(string)
+
+		if isSubagent {
+			// Create SubagentMessageItem for subagent tasks
+			description, _ := msg.Input["prompt"].(string)
+			newMsg := &SubagentMessageItem{
+				id:           msg.ToolCallID,
+				subagentType: subagentType,
+				description:  description,
+				status:       status,
+				sessionID:    msg.SessionID, // May be empty initially
+			}
+			a.messages = append(a.messages, newMsg)
+			a.toolIndex[msg.ToolCallID] = len(a.messages) - 1
+			a.refreshContent()
+		} else {
+			// Create regular ToolMessageItem
+			newMsg := &ToolMessageItem{
+				id:       msg.ToolCallID,
+				toolName: msg.Title,
+				kind:     msg.Kind,
+				status:   status,
+				input:    msg.Input,
+				output:   msg.Output,
+				fileDiff: msg.FileDiff,
+				maxLines: 10,
+			}
+			a.messages = append(a.messages, newMsg)
+			a.toolIndex[msg.ToolCallID] = len(a.messages) - 1
+			a.refreshContent()
 		}
-		a.messages = append(a.messages, newMsg)
-		a.toolIndex[msg.ToolCallID] = len(a.messages) - 1
-		a.refreshContent()
 	} else {
 		// Update existing tool call in-place
-		if toolMsg, ok := a.messages[idx].(*ToolMessageItem); ok {
+		// Check if it's a SubagentMessageItem or ToolMessageItem
+		if subagentMsg, ok := a.messages[idx].(*SubagentMessageItem); ok {
+			// Update SubagentMessageItem
+			subagentMsg.status = mapToolStatus(msg.Status)
+			if msg.SessionID != "" {
+				subagentMsg.sessionID = msg.SessionID
+			}
+			// Invalidate cache - ScrollList will re-render on next View() call
+			subagentMsg.cachedWidth = 0
+			// Only adjust scroll position if needed, no full refresh
+			if a.ready && a.scrollList != nil && a.scrollList.autoScroll {
+				a.scrollList.GotoBottom()
+			}
+		} else if toolMsg, ok := a.messages[idx].(*ToolMessageItem); ok {
+			// Update regular ToolMessageItem
 			toolMsg.status = mapToolStatus(msg.Status)
 			if msg.Kind != "" {
 				toolMsg.kind = msg.Kind
