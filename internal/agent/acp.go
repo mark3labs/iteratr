@@ -499,6 +499,61 @@ func extractDiffBlocks(content []toolCallContent) []DiffBlock {
 	return blocks
 }
 
+// extractFileChanges extracts file changes from a ToolCallEvent.
+// Primary source: DiffBlocks from content array (provides path, isNew)
+// Secondary source: FileDiff metadata (provides additions/deletions for edit tools)
+// Fallback: RawInput.filePath if no diff blocks present
+//
+// Returns a slice of FileChange with:
+// - Path: absolute file path
+// - IsNew: true if oldText was empty (file was created)
+// - Additions/Deletions: from metadata if available, 0 otherwise
+func extractFileChanges(event ToolCallEvent) []FileChange {
+	var changes []FileChange
+
+	// Primary: Extract from diff blocks (present in both write and edit tools)
+	if len(event.DiffBlocks) > 0 {
+		for _, block := range event.DiffBlocks {
+			change := FileChange{
+				AbsPath: block.Path,
+				IsNew:   block.OldText == "",
+			}
+
+			// Secondary: Merge additions/deletions from metadata if available
+			// (only present in edit tools, not write tools)
+			if event.FileDiff != nil && event.FileDiff.File == block.Path {
+				change.Additions = event.FileDiff.Additions
+				change.Deletions = event.FileDiff.Deletions
+			}
+
+			changes = append(changes, change)
+		}
+		return changes
+	}
+
+	// Fallback: Extract path from metadata or rawInput if no diff blocks
+	var path string
+	if event.FileDiff != nil && event.FileDiff.File != "" {
+		path = event.FileDiff.File
+	} else if fp, ok := event.RawInput["filePath"].(string); ok {
+		path = fp
+	}
+
+	if path != "" {
+		change := FileChange{
+			AbsPath: path,
+			IsNew:   false, // Unknown without diff blocks
+		}
+		if event.FileDiff != nil {
+			change.Additions = event.FileDiff.Additions
+			change.Deletions = event.FileDiff.Deletions
+		}
+		changes = append(changes, change)
+	}
+
+	return changes
+}
+
 type jsonRPCRequest struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`

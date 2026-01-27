@@ -163,3 +163,202 @@ func TestExtractDiffBlocks(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractFileChanges(t *testing.T) {
+	tests := []struct {
+		name  string
+		event ToolCallEvent
+		want  []FileChange
+	}{
+		{
+			name: "write tool - new file from diff block",
+			event: ToolCallEvent{
+				Status: "completed",
+				Kind:   "edit",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file.txt",
+						OldText: "",
+						NewText: "Hello World",
+					},
+				},
+			},
+			want: []FileChange{
+				{
+					AbsPath:   "/abs/path/file.txt",
+					IsNew:     true,
+					Additions: 0,
+					Deletions: 0,
+				},
+			},
+		},
+		{
+			name: "edit tool - modified file with metadata",
+			event: ToolCallEvent{
+				Status: "completed",
+				Kind:   "edit",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file.go",
+						OldText: "Line 1",
+						NewText: "Line 1\nLine 2",
+					},
+				},
+				FileDiff: &FileDiff{
+					File:      "/abs/path/file.go",
+					Additions: 2,
+					Deletions: 1,
+				},
+			},
+			want: []FileChange{
+				{
+					AbsPath:   "/abs/path/file.go",
+					IsNew:     false,
+					Additions: 2,
+					Deletions: 1,
+				},
+			},
+		},
+		{
+			name: "multiple diff blocks - batch edit",
+			event: ToolCallEvent{
+				Status: "completed",
+				Kind:   "edit",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file1.go",
+						OldText: "old",
+						NewText: "new",
+					},
+					{
+						Path:    "/abs/path/file2.go",
+						OldText: "",
+						NewText: "created",
+					},
+				},
+			},
+			want: []FileChange{
+				{
+					AbsPath:   "/abs/path/file1.go",
+					IsNew:     false,
+					Additions: 0,
+					Deletions: 0,
+				},
+				{
+					AbsPath:   "/abs/path/file2.go",
+					IsNew:     true,
+					Additions: 0,
+					Deletions: 0,
+				},
+			},
+		},
+		{
+			name: "fallback to FileDiff metadata",
+			event: ToolCallEvent{
+				Status:     "completed",
+				Kind:       "edit",
+				DiffBlocks: []DiffBlock{},
+				FileDiff: &FileDiff{
+					File:      "/abs/path/file.go",
+					Additions: 5,
+					Deletions: 3,
+				},
+			},
+			want: []FileChange{
+				{
+					AbsPath:   "/abs/path/file.go",
+					IsNew:     false,
+					Additions: 5,
+					Deletions: 3,
+				},
+			},
+		},
+		{
+			name: "fallback to RawInput filePath",
+			event: ToolCallEvent{
+				Status:     "completed",
+				Kind:       "edit",
+				DiffBlocks: []DiffBlock{},
+				RawInput: map[string]any{
+					"filePath": "/abs/path/file.txt",
+				},
+			},
+			want: []FileChange{
+				{
+					AbsPath:   "/abs/path/file.txt",
+					IsNew:     false,
+					Additions: 0,
+					Deletions: 0,
+				},
+			},
+		},
+		{
+			name: "no extractable file information",
+			event: ToolCallEvent{
+				Status:     "completed",
+				Kind:       "edit",
+				DiffBlocks: []DiffBlock{},
+				RawInput:   map[string]any{},
+			},
+			want: []FileChange{},
+		},
+		{
+			name: "diff block with mismatched FileDiff path - no merge",
+			event: ToolCallEvent{
+				Status: "completed",
+				Kind:   "edit",
+				DiffBlocks: []DiffBlock{
+					{
+						Path:    "/abs/path/file1.go",
+						OldText: "old",
+						NewText: "new",
+					},
+				},
+				FileDiff: &FileDiff{
+					File:      "/abs/path/file2.go",
+					Additions: 10,
+					Deletions: 5,
+				},
+			},
+			want: []FileChange{
+				{
+					AbsPath:   "/abs/path/file1.go",
+					IsNew:     false,
+					Additions: 0,
+					Deletions: 0,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractFileChanges(tt.event)
+
+			// Handle nil vs empty slice comparison
+			if len(got) == 0 && len(tt.want) == 0 {
+				return
+			}
+
+			if len(got) != len(tt.want) {
+				t.Errorf("extractFileChanges() returned %d changes, want %d", len(got), len(tt.want))
+				return
+			}
+
+			for i := range got {
+				if got[i].AbsPath != tt.want[i].AbsPath {
+					t.Errorf("change[%d].AbsPath = %s, want %s", i, got[i].AbsPath, tt.want[i].AbsPath)
+				}
+				if got[i].IsNew != tt.want[i].IsNew {
+					t.Errorf("change[%d].IsNew = %v, want %v", i, got[i].IsNew, tt.want[i].IsNew)
+				}
+				if got[i].Additions != tt.want[i].Additions {
+					t.Errorf("change[%d].Additions = %d, want %d", i, got[i].Additions, tt.want[i].Additions)
+				}
+				if got[i].Deletions != tt.want[i].Deletions {
+					t.Errorf("change[%d].Deletions = %d, want %d", i, got[i].Deletions, tt.want[i].Deletions)
+				}
+			}
+		})
+	}
+}
