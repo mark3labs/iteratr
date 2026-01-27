@@ -34,19 +34,20 @@ type App struct {
 	layoutDirty bool
 
 	// State
-	logsVisible    bool // Toggle for logs modal overlay
-	sidebarVisible bool // Toggle for sidebar visibility in compact mode
-	iteration      int  // Current iteration number (for note tagging)
-	queueDepth     int  // Number of messages waiting in orchestrator queue
-	store          *session.Store
-	sessionName    string
-	nc             *nats.Conn
-	ctx            context.Context
-	width          int
-	height         int
-	quitting       bool
-	eventChan      chan session.Event // Channel for receiving NATS events
-	sendChan       chan string        // Channel for sending user messages to orchestrator
+	logsVisible       bool // Toggle for logs modal overlay
+	sidebarVisible    bool // Toggle for sidebar visibility in compact mode
+	iteration         int  // Current iteration number (for note tagging)
+	queueDepth        int  // Number of messages waiting in orchestrator queue
+	modifiedFileCount int  // Number of files modified in current iteration
+	store             *session.Store
+	sessionName       string
+	nc                *nats.Conn
+	ctx               context.Context
+	width             int
+	height            int
+	quitting          bool
+	eventChan         chan session.Event // Channel for receiving NATS events
+	sendChan          chan string        // Channel for sending user messages to orchestrator
 }
 
 // NewApp creates a new TUI application with the given session store and NATS connection.
@@ -125,6 +126,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case IterationStartMsg:
 		a.iteration = msg.Number // Track current iteration for note creation
+		a.modifiedFileCount = 0  // Reset modified file count for new iteration
 		busyCmd := a.dashboard.SetAgentBusy(true)
 		return a, tea.Batch(
 			a.dashboard.SetIteration(msg.Number),
@@ -260,6 +262,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Close the modal after submitting
 		a.taskInputModal.Close()
 		return a, nil
+
+	case FileChangeMsg:
+		// Increment modified file count when a file is modified
+		a.modifiedFileCount++
+		// Update status bar to reflect new count
+		return a, a.status.Tick()
 	}
 
 	// Update status bar (for spinner animation) - always visible
