@@ -167,13 +167,8 @@ func (f *FilePickerStep) loadDirectory(path string) error {
 func (f *FilePickerStep) SetSize(width, height int) {
 	f.width = width
 	f.height = height
-	// Reserve space for path header and hint bar (about 5 lines)
-	listHeight := height - 5
-	if listHeight < 3 {
-		listHeight = 3
-	}
 	f.scrollList.SetWidth(width)
-	f.scrollList.SetHeight(listHeight)
+	f.scrollList.SetHeight(height)
 }
 
 // Update handles messages for the file picker step.
@@ -314,4 +309,24 @@ func (f *FilePickerStep) SelectedPath() string {
 // FileSelectedMsg is sent when a file is selected.
 type FileSelectedMsg struct {
 	Path string
+}
+
+// PreferredHeight returns the preferred height for this step's content.
+// This allows the modal to size dynamically based on content.
+func (f *FilePickerStep) PreferredHeight() int {
+	// Fixed overhead:
+	// - Current path: 1
+	// - Blank line: 1
+	// - Blank line before hint bar: 1
+	// - Hint bar: 1
+	// Total overhead: 4
+	overhead := 4
+
+	// File list items (cap at 20 for reasonable modal size)
+	listItems := len(f.items)
+	if listItems > 20 {
+		listItems = 20
+	}
+
+	return listItems + overhead
 }

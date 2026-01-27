@@ -109,7 +109,7 @@ func formatRelativeTime(t time.Time) string {
 // SessionSelectorStep manages the session selector UI step.
 type SessionSelectorStep struct {
 	sessionStore    *session.Store  // Session store for loading sessions
-	sessions        []SessionItem   // All session items (sessions + "New Session")
+	sessions        []SessionItem   // All session items ("New Session" + existing sessions)
 	scrollList      *tui.ScrollList // Lazy-rendering scroll list
 	selectedIdx     int             // Index of selected item
 	loading         bool            // Whether sessions are being fetched
@@ -172,13 +172,8 @@ func (s *SessionSelectorStep) fetchSessions() tea.Cmd {
 func (s *SessionSelectorStep) SetSize(width, height int) {
 	s.width = width
 	s.height = height
-	// Reserve space for title, spacing, and hint bar (about 5 lines)
-	listHeight := height - 5
-	if listHeight < 3 {
-		listHeight = 3
-	}
 	s.scrollList.SetWidth(width)
-	s.scrollList.SetHeight(listHeight)
+	s.scrollList.SetHeight(height)
 }
 
 // Update handles messages for the session selector step.
@@ -191,6 +186,9 @@ func (s *SessionSelectorStep) Update(msg tea.Msg) tea.Cmd {
 		s.loading = false
 		s.sessions = make([]SessionItem, 0, len(msg.sessions)+1)
 
+		// Add "New Session" at the top
+		s.sessions = append(s.sessions, SessionItem{isNew: true})
+
 		// Add existing sessions
 		for _, info := range msg.sessions {
 			s.sessions = append(s.sessions, SessionItem{
@@ -199,9 +197,6 @@ func (s *SessionSelectorStep) Update(msg tea.Msg) tea.Cmd {
 			})
 		}
 
-		// Add "New Session" at the end
-		s.sessions = append(s.sessions, SessionItem{isNew: true})
-
 		// Update scroll list with items
 		scrollItems := make([]tui.ScrollItem, len(s.sessions))
 		for i := range s.sessions {
@@ -209,13 +204,15 @@ func (s *SessionSelectorStep) Update(msg tea.Msg) tea.Cmd {
 		}
 		s.scrollList.SetItems(scrollItems)
 		s.scrollList.SetSelected(s.selectedIdx)
-		return nil
+		// Notify wizard that content changed (for modal resizing)
+		return func() tea.Msg { return ContentChangedMsg{} }
 
 	case SessionsErrorMsg:
 		// Error fetching sessions
 		s.loading = false
 		s.error = msg.err.Error()
-		return nil
+		// Notify wizard that content changed (for modal resizing)
+		return func() tea.Msg { return ContentChangedMsg{} }
 
 	case spinner.TickMsg:
 		if s.loading {
@@ -402,19 +399,8 @@ func (s *SessionSelectorStep) renderListing() string {
 		return b.String()
 	}
 
-	// Show separator line before "New Session" if there are existing sessions
-	// This is handled by adding it to the view after the scroll list
-	if len(s.sessions) > 1 {
-		// Render scroll list
-		listView := s.scrollList.View()
-
-		// If "New Session" is visible, we need to add a separator before it
-		// For now, just render the list as-is
-		// TODO: Add separator line rendering logic
-		b.WriteString(listView)
-	} else {
-		b.WriteString(s.scrollList.View())
-	}
+	// Render scroll list (New Session is at top, followed by existing sessions)
+	b.WriteString(s.scrollList.View())
 
 	// Add spacing before hint bar
 	b.WriteString("\n")
@@ -502,6 +488,18 @@ func (s *SessionSelectorStep) IsNewSession() bool {
 	return false
 }
 
+// IsConfirming returns true if the session selector is in a confirmation state.
+func (s *SessionSelectorStep) IsConfirming() bool {
+	return s.state == "confirm_continue" || s.state == "confirm_reset"
+}
+
+// ReturnToListing returns to the session listing from a confirmation state.
+func (s *SessionSelectorStep) ReturnToListing() {
+	s.state = "listing"
+	s.confirmInput = ""
+	s.selectedSession = nil
+}
+
 // SessionsLoadedMsg is sent when sessions are successfully fetched.
 type SessionsLoadedMsg struct {
 	sessions []session.SessionInfo
@@ -558,4 +556,36 @@ func (s *SessionSelectorStep) resumeWithoutReset() tea.Cmd {
 			ShouldReset: false,
 		}
 	}
+}
+
+// PreferredHeight returns the preferred height for this step's content.
+// This allows the modal to size dynamically based on content.
+func (s *SessionSelectorStep) PreferredHeight() int {
+	// For confirmation states, return fixed smaller height
+	if s.state == "confirm_continue" || s.state == "confirm_reset" {
+		// "Selected: name" + blank + "prompt" + blank + hint bar = 5 lines
+		return 5
+	}
+
+	// For loading state
+	if s.loading {
+		// "Loading sessions..." = 1 line
+		return 1
+	}
+
+	// For error state
+	if s.error != "" {
+		// Error message + blank + hint bar = 3 lines
+		return 3
+	}
+
+	// For listing state:
+	// - Sessions list (number of items, max 20 for reasonable modal size)
+	// - blank line + hint bar = 2
+	listItems := len(s.sessions)
+	if listItems > 20 {
+		listItems = 20 // Cap at 20 for scrollable list
+	}
+
+	return listItems + 2
 }

@@ -221,3 +221,11 @@ func (t *TemplateEditorStep) Content() string {
 type TemplateEditedMsg struct {
 	Content string
 }
+
+// PreferredHeight returns the preferred height for this step's content.
+// Template editor prefers maximum available height for comfortable viewing.
+func (t *TemplateEditorStep) PreferredHeight() int {
+	// Template editor wants all available space - return a large value
+	// to indicate it should use max height. The modal will clamp this.
+	return 100
+}

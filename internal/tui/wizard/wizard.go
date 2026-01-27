@@ -11,6 +11,10 @@ import (
 	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
+// ContentChangedMsg is sent when a step's content changes in a way that affects preferred height.
+// The wizard handles this by recalculating modal dimensions.
+type ContentChangedMsg struct{}
+
 // WizardResult holds the output values from the wizard.
 // These are applied to buildFlags before orchestrator creation.
 type WizardResult struct {
@@ -123,9 +127,15 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancelled = true
 			return m, tea.Quit
 		case "esc":
-			// ESC behavior depends on step
+			// ESC behavior depends on step and state
 			if m.step == 0 {
-				// On first step, exit wizard
+				// On first step, check if session selector is in confirmation state
+				if m.sessionSelectorStep != nil && m.sessionSelectorStep.IsConfirming() {
+					// Let session selector handle ESC (return to listing)
+					cmd := m.sessionSelectorStep.Update(msg)
+					return m, cmd
+				}
+				// Not confirming - exit wizard
 				m.cancelled = true
 				return m, tea.Quit
 			} else {
@@ -233,6 +243,11 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Start at first button when coming backwards
 		m.buttonBar.FocusPrev()
 		return m, nil
+
+	case ContentChangedMsg:
+		// A step's content changed, recalculate modal dimensions
+		m.updateCurrentStepSize()
+		return m, nil
 	}
 
 	// Forward to current step (only if not button focused)
@@ -280,7 +295,13 @@ func (m *WizardModel) activateButton(btnID ButtonID) (tea.Model, tea.Cmd) {
 	switch btnID {
 	case ButtonBack:
 		if m.step == 0 {
-			// Cancel on first step
+			// On first step, check if in confirmation state
+			if m.sessionSelectorStep != nil && m.sessionSelectorStep.IsConfirming() {
+				// Return to session listing
+				m.sessionSelectorStep.ReturnToListing()
+				return m, nil
+			}
+			// Cancel wizard
 			m.cancelled = true
 			return m, tea.Quit
 		}
@@ -433,9 +454,37 @@ func (m *WizardModel) initCurrentStep() {
 	m.updateCurrentStepSize()
 }
 
-// updateCurrentStepSize updates the size of the current step component.
-func (m *WizardModel) updateCurrentStepSize() {
-	// Calculate modal dimensions first
+// getStepPreferredHeight returns the preferred content height for the current step.
+func (m *WizardModel) getStepPreferredHeight() int {
+	switch m.step {
+	case 0:
+		if m.sessionSelectorStep != nil {
+			return m.sessionSelectorStep.PreferredHeight()
+		}
+	case 1:
+		if m.filePickerStep != nil {
+			return m.filePickerStep.PreferredHeight()
+		}
+	case 2:
+		if m.modelSelectorStep != nil {
+			return m.modelSelectorStep.PreferredHeight()
+		}
+	case 3:
+		if m.templateEditorStep != nil {
+			return m.templateEditorStep.PreferredHeight()
+		}
+	case 4:
+		if m.configStep != nil {
+			return m.configStep.PreferredHeight()
+		}
+	}
+	return 15 // Default fallback
+}
+
+// calculateModalDimensions calculates the modal dimensions based on terminal size and content.
+// Returns modalWidth, modalHeight, contentWidth, contentHeight.
+func (m *WizardModel) calculateModalDimensions() (int, int, int, int) {
+	// Calculate modal width
 	modalWidth := m.width - 6
 	if modalWidth < 60 {
 		modalWidth = 60
@@ -450,12 +499,13 @@ func (m *WizardModel) updateCurrentStepSize() {
 		contentWidth = 40
 	}
 
-	// Modal height calculation
-	modalHeight := m.height - 4
-	if modalHeight < 15 {
-		modalHeight = 15
+	// Calculate max modal height (don't overflow screen)
+	maxModalHeight := m.height - 4
+	if maxModalHeight < 15 {
+		maxModalHeight = 15
 	}
-	// Content height = modal height minus:
+
+	// Modal overhead:
 	// - padding top/bottom: 2
 	// - border top/bottom: 2
 	// - title line: 1
@@ -463,10 +513,35 @@ func (m *WizardModel) updateCurrentStepSize() {
 	// - blank before buttons: 1
 	// - button bar: 1
 	// Total overhead: 8
-	contentHeight := modalHeight - 8
-	if contentHeight < 10 {
-		contentHeight = 10
+	const modalOverhead = 8
+
+	// Get preferred content height from current step
+	preferredContentHeight := m.getStepPreferredHeight()
+
+	// Calculate ideal modal height based on content
+	idealModalHeight := preferredContentHeight + modalOverhead
+
+	// Clamp modal height between min and max
+	modalHeight := idealModalHeight
+	if modalHeight > maxModalHeight {
+		modalHeight = maxModalHeight
 	}
+	if modalHeight < 15 {
+		modalHeight = 15
+	}
+
+	// Calculate actual content height
+	contentHeight := modalHeight - modalOverhead
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
+
+	return modalWidth, modalHeight, contentWidth, contentHeight
+}
+
+// updateCurrentStepSize updates the size of the current step component.
+func (m *WizardModel) updateCurrentStepSize() {
+	_, _, contentWidth, contentHeight := m.calculateModalDimensions()
 
 	switch m.step {
 	case 0:
@@ -540,21 +615,8 @@ func (m *WizardModel) View() tea.View {
 
 // renderModal wraps the step content in a modal container with title, buttons, and step indicator.
 func (m *WizardModel) renderModal(stepContent string) string {
-	// Calculate modal dimensions based on terminal size
-	modalWidth := m.width - 6 // Minimal margin for borders
-	if modalWidth < 60 {
-		modalWidth = 60
-	}
-	// Template editor step (3) uses full width, others capped for readability
-	if m.step != 3 && modalWidth > 100 {
-		modalWidth = 100
-	}
-
-	// Calculate modal height (terminal height minus small margin)
-	modalHeight := m.height - 4
-	if modalHeight < 15 {
-		modalHeight = 15
-	}
+	// Calculate modal dimensions dynamically based on content and terminal size
+	modalWidth, modalHeight, _, _ := m.calculateModalDimensions()
 
 	// Calculate modal position (centered on screen)
 	modalX := (m.width - modalWidth) / 2
@@ -581,7 +643,6 @@ func (m *WizardModel) renderModal(stepContent string) string {
 	sections = append(sections, "")
 
 	// Calculate button Y position relative to modal content
-	// Lines: title (1) + blank (1) + stepContent lines + blank (1) = content before buttons
 	stepLines := strings.Count(stepContent, "\n") + 1
 	buttonContentY := 1 + 1 + stepLines + 1 // title + blank + content + blank
 
@@ -616,8 +677,12 @@ func (m *WizardModel) createButtonBar(modalX, modalY, modalWidth, contentStartY 
 
 	switch m.step {
 	case 0:
-		// First step: Cancel + Next
-		buttons = CreateCancelNextButtons(isValid, nextLabel)
+		// First step: Cancel + Next, or Back + Next if in confirmation state
+		if m.sessionSelectorStep != nil && m.sessionSelectorStep.IsConfirming() {
+			buttons = CreateBackNextButtons(true, isValid, nextLabel)
+		} else {
+			buttons = CreateCancelNextButtons(isValid, nextLabel)
+		}
 	case 4:
 		// Last step: Back + Finish
 		nextLabel = "Finish"

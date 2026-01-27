@@ -343,6 +343,23 @@ func (c *ConfigStep) Iterations() int {
 	return iterations
 }
 
+// PreferredHeight returns the preferred height for this step's content.
+// This allows the modal to size dynamically based on content.
+func (c *ConfigStep) PreferredHeight() int {
+	// Fixed content lines:
+	// - "Session Name" label: 1
+	// - session input: 1
+	// - potential error line: 1 (reserve even if not showing)
+	// - blank line: 1
+	// - "Max Iterations" label: 1
+	// - iterations input: 1
+	// - potential error line: 1 (reserve even if not showing)
+	// - blank line: 1
+	// - hint bar: 1
+	// Total: 9 lines
+	return 9
+}
+
 // ConfigCompleteMsg is sent when the config is complete and valid.
 type ConfigCompleteMsg struct{}
 

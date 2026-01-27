@@ -207,13 +207,8 @@ func (m *ModelSelectorStep) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.searchInput.SetWidth(width - 10)
-	// Reserve space for search input, spacing, and hint bar (about 6 lines)
-	listHeight := height - 6
-	if listHeight < 3 {
-		listHeight = 3
-	}
 	m.scrollList.SetWidth(width)
-	m.scrollList.SetHeight(listHeight)
+	m.scrollList.SetHeight(height)
 }
 
 // Update handles messages for the model selector step.
@@ -228,14 +223,16 @@ func (m *ModelSelectorStep) Update(msg tea.Msg) tea.Cmd {
 		m.filterModels()
 		// Pre-select default model if available
 		m.selectDefaultModel()
-		return nil
+		// Notify wizard that content changed (for modal resizing)
+		return func() tea.Msg { return ContentChangedMsg{} }
 
 	case ModelsErrorMsg:
 		// Error fetching models
 		m.loading = false
 		m.error = msg.err.Error()
 		m.isNotInstalled = msg.isNotInstalled
-		return nil
+		// Notify wizard that content changed (for modal resizing)
+		return func() tea.Msg { return ContentChangedMsg{} }
 
 	case spinner.TickMsg:
 		if m.loading {
@@ -401,4 +398,40 @@ type ModelsErrorMsg struct {
 // ModelSelectedMsg is sent when a model is selected.
 type ModelSelectedMsg struct {
 	ModelID string
+}
+
+// PreferredHeight returns the preferred height for this step's content.
+// This allows the modal to size dynamically based on content.
+func (m *ModelSelectorStep) PreferredHeight() int {
+	// For loading state
+	if m.loading {
+		// "Loading models..." = 1 line
+		return 1
+	}
+
+	// For error state
+	if m.error != "" {
+		if m.isNotInstalled {
+			// Error + blank + 2 help lines + blank + hint bar = 6 lines
+			return 6
+		}
+		// Error + blank + hint bar = 3 lines
+		return 3
+	}
+
+	// For normal state:
+	// - Search input: 1
+	// - Blank line: 1
+	// - Model list (cap at 20 for reasonable modal size)
+	// - Blank line: 1
+	// - Hint bar: 1
+	// Total overhead: 4
+	overhead := 4
+
+	listItems := len(m.filtered)
+	if listItems > 20 {
+		listItems = 20
+	}
+
+	return listItems + overhead
 }
