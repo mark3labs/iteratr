@@ -42,11 +42,10 @@ IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NO
 2. **Pick ONE ready task** - highest priority with no unresolved dependencies
 3. **Mark in_progress** - ` + "`" + `task-status --id X --status in_progress` + "`" + `
 4. **Do the work** - implement fully, run tests
-5. **Commit** - commit changes with a clear message
-6. **Mark completed** - ` + "`" + `task-status --id X --status completed` + "`" + `
-7. **Write summary** - ` + "`" + `iteration-summary --summary "what you did"` + "`" + `
-8. **STOP** - do NOT pick another task
-9. **End session** - only call session-complete when ALL tasks done
+5. **Mark completed** - ` + "`" + `task-status --id X --status completed` + "`" + `
+6. **Write summary** - ` + "`" + `iteration-summary --summary "what you did"` + "`" + `
+7. **STOP** - do NOT pick another task
+8. **End session** - only call session-complete when ALL tasks done
 
 ## If Something Goes Wrong
 
@@ -60,11 +59,6 @@ IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NO
 - Add dependency if blocked by another task: ` + "`" + `task-depends --id X --depends-on Y` + "`" + `
 - Pick different task or end iteration
 
-### Need to Revert Changes
-- Uncommitted: ` + "`" + `git checkout -- <files>` + "`" + `
-- Committed: ` + "`" + `git revert HEAD` + "`" + `
-- Add note explaining what went wrong
-
 ## Rules
 
 - **ONE TASK per iteration** - complete it fully before stopping
@@ -72,7 +66,6 @@ IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NO
 - **RESPECT USER-ADDED TASKS**: Tasks added by the user during the session are valid work items - do NOT cancel or remove them just because they aren't in the spec
 - **ALWAYS use iteratr tool**: All task management via ` + "`" + `iteratr tool` + "`" + ` commands - never use other todo/task tools
 - **Test before completing** - verify changes work
-- **Commit before completing** - always commit changes before marking a task completed
 - **Write summary** - record what you accomplished before ending
 - **session-complete required** - must call it to end the session loop
 {{extra}}`
