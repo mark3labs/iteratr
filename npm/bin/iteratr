@@ -50,25 +50,31 @@ async function install() {
   const filename = `${BINARY}_${version}_${platform}_${arch}.${ext}`;
   const url = `https://github.com/${REPO}/releases/download/v${version}/${filename}`;
   const archivePath = path.join(binDir, filename);
+  // Extract to temp dir to avoid overwriting this JS wrapper script
+  const tempDir = path.join(binDir, ".tmp-extract");
 
   console.log(`Installing ${BINARY} v${version} (${platform}/${arch})...`);
 
   await download(url, archivePath);
 
+  // Create temp extraction directory
+  fs.mkdirSync(tempDir, { recursive: true });
+
   if (platform === "windows") {
-    spawnSync("powershell", ["-Command", `Expand-Archive -Path "${archivePath}" -DestinationPath "${binDir}" -Force`]);
+    spawnSync("powershell", ["-Command", `Expand-Archive -Path "${archivePath}" -DestinationPath "${tempDir}" -Force`]);
   } else {
-    spawnSync("tar", ["-xzf", archivePath, "-C", binDir]);
+    spawnSync("tar", ["-xzf", archivePath, "-C", tempDir]);
   }
 
-  // Rename extracted binary
-  const extractedPath = path.join(binDir, platform === "windows" ? `${BINARY}.exe` : BINARY);
-  if (extractedPath !== binaryPath && fs.existsSync(extractedPath)) {
+  // Move extracted binary to final location (from temp dir to avoid overwriting wrapper)
+  const extractedPath = path.join(tempDir, platform === "windows" ? `${BINARY}.exe` : BINARY);
+  if (fs.existsSync(extractedPath)) {
     fs.renameSync(extractedPath, binaryPath);
   }
 
   if (platform !== "windows") fs.chmodSync(binaryPath, 0o755);
   fs.unlinkSync(archivePath);
+  fs.rmSync(tempDir, { recursive: true, force: true });
   console.log(`Installed ${BINARY} successfully`);
 }
 
