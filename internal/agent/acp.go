@@ -203,6 +203,62 @@ func (c *acpConn) newSession(ctx context.Context, cwd string) (string, error) {
 	}
 }
 
+// loadSession loads an existing ACP session and returns the session ID.
+func (c *acpConn) loadSession(ctx context.Context, sessionID, cwd string) (string, error) {
+	params := loadSessionParams{
+		SessionID:  sessionID,
+		Cwd:        cwd,
+		McpServers: []any{},
+	}
+
+	reqID, err := c.sendRequest("session/load", params)
+	if err != nil {
+		return "", fmt.Errorf("failed to send session/load request: %w", err)
+	}
+
+	// Read response (skip notifications)
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		default:
+		}
+
+		resp, err := c.readMessage()
+		if err != nil {
+			return "", fmt.Errorf("failed to read session/load response: %w", err)
+		}
+
+		// Skip notifications
+		if resp.ID == nil {
+			continue
+		}
+
+		// Check if this is our response
+		if *resp.ID != reqID {
+			continue
+		}
+
+		// Handle error response
+		if resp.Error != nil {
+			return "", fmt.Errorf("session/load failed: %s (code %d)", resp.Error.Message, resp.Error.Code)
+		}
+
+		// Parse result (same structure as newSession)
+		var result newSessionResult
+		if err := json.Unmarshal(resp.Result, &result); err != nil {
+			return "", fmt.Errorf("failed to parse session/load result: %w", err)
+		}
+
+		if result.SessionID == "" {
+			return "", fmt.Errorf("session/load response missing sessionId")
+		}
+
+		logger.Debug("ACP session loaded: %s", result.SessionID)
+		return result.SessionID, nil
+	}
+}
+
 // setModel sets the model for the given session.
 func (c *acpConn) setModel(ctx context.Context, sessionID, modelID string) error {
 	params := setModelParams{
