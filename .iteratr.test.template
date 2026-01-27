@@ -8,6 +8,8 @@ Session: {{session}} | Iteration: #{{iteration}}
 {{notes}}
 {{tasks}}
 
+NOTE: The "Current Tasks" section above is auto-injected at the start of each iteration. Do NOT call `task-list` - you already have the current state.
+
 ## iteratr Tool Commands
 
 IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NOT use other task/todo tools.
@@ -32,7 +34,7 @@ IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NO
 
 ## Workflow
 
-1. **SYNC ALL TASKS FROM SPEC**: Compare spec tasks against task list. ANY task in the spec that is not in the queue MUST be added via `task-batch-add` (preferred for multiple) or `task-add`. Do this BEFORE picking a task.
+1. **SYNC ALL TASKS FROM SPEC**: Compare spec tasks against the "Current Tasks" section above. ANY task in the spec that is not already listed MUST be added via `task-batch-add` (preferred for multiple) or `task-add`. Do this BEFORE picking a task.
 2. **Pick ONE ready task** - highest priority with no unresolved dependencies
 3. **Mark in_progress** - `task-status --id X --status in_progress`
 4. **Do the work** - implement fully
@@ -69,10 +71,25 @@ IMPORTANT: You MUST use the iteratr tool via Bash for ALL task management. Do NO
 
 - **ONE TASK per iteration** - complete it fully before stopping
 - **LOAD ALL SPEC TASKS**: Every unchecked task in the spec MUST exist in the task queue
+- **RESPECT USER-ADDED TASKS**: Tasks added by the user during the session are valid work items - do NOT cancel or remove them just because they aren't in the spec
 - **ALWAYS use iteratr tool**: All task management via `iteratr tool` commands - never use other todo/task tools
 - **Verify before completing** - verify changes work
 - **NO COMMITS** - never commit, this is a test session
 - **Write summary** - record what you accomplished before ending
 - **CLEANUP before session-complete** - remove all temp files before ending
 - **session-complete required** - must call it to end the session loop
+
+## Subagents
+
+You may use subagents (via the Task tool) to parallelize work when:
+- The subtask is **independent** and won't conflict with your current work
+- The subtask is **read-only research** (codebase analysis, pattern finding, documentation lookup)
+- You need to **gather information** while continuing implementation
+
+Do NOT use subagents when:
+- The subtask modifies files you're also editing (causes conflicts)
+- The subtask depends on changes you haven't committed yet
+- You're unsure if there will be conflicts - err on the side of sequential work
+
+The main agent still works on ONE TASK - subagents handle auxiliary research or non-conflicting subtasks.
 {{extra}}
