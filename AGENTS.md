@@ -145,7 +145,7 @@ The `iteratr gen-template` command still outputs to `.iteratr.template` by defau
 
 When you need up-to-date information about technologies used in this project, use btca to query source repositories directly.
 
-**Available resources**: Claude, bubbleteaV2, natsGo, acpGoSdk, bubbles, crush, ultraviolet, lipgloss, bubblezone, viper
+**Available resources**: opencode, bubbleteaV2, natsGo, acpGoSdk, bubbles, crush, ultraviolet, lipgloss, bubblezone, viper
 
 ### Usage
 
@@ -156,7 +156,7 @@ btca ask -r <resource> -q "<question>"
 Use multiple `-r` flags to query multiple resources at once:
 
 ```bash
-btca ask -r Claude -r bubbleteaV2 -q "How do I build a TUI with Claude?"
+btca ask -r opencode -r bubbleteaV2 -q "How do I build a TUI with Claude?"
 ```
 
 ### Using Bubbles Components
