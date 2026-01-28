@@ -56,13 +56,7 @@
       "branch": "v2.0.0-beta.3",
       "specialNotes": "Lipgloss v2 style definitions for terminal UIs. Flexbox-like composition with JoinVertical/JoinHorizontal. Includes table and tree subpackages."
     },
-    {
-      "type": "git",
-      "name": "bubblezone",
-      "url": "https://github.com/lrstanley/bubblezone",
-      "branch": "v2-exp",
-      "specialNotes": "Mouse zone management for Bubbletea v2. Enables clickable regions in TUIs."
-    },
+
     {
       "type": "git",
       "name": "viper",
