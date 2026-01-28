@@ -92,7 +92,17 @@ This checks that opencode and other dependencies are available.
 
 ## Quick Start
 
-### 1. Create a Spec File
+### 1. Initial Setup
+
+First-time setup creates a config file with your preferred model:
+
+```bash
+iteratr setup
+```
+
+This launches an interactive wizard that saves settings to `~/.config/iteratr/iteratr.yml`. For project-specific config, use `--project` to create `./iteratr.yml` instead.
+
+### 2. Create a Spec File
 
 Create a spec file at `specs/myfeature.md`:
 
@@ -114,7 +124,7 @@ Build a user authentication system.
 - [ ] Write tests
 ```
 
-### 2. Run the Build Loop
+### 3. Run the Build Loop
 
 ```bash
 iteratr build --spec specs/myfeature.md
@@ -127,7 +137,7 @@ This will:
 - Run opencode agent in iterative loops
 - Track progress and state across iterations
 
-### 3. Interact via TUI
+### 4. Interact via TUI
 
 While iteratr is running, type messages directly in the TUI to send guidance or feedback to the agent. The agent will receive the message in its next iteration.
 
@@ -145,9 +155,99 @@ The wizard guides you through 4 steps:
 3. **Template Editor** - Customize the prompt template
 4. **Config** - Set session name and max iterations
 
+## Configuration
+
+iteratr uses layered configuration with files, environment variables, and CLI flags.
+
+### Config Files
+
+- **Global**: `~/.config/iteratr/iteratr.yml` (or `$XDG_CONFIG_HOME/iteratr/iteratr.yml`)
+- **Project**: `./iteratr.yml` (current directory)
+
+### Precedence
+
+CLI flags > ENV vars > project config > global config > defaults
+
+### Setup Command
+
+Create initial configuration:
+
+```bash
+# Create global config at ~/.config/iteratr/iteratr.yml
+iteratr setup
+
+# Create project config at ./iteratr.yml
+iteratr setup --project
+
+# Overwrite existing config
+iteratr setup --force
+```
+
+The wizard prompts for:
+1. **Model selection** - Choose from opencode models or enter custom model ID
+2. **Auto-commit** - Whether to automatically commit changes after iterations
+
+### Config Schema
+
+```yaml
+# iteratr.yml
+model: ""              # required (or ITERATR_MODEL env var)
+auto_commit: true      # auto-commit after iterations
+data_dir: .iteratr     # NATS/session storage
+log_level: info        # debug, info, warn, error
+log_file: ""           # empty = no file logging
+iterations: 0          # 0 = infinite
+headless: false        # run without TUI
+template: ""           # path to template file, empty = embedded default
+```
+
+### View Current Config
+
+```bash
+iteratr config
+```
+
+Shows resolved configuration with all sources merged.
+
 ## Usage
 
 ### Commands
+
+#### `iteratr setup`
+
+Create or update configuration file.
+
+```bash
+iteratr setup [flags]
+```
+
+**Flags:**
+
+- `-p, --project`: Create config in current directory (./iteratr.yml)
+- `-f, --force`: Overwrite existing config
+
+**Examples:**
+
+```bash
+# Interactive setup (global config)
+iteratr setup
+
+# Create project-specific config
+iteratr setup --project
+
+# Overwrite existing config
+iteratr setup --force
+```
+
+#### `iteratr config`
+
+Display current configuration with all sources merged.
+
+```bash
+iteratr config
+```
+
+Shows the resolved config values from all layers (files, env vars, defaults).
 
 #### `iteratr build`
 
@@ -161,13 +261,14 @@ iteratr build [flags]
 
 - `-n, --name <name>`: Session name (default: spec filename stem)
 - `-s, --spec <path>`: Spec file path (default: `./specs/SPEC.md`)
-- `-t, --template <path>`: Custom prompt template file
+- `-t, --template <path>`: Custom prompt template file (overrides config)
 - `-e, --extra-instructions <text>`: Extra instructions for the prompt
-- `-i, --iterations <count>`: Max iterations, 0=infinite (default: 0)
-- `-m, --model <model>`: Model to use (default: `anthropic/claude-sonnet-4-5`)
-- `--headless`: Run without TUI (logging only)
+- `-i, --iterations <count>`: Max iterations, 0=infinite (overrides config)
+- `-m, --model <model>`: Model to use (overrides config, required if not in config/env)
+- `--headless`: Run without TUI (overrides config)
+- `--auto-commit`: Auto-commit changes after iterations (overrides config)
 - `--reset`: Reset session data before starting
-- `--data-dir <path>`: Data directory for NATS storage (default: `.iteratr`)
+- `--data-dir <path>`: Data directory for NATS storage (overrides config)
 
 **Examples:**
 
@@ -452,13 +553,28 @@ This allows the agent to see test failures, lint errors, or build issues and fix
 
 ## Environment Variables
 
-- `ITERATR_DATA_DIR` - Data directory for NATS storage (default: `.iteratr`)
-- `ITERATR_LOG_FILE` - Log file path for debugging
-- `ITERATR_LOG_LEVEL` - Log level: debug, info, warn, error
+All config keys can be set via environment variables with the `ITERATR_` prefix:
 
-**Example:**
+| Config Key | ENV Var | Type | Default |
+|------------|---------|------|---------|
+| `model` | `ITERATR_MODEL` | string | (required) |
+| `auto_commit` | `ITERATR_AUTO_COMMIT` | bool | `true` |
+| `data_dir` | `ITERATR_DATA_DIR` | string | `.iteratr` |
+| `log_level` | `ITERATR_LOG_LEVEL` | string | `info` |
+| `log_file` | `ITERATR_LOG_FILE` | string | `""` |
+| `iterations` | `ITERATR_ITERATIONS` | int | `0` |
+| `headless` | `ITERATR_HEADLESS` | bool | `false` |
+| `template` | `ITERATR_TEMPLATE` | string | `""` |
+
+Environment variables override config file values but are overridden by CLI flags.
+
+**Examples:**
 
 ```bash
+# Set model via environment (useful for CI/CD)
+export ITERATR_MODEL=anthropic/claude-opus-4
+iteratr build
+
 # Use custom data directory
 export ITERATR_DATA_DIR=/var/lib/iteratr
 iteratr build
@@ -467,6 +583,12 @@ iteratr build
 export ITERATR_LOG_LEVEL=debug
 export ITERATR_LOG_FILE=iteratr.log
 iteratr build
+
+# Run without config file (CI/CD mode)
+export ITERATR_MODEL=anthropic/claude-sonnet-4-5
+export ITERATR_HEADLESS=true
+export ITERATR_ITERATIONS=5
+iteratr build --spec specs/myfeature.md
 ```
 
 ## Architecture
@@ -556,11 +678,38 @@ iteratr gen-template -o team-template.txt
 # Edit template to add team-specific guidelines
 vim team-template.txt
 
-# Use custom template with extra instructions
+# Configure template in config file
+cat >> iteratr.yml <<EOF
+template: team-template.txt
+EOF
+
+# Or use --template flag to override config
 iteratr build \
   --template team-template.txt \
   --extra-instructions "Follow the error handling patterns in internal/errors/" \
   --spec specs/myfeature.md
+```
+
+### Example 6: Project-Specific Configuration
+
+```bash
+# Create project config with team settings
+iteratr setup --project
+
+# Edit to customize for this project
+cat >> ./iteratr.yml <<EOF
+model: anthropic/claude-opus-4
+auto_commit: false
+iterations: 10
+template: .team-template
+EOF
+
+# All team members use the same config
+git add iteratr.yml
+git commit -m "Add iteratr project config"
+
+# Builds use project config automatically
+iteratr build --spec specs/myfeature.md
 ```
 
 ## Workflow
