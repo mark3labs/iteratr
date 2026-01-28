@@ -50,14 +50,14 @@ Global config: ~/.config/iteratr/iteratr.yml`,
 func init() {
 	buildCmd.Flags().StringVarP(&buildFlags.name, "name", "n", "", "Session name (default: spec filename stem)")
 	buildCmd.Flags().StringVarP(&buildFlags.spec, "spec", "s", "", "Spec file path (default: ./specs/SPEC.md)")
-	buildCmd.Flags().StringVarP(&buildFlags.template, "template", "t", "", "Custom template file")
+	buildCmd.Flags().StringVarP(&buildFlags.template, "template", "t", "", "Custom template file (overrides config file)")
 	buildCmd.Flags().StringVarP(&buildFlags.extraInstructions, "extra-instructions", "e", "", "Extra instructions for prompt")
-	buildCmd.Flags().IntVarP(&buildFlags.iterations, "iterations", "i", 0, "Max iterations, 0=infinite (default: 0)")
-	buildCmd.Flags().BoolVar(&buildFlags.headless, "headless", false, "Run without TUI (logging only)")
-	buildCmd.Flags().StringVar(&buildFlags.dataDir, "data-dir", ".iteratr", "Data directory for NATS storage")
-	buildCmd.Flags().StringVarP(&buildFlags.model, "model", "m", "", "Model to use (e.g., anthropic/claude-sonnet-4-5, openai/gpt-4)")
+	buildCmd.Flags().IntVarP(&buildFlags.iterations, "iterations", "i", 0, "Max iterations, 0=infinite (overrides config file)")
+	buildCmd.Flags().BoolVar(&buildFlags.headless, "headless", false, "Run without TUI (overrides config file)")
+	buildCmd.Flags().StringVar(&buildFlags.dataDir, "data-dir", ".iteratr", "Data directory for NATS storage (overrides config file)")
+	buildCmd.Flags().StringVarP(&buildFlags.model, "model", "m", "", "Model to use (overrides config file, e.g., anthropic/claude-sonnet-4-5)")
 	buildCmd.Flags().BoolVar(&buildFlags.reset, "reset", false, "Reset session data before starting (clears all NATS events for this session)")
-	buildCmd.Flags().BoolVar(&buildFlags.autoCommit, "auto-commit", true, "Auto-commit modified files after iteration (use --auto-commit=false to disable)")
+	buildCmd.Flags().BoolVar(&buildFlags.autoCommit, "auto-commit", true, "Auto-commit modified files after iteration (overrides config file)")
 }
 
 // setupWizardStore creates a temporary NATS connection and session store for the wizard.

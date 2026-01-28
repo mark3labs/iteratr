@@ -45,7 +45,7 @@ func init() {
 
 	// Common flags for all tool subcommands
 	toolCmd.PersistentFlags().StringVarP(&toolFlags.name, "name", "n", "", "Session name (required)")
-	toolCmd.PersistentFlags().StringVar(&toolFlags.dataDir, "data-dir", "", "Data directory (default: from config file or .iteratr)")
+	toolCmd.PersistentFlags().StringVar(&toolFlags.dataDir, "data-dir", "", "Data directory (overrides config file, default: .iteratr)")
 }
 
 // connectToSession connects to a running iteratr session's server

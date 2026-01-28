@@ -304,7 +304,7 @@ func TestToolConfigIntegration(t *testing.T) {
 	usage := flag.Usage
 
 	// The help text should mention config file as documented in spec
-	expectedUsage := "Data directory (default: from config file or .iteratr)"
+	expectedUsage := "Data directory (overrides config file, default: .iteratr)"
 	if usage != expectedUsage {
 		t.Errorf("Expected data-dir usage to mention config file.\nGot: %s\nWant: %s", usage, expectedUsage)
 	}

@@ -17,8 +17,12 @@ var genTemplateCmd = &cobra.Command{
 	Short: "Export the default prompt template",
 	Long: `Export the default prompt template to a file.
 
-The generated template can be customized and then used with the --template flag
-in the build command. Templates use {{variable}} syntax for substitution.`,
+The generated template can be customized and then used with:
+  - 'template' key in config file (iteratr.yml)
+  - --template flag in build command
+  - ITERATR_TEMPLATE environment variable
+
+Templates use {{variable}} syntax for substitution.`,
 	RunE: runGenTemplate,
 }
 

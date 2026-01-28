@@ -51,7 +51,12 @@ It manages session state (tasks, notes, inbox) via embedded NATS JetStream,
 communicates with opencode via ACP (Agent Control Protocol) over stdio,
 and presents a full-screen TUI using Bubbletea v2.
 
-Spiritual successor to ralph.nu - same concepts, modern Go implementation.`
+Spiritual successor to ralph.nu - same concepts, modern Go implementation.
+
+Getting Started:
+  1. Run 'iteratr setup' to create your config file
+  2. Run 'iteratr build' to start a session
+  3. Run 'iteratr config' to view current settings`
 
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(genTemplateCmd)
