@@ -21,9 +21,9 @@ type SetupResult struct {
 }
 
 // SetupModel is the main BubbleTea model for the setup wizard.
-// It manages the two-step flow: model selector → auto-commit selector.
+// It manages the three-step flow: model selector → auto-commit selector → completion.
 type SetupModel struct {
-	step      int         // Current step (0-1)
+	step      int         // Current step (0-2)
 	cancelled bool        // User cancelled via ESC
 	result    SetupResult // Accumulated result from each step
 	width     int         // Terminal width
@@ -33,6 +33,7 @@ type SetupModel struct {
 	// Step components
 	modelStep      *ModelStep
 	autoCommitStep *AutoCommitStep
+	completionStep *CompletionStep
 }
 
 // RunSetup is the entry point for the setup wizard.
@@ -116,8 +117,16 @@ func (m *SetupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AutoCommitSelectedMsg:
 		// Auto-commit selected in step 1
 		m.result.AutoCommit = msg.Enabled
-		// Wizard complete - quit
-		return m, tea.Quit
+		// Write config file
+		if err := m.WriteConfig(); err != nil {
+			// On error, just quit (error handling could be improved)
+			m.cancelled = true
+			return m, tea.Quit
+		}
+		// Move to completion step
+		m.step++
+		m.initCurrentStep()
+		return m, m.completionStep.Init()
 
 	case ContentChangedMsg:
 		// A step's content changed, recalculate modal dimensions
@@ -135,6 +144,10 @@ func (m *SetupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case 1:
 		if m.autoCommitStep != nil {
 			cmd = m.autoCommitStep.Update(msg)
+		}
+	case 2:
+		if m.completionStep != nil {
+			cmd = m.completionStep.Update(msg)
 		}
 	}
 
@@ -161,6 +174,10 @@ func (m *SetupModel) initCurrentStep() {
 		if m.autoCommitStep == nil {
 			m.autoCommitStep = NewAutoCommitStep()
 		}
+	case 2:
+		if m.completionStep == nil {
+			m.completionStep = NewCompletionStep(m.isProject)
+		}
 	}
 	m.updateCurrentStepSize()
 }
@@ -175,6 +192,10 @@ func (m *SetupModel) getStepPreferredHeight() int {
 	case 1:
 		if m.autoCommitStep != nil {
 			return m.autoCommitStep.PreferredHeight()
+		}
+	case 2:
+		if m.completionStep != nil {
+			return m.completionStep.PreferredHeight()
 		}
 	}
 	return 10 // Default fallback
@@ -249,6 +270,10 @@ func (m *SetupModel) updateCurrentStepSize() {
 		if m.autoCommitStep != nil {
 			m.autoCommitStep.SetSize(contentWidth, contentHeight)
 		}
+	case 2:
+		if m.completionStep != nil {
+			m.completionStep.SetSize(contentWidth, contentHeight)
+		}
 	}
 }
 
@@ -271,6 +296,10 @@ func (m *SetupModel) View() tea.View {
 	case 1:
 		if m.autoCommitStep != nil {
 			stepContent = m.autoCommitStep.View()
+		}
+	case 2:
+		if m.completionStep != nil {
+			stepContent = m.completionStep.View()
 		}
 	}
 
@@ -298,8 +327,15 @@ func (m *SetupModel) renderModal(stepContent string) string {
 	stepNames := []string{
 		"Select Model",
 		"Auto-Commit",
+		"Complete",
 	}
-	title := fmt.Sprintf("Setup - Step %d of 2: %s", m.step+1, stepNames[m.step])
+	// Don't show step indicator on completion screen
+	var title string
+	if m.step == 2 {
+		title = "Setup Complete"
+	} else {
+		title = fmt.Sprintf("Setup - Step %d of 2: %s", m.step+1, stepNames[m.step])
+	}
 	sections = append(sections, theme.Current().S().ModalTitle.Render(title))
 	sections = append(sections, "")
 
