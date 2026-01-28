@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/mark3labs/iteratr/internal/config"
 	"github.com/mark3labs/iteratr/internal/nats"
 	"github.com/mark3labs/iteratr/internal/session"
 	"github.com/nats-io/nats.go/jetstream"
@@ -45,15 +45,18 @@ func init() {
 
 	// Common flags for all tool subcommands
 	toolCmd.PersistentFlags().StringVarP(&toolFlags.name, "name", "n", "", "Session name (required)")
-	toolCmd.PersistentFlags().StringVar(&toolFlags.dataDir, "data-dir", "", "Data directory (default: from ITERATR_DATA_DIR or .iteratr)")
+	toolCmd.PersistentFlags().StringVar(&toolFlags.dataDir, "data-dir", "", "Data directory (default: from config file or .iteratr)")
 }
 
 // connectToSession connects to a running iteratr session's server
 func connectToSession() (*session.Store, func(), error) {
-	// Determine data directory
+	// Determine data directory with precedence: CLI flag > config > default
 	dataDir := toolFlags.dataDir
 	if dataDir == "" {
-		dataDir = os.Getenv("ITERATR_DATA_DIR")
+		// Try loading from config (ignore errors, fall back to default)
+		if cfg, err := config.Load(); err == nil {
+			dataDir = cfg.DataDir
+		}
 	}
 	if dataDir == "" {
 		dataDir = ".iteratr"
