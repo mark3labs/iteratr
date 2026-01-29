@@ -944,3 +944,334 @@ func TestHandleSessionComplete_IncompleteTasks(t *testing.T) {
 		t.Errorf("expected 'not in terminal state' in error message, got: %s", text)
 	}
 }
+
+func TestHandleTaskAdd_InvalidTasksType(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-add",
+			Arguments: map[string]any{
+				"tasks": "not an array", // Invalid type
+			},
+		},
+	}
+
+	result, err := srv.handleTaskAdd(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleTaskAdd returned error: %v", err)
+	}
+
+	text := extractText(result)
+	if !strings.Contains(text, "error:") || !strings.Contains(text, "not an array") {
+		t.Errorf("expected type error, got: %s", text)
+	}
+}
+
+func TestHandleTaskAdd_EmptyArray(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-add",
+			Arguments: map[string]any{
+				"tasks": []any{}, // Empty array
+			},
+		},
+	}
+
+	result, err := srv.handleTaskAdd(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleTaskAdd returned error: %v", err)
+	}
+
+	text := extractText(result)
+	if !strings.Contains(text, "error:") || !strings.Contains(text, "at least one task") {
+		t.Errorf("expected empty array error, got: %s", text)
+	}
+}
+
+func TestHandleTaskAdd_InvalidTaskObject(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-add",
+			Arguments: map[string]any{
+				"tasks": []any{
+					"not an object", // Invalid task type
+				},
+			},
+		},
+	}
+
+	result, err := srv.handleTaskAdd(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleTaskAdd returned error: %v", err)
+	}
+
+	text := extractText(result)
+	if !strings.Contains(text, "error:") || !strings.Contains(text, "not an object") {
+		t.Errorf("expected object type error, got: %s", text)
+	}
+}
+
+func TestHandleTaskUpdate_InvalidPriorityType(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Add a task first
+	addReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-add",
+			Arguments: map[string]any{
+				"tasks": []any{
+					map[string]any{
+						"content": "Test task",
+					},
+				},
+			},
+		},
+	}
+	_, err := srv.handleTaskAdd(ctx, addReq)
+	if err != nil {
+		t.Fatalf("failed to add task: %v", err)
+	}
+
+	// Try to update with invalid priority type
+	updateReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-update",
+			Arguments: map[string]any{
+				"id":       "TAS-1",
+				"priority": "invalid", // String instead of number
+			},
+		},
+	}
+
+	result, err := srv.handleTaskUpdate(ctx, updateReq)
+	if err != nil {
+		t.Fatalf("handleTaskUpdate returned error: %v", err)
+	}
+
+	text := extractText(result)
+	if !strings.Contains(text, "error:") || !strings.Contains(text, "must be a number") {
+		t.Errorf("expected priority type error, got: %s", text)
+	}
+}
+
+func TestHandleTaskList_AllStatuses(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Add tasks with all possible statuses
+	addReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-add",
+			Arguments: map[string]any{
+				"tasks": []any{
+					map[string]any{
+						"content": "Remaining task",
+						"status":  "remaining",
+					},
+					map[string]any{
+						"content": "In progress task",
+						"status":  "in_progress",
+					},
+					map[string]any{
+						"content": "Completed task",
+						"status":  "completed",
+					},
+					map[string]any{
+						"content": "Blocked task",
+						"status":  "blocked",
+					},
+					map[string]any{
+						"content": "Cancelled task",
+						"status":  "cancelled",
+					},
+				},
+			},
+		},
+	}
+	_, err := srv.handleTaskAdd(ctx, addReq)
+	if err != nil {
+		t.Fatalf("failed to add tasks: %v", err)
+	}
+
+	// List all tasks
+	listReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-list",
+		},
+	}
+
+	result, err := srv.handleTaskList(ctx, listReq)
+	if err != nil {
+		t.Fatalf("handleTaskList returned error: %v", err)
+	}
+
+	text := extractText(result)
+
+	// Verify all status sections appear
+	if !strings.Contains(text, "Remaining:") {
+		t.Errorf("missing 'Remaining:' section")
+	}
+	if !strings.Contains(text, "In progress:") {
+		t.Errorf("missing 'In progress:' section")
+	}
+	if !strings.Contains(text, "Completed:") {
+		t.Errorf("missing 'Completed:' section")
+	}
+	if !strings.Contains(text, "Blocked:") {
+		t.Errorf("missing 'Blocked:' section")
+	}
+	if !strings.Contains(text, "Cancelled:") {
+		t.Errorf("missing 'Cancelled:' section")
+	}
+
+	// Verify all task IDs are present
+	if !strings.Contains(text, "TAS-1") {
+		t.Errorf("missing task ID TAS-1 in output")
+	}
+	if !strings.Contains(text, "TAS-2") {
+		t.Errorf("missing task ID TAS-2 in output")
+	}
+	if !strings.Contains(text, "TAS-3") {
+		t.Errorf("missing task ID TAS-3 in output")
+	}
+	if !strings.Contains(text, "TAS-4") {
+		t.Errorf("missing task ID TAS-4 in output")
+	}
+	if !strings.Contains(text, "TAS-5") {
+		t.Errorf("missing task ID TAS-5 in output")
+	}
+}
+
+func TestHandleTaskNext_OnlyNonRemainingTasks(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Add tasks and mark them all as non-remaining
+	addReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-add",
+			Arguments: map[string]any{
+				"tasks": []any{
+					map[string]any{
+						"content": "Task 1",
+					},
+					map[string]any{
+						"content": "Task 2",
+					},
+				},
+			},
+		},
+	}
+	_, err := srv.handleTaskAdd(ctx, addReq)
+	if err != nil {
+		t.Fatalf("failed to add tasks: %v", err)
+	}
+
+	// Mark both as completed
+	updateReq1 := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-update",
+			Arguments: map[string]any{
+				"id":     "TAS-1",
+				"status": "completed",
+			},
+		},
+	}
+	_, err = srv.handleTaskUpdate(ctx, updateReq1)
+	if err != nil {
+		t.Fatalf("failed to update task 1: %v", err)
+	}
+
+	updateReq2 := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-update",
+			Arguments: map[string]any{
+				"id":     "TAS-2",
+				"status": "completed",
+			},
+		},
+	}
+	_, err = srv.handleTaskUpdate(ctx, updateReq2)
+	if err != nil {
+		t.Fatalf("failed to update task 2: %v", err)
+	}
+
+	// Try to get next task
+	nextReq := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "task-next",
+		},
+	}
+
+	result, err := srv.handleTaskNext(ctx, nextReq)
+	if err != nil {
+		t.Fatalf("handleTaskNext returned error: %v", err)
+	}
+
+	text := extractText(result)
+	if text != "No ready tasks" {
+		t.Errorf("expected 'No ready tasks', got: %s", text)
+	}
+}
+
+func TestHandleIterationSummary_EmptySummary(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "iteration-summary",
+			Arguments: map[string]any{
+				"summary": "", // Empty string
+			},
+		},
+	}
+
+	result, err := srv.handleIterationSummary(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleIterationSummary returned error: %v", err)
+	}
+
+	text := extractText(result)
+	if !strings.Contains(text, "error:") || !strings.Contains(text, "summary") {
+		t.Errorf("expected empty summary error, got: %s", text)
+	}
+}
+
+func TestHandleSessionComplete_EmptySession(t *testing.T) {
+	srv, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Try to mark session complete with no tasks added
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "session-complete",
+		},
+	}
+
+	result, err := srv.handleSessionComplete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handleSessionComplete returned error: %v", err)
+	}
+
+	text := extractText(result)
+	// Empty session should succeed (no tasks to check)
+	if text != "Session marked complete" {
+		t.Errorf("expected success for empty session, got: %s", text)
+	}
+}
