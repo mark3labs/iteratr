@@ -796,6 +796,9 @@ func (d *DividerMessageItem) Height() int {
 	return lines
 }
 
+// PauseStateMsg signals pause state change to TUI.
+type PauseStateMsg struct{ Paused bool }
+
 // formatDuration formats a duration as a human-readable string.
 // Examples: "1.2s", "345ms", "2m30s"
 func formatDuration(d time.Duration) string {

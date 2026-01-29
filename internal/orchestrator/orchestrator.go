@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -64,6 +65,8 @@ type Orchestrator struct {
 	autoCommit        bool               // Auto-commit modified files after iteration
 	pendingHookOutput string             // Buffer for hook output to be sent in next iteration
 	pendingMu         sync.Mutex         // Protects pendingHookOutput (needed for NATS callback)
+	paused            atomic.Bool        // Pause state (atomic for thread-safe access)
+	resumeChan        chan struct{}      // Signals resume from pause
 }
 
 // New creates a new Orchestrator with the given configuration.
@@ -91,6 +94,7 @@ func New(cfg Config) (*Orchestrator, error) {
 		sendChan:    make(chan string, 10), // Buffered channel for user input messages
 		fileTracker: agent.NewFileTracker(cfg.WorkDir),
 		autoCommit:  cfg.AutoCommit,
+		resumeChan:  make(chan struct{}, 1), // Buffered to prevent blocking on Resume()
 	}, nil
 }
 
@@ -1151,4 +1155,33 @@ func isGitRepo(dir string) bool {
 		}
 		current = parent
 	}
+}
+
+// RequestPause sets the paused flag to request a pause after current iteration.
+func (o *Orchestrator) RequestPause() {
+	logger.Debug("Pause requested")
+	o.paused.Store(true)
+}
+
+// CancelPause clears the pause flag (only effective before waitIfPaused blocks).
+func (o *Orchestrator) CancelPause() {
+	logger.Debug("Pause cancelled")
+	o.paused.Store(false)
+}
+
+// Resume clears the pause flag and signals resumeChan to unblock waitIfPaused.
+func (o *Orchestrator) Resume() {
+	logger.Debug("Resume requested")
+	o.paused.Store(false)
+	// Send non-blocking signal to resumeChan
+	select {
+	case o.resumeChan <- struct{}{}:
+	default:
+		// Channel already has a signal, no need to send another
+	}
+}
+
+// IsPaused returns the current pause state (for TUI display).
+func (o *Orchestrator) IsPaused() bool {
+	return o.paused.Load()
 }
