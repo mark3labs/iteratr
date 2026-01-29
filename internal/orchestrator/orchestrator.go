@@ -953,6 +953,18 @@ func (o *Orchestrator) Stop() error {
 		o.runner = nil
 	}
 
+	// Stop MCP server (after runner, before NATS)
+	if o.mcpServer != nil {
+		logger.Debug("Stopping MCP server")
+		if err := o.mcpServer.Stop(); err != nil {
+			logger.Error("MCP server shutdown failed: %v", err)
+			multiErr.Append(fmt.Errorf("MCP server shutdown failed: %w", err))
+		} else {
+			logger.Debug("MCP server stopped successfully")
+		}
+		o.mcpServer = nil
+	}
+
 	// Close NATS connection (and server if primary)
 	if o.isPrimary {
 		// Primary mode: shut down the server we own
