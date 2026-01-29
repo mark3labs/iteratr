@@ -1066,7 +1066,7 @@ func (o *Orchestrator) setupJetStream() error {
 // startTUI initializes and starts the Bubbletea TUI.
 func (o *Orchestrator) startTUI() error {
 	// Create TUI app
-	o.tuiApp = tui.NewApp(o.ctx, o.store, o.cfg.SessionName, o.cfg.WorkDir, o.nc, o.sendChan)
+	o.tuiApp = tui.NewApp(o.ctx, o.store, o.cfg.SessionName, o.cfg.WorkDir, o.nc, o.sendChan, o)
 
 	// Create Bubbletea program with context for graceful shutdown
 	o.tuiProgram = tea.NewProgram(o.tuiApp, tea.WithContext(o.ctx))

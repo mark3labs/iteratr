@@ -16,6 +16,15 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// Orchestrator defines the interface for pause/resume control.
+// This interface allows the TUI to control orchestrator state without creating a circular dependency.
+type Orchestrator interface {
+	RequestPause()
+	CancelPause()
+	Resume()
+	IsPaused() bool
+}
+
 // App is the main Bubbletea model that manages the TUI application.
 type App struct {
 	// View components
@@ -52,10 +61,11 @@ type App struct {
 	quitting          bool
 	eventChan         chan session.Event // Channel for receiving NATS events
 	sendChan          chan string        // Channel for sending user messages to orchestrator
+	orchestrator      Orchestrator       // Interface to orchestrator for pause/resume control
 }
 
 // NewApp creates a new TUI application with the given session store and NATS connection.
-func NewApp(ctx context.Context, store *session.Store, sessionName, workDir string, nc *nats.Conn, sendChan chan string) *App {
+func NewApp(ctx context.Context, store *session.Store, sessionName, workDir string, nc *nats.Conn, sendChan chan string, orch Orchestrator) *App {
 	agent := NewAgentOutput()
 	sidebar := NewSidebar()
 	return &App{
@@ -65,6 +75,7 @@ func NewApp(ctx context.Context, store *session.Store, sessionName, workDir stri
 		nc:             nc,
 		ctx:            ctx,
 		sendChan:       sendChan,
+		orchestrator:   orch,
 		sidebarVisible: false, // Sidebar hidden by default in compact mode
 		dashboard:      NewDashboard(agent, sidebar),
 		logs:           NewLogViewer(),
@@ -371,6 +382,9 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			return a, a.taskInputModal.Show()
+		case "p":
+			// ctrl+x p -> toggle pause/resume
+			return a, a.togglePause()
 		case "ctrl+c", "esc":
 			// Allow escape or ctrl+c to exit prefix mode
 			return a, nil
@@ -628,6 +642,41 @@ func (a *App) handleGlobalKeys(msg tea.KeyPressMsg) tea.Cmd {
 		return tea.Quit
 	}
 	return nil
+}
+
+// togglePause handles the ctrl+x p keyboard shortcut to toggle pause/resume.
+// Behavior depends on current state:
+// - If not paused: request pause (will take effect after current iteration)
+// - If paused and agent still working: cancel pause request
+// - If paused and agent blocked: resume immediately
+func (a *App) togglePause() tea.Cmd {
+	// Guard: if orchestrator is nil, do nothing
+	if a.orchestrator == nil {
+		return nil
+	}
+
+	paused := a.orchestrator.IsPaused()
+	working := a.dashboard != nil && a.dashboard.agentBusy
+
+	if !paused {
+		// Not paused -> request pause
+		a.orchestrator.RequestPause()
+		return func() tea.Msg {
+			return PauseStateMsg{Paused: true}
+		}
+	} else if working {
+		// Paused but still working -> cancel pause request
+		a.orchestrator.CancelPause()
+		return func() tea.Msg {
+			return PauseStateMsg{Paused: false}
+		}
+	} else {
+		// Paused and blocked -> resume
+		a.orchestrator.Resume()
+		return func() tea.Msg {
+			return PauseStateMsg{Paused: false}
+		}
+	}
 }
 
 // View renders the current view. In Bubbletea v2, this returns tea.View
