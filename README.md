@@ -39,19 +39,25 @@ Orchestrates AI coding agents in an iterative loop.
 ### Quick Install (recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/mark3labs/iteratr/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/mark3labs/iteratr/refs/heads/master/install.sh | sh
 ```
 
 Install a specific version:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/mark3labs/iteratr/main/install.sh | sh -s v1.0.0
+curl -sSL https://raw.githubusercontent.com/mark3labs/iteratr/refs/heads/master/install.sh | sh -s v1.0.0
 ```
 
 Install to a custom directory:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/mark3labs/iteratr/main/install.sh | INSTALL_DIR=~/.local/bin sh
+curl -sSL https://raw.githubusercontent.com/mark3labs/iteratr/refs/heads/master/install.sh | INSTALL_DIR=~/.local/bin sh
+```
+
+### bun/npm/pnpm
+
+```bash
+bun add -g iteratr
 ```
 
 ### Go Install
