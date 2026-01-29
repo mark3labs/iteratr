@@ -23,12 +23,12 @@ Session: {{session}} | Iteration: #{{iteration}}
 - Respect user-added tasks even if not in spec
 
 ## Workflow
-1. If no tasks: sync from spec via ` + "`" + `task-batch-add` + "`" + `
-2. Pick ONE ready task (highest priority, no blockers)
-3. ` + "`" + `task-status --id X --status in_progress` + "`" + `
+1. If no tasks: sync from spec using task-add tool
+2. Pick ONE ready task (highest priority, no blockers) using task-next tool
+3. Mark task as in_progress using task-update tool
 4. Implement + test
-5. ` + "`" + `task-status --id X --status completed` + "`" + `
-6. ` + "`" + `iteration-summary --summary "..."` + "`" + `
+5. Mark task as completed using task-update tool
+6. Write iteration-summary using iteration-summary tool
 7. STOP (do not pick another task)
 
 ## Commands
