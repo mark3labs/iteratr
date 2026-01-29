@@ -151,10 +151,20 @@ func (c *acpConn) initialize(ctx context.Context) error {
 }
 
 // newSession creates a new ACP session and returns the session ID.
-func (c *acpConn) newSession(ctx context.Context, cwd string) (string, error) {
+func (c *acpConn) newSession(ctx context.Context, cwd, mcpURL string) (string, error) {
+	mcpServers := []McpServer{}
+	if mcpURL != "" {
+		mcpServers = append(mcpServers, McpServer{
+			Type:    "http",
+			Name:    "iteratr-tools",
+			URL:     mcpURL,
+			Headers: []HttpHeader{},
+		})
+	}
+
 	params := newSessionParams{
 		Cwd:        cwd,
-		McpServers: []McpServer{},
+		McpServers: mcpServers,
 	}
 
 	reqID, err := c.sendRequest("session/new", params)
@@ -208,11 +218,21 @@ func (c *acpConn) newSession(ctx context.Context, cwd string) (string, error) {
 // LoadSession loads an existing ACP session and returns the session ID.
 // After LoadSession returns, the caller must continue reading notifications
 // to replay the full session history until EOF.
-func (c *acpConn) LoadSession(ctx context.Context, sessionID, cwd string) (string, error) {
+func (c *acpConn) LoadSession(ctx context.Context, sessionID, cwd, mcpURL string) (string, error) {
+	mcpServers := []McpServer{}
+	if mcpURL != "" {
+		mcpServers = append(mcpServers, McpServer{
+			Type:    "http",
+			Name:    "iteratr-tools",
+			URL:     mcpURL,
+			Headers: []HttpHeader{},
+		})
+	}
+
 	params := loadSessionParams{
 		SessionID:  sessionID,
 		Cwd:        cwd,
-		McpServers: []any{},
+		McpServers: mcpServers,
 	}
 
 	reqID, err := c.sendRequest("session/load", params)
@@ -329,7 +349,7 @@ func (s *SessionLoader) LoadAndStream(ctx context.Context, sessionID, workDir st
 	params := loadSessionParams{
 		SessionID:  sessionID,
 		Cwd:        workDir,
-		McpServers: []any{},
+		McpServers: []McpServer{},
 	}
 
 	reqID, err := s.conn.sendRequest("session/load", params)
@@ -974,9 +994,9 @@ type newSessionParams struct {
 }
 
 type loadSessionParams struct {
-	SessionID  string `json:"sessionId"`
-	Cwd        string `json:"cwd"`
-	McpServers []any  `json:"mcpServers"`
+	SessionID  string      `json:"sessionId"`
+	Cwd        string      `json:"cwd"`
+	McpServers []McpServer `json:"mcpServers"`
 }
 
 type newSessionResult struct {

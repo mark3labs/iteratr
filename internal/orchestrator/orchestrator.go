@@ -252,10 +252,11 @@ func (o *Orchestrator) Run() error {
 	if o.tuiProgram != nil {
 		// TUI mode - send output to TUI
 		o.runner = agent.NewRunner(agent.RunnerConfig{
-			Model:       o.cfg.Model,
-			WorkDir:     o.cfg.WorkDir,
-			SessionName: o.cfg.SessionName,
-			NATSPort:    o.natsPort,
+			Model:        o.cfg.Model,
+			WorkDir:      o.cfg.WorkDir,
+			SessionName:  o.cfg.SessionName,
+			NATSPort:     o.natsPort,
+			MCPServerURL: o.mcpServer.URL(),
 			OnText: func(content string) {
 				o.tuiProgram.Send(tui.AgentOutputMsg{Content: content})
 			},
@@ -307,10 +308,11 @@ func (o *Orchestrator) Run() error {
 	} else {
 		// Headless mode - print to stdout
 		o.runner = agent.NewRunner(agent.RunnerConfig{
-			Model:       o.cfg.Model,
-			WorkDir:     o.cfg.WorkDir,
-			SessionName: o.cfg.SessionName,
-			NATSPort:    o.natsPort,
+			Model:        o.cfg.Model,
+			WorkDir:      o.cfg.WorkDir,
+			SessionName:  o.cfg.SessionName,
+			NATSPort:     o.natsPort,
+			MCPServerURL: o.mcpServer.URL(),
 			OnText: func(content string) {
 				fmt.Print(content)
 			},

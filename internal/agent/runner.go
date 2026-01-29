@@ -17,6 +17,7 @@ type Runner struct {
 	workDir      string
 	sessionName  string
 	natsPort     int
+	mcpServerURL string
 	onText       func(text string)
 	onToolCall   func(ToolCallEvent)
 	onThinking   func(string)
@@ -35,6 +36,7 @@ type RunnerConfig struct {
 	WorkDir      string              // Working directory for agent
 	SessionName  string              // Session name
 	NATSPort     int                 // NATS server port for tool CLI
+	MCPServerURL string              // MCP server URL for tool access
 	OnText       func(text string)   // Callback for text output
 	OnToolCall   func(ToolCallEvent) // Callback for tool lifecycle events
 	OnThinking   func(string)        // Callback for thinking/reasoning output
@@ -49,6 +51,7 @@ func NewRunner(cfg RunnerConfig) *Runner {
 		workDir:      cfg.WorkDir,
 		sessionName:  cfg.SessionName,
 		natsPort:     cfg.NATSPort,
+		mcpServerURL: cfg.MCPServerURL,
 		onText:       cfg.OnText,
 		onToolCall:   cfg.OnToolCall,
 		onThinking:   cfg.OnThinking,
@@ -132,7 +135,7 @@ func (r *Runner) RunIteration(ctx context.Context, prompt string, hookOutput str
 
 	// Create fresh session for this iteration (clean context)
 	logger.Debug("Creating new ACP session for iteration")
-	sessID, err := r.conn.newSession(ctx, r.workDir)
+	sessID, err := r.conn.newSession(ctx, r.workDir, r.mcpServerURL)
 	if err != nil {
 		return fmt.Errorf("ACP new session failed: %w", err)
 	}
