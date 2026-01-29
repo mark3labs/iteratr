@@ -154,7 +154,7 @@ func (c *acpConn) initialize(ctx context.Context) error {
 func (c *acpConn) newSession(ctx context.Context, cwd string) (string, error) {
 	params := newSessionParams{
 		Cwd:        cwd,
-		McpServers: []any{},
+		McpServers: []McpServer{},
 	}
 
 	reqID, err := c.sendRequest("session/new", params)
@@ -969,8 +969,8 @@ type initializeResult struct {
 }
 
 type newSessionParams struct {
-	Cwd        string `json:"cwd"`
-	McpServers []any  `json:"mcpServers"`
+	Cwd        string      `json:"cwd"`
+	McpServers []McpServer `json:"mcpServers"`
 }
 
 type loadSessionParams struct {
@@ -1111,4 +1111,17 @@ type permissionResponse struct {
 type permissionOutcome struct {
 	OptionID string `json:"optionId"`
 	Outcome  string `json:"outcome"` // "selected" or "cancelled"
+}
+
+// MCP server types for session/new and session/load
+type McpServer struct {
+	Type    string       `json:"type"`    // "http"
+	Name    string       `json:"name"`    // "iteratr-tools"
+	URL     string       `json:"url"`     // "http://localhost:PORT/mcp"
+	Headers []HttpHeader `json:"headers"` // empty array
+}
+
+type HttpHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
