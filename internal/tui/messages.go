@@ -803,6 +803,16 @@ type PauseStateMsg struct{ Paused bool }
 // Used by status bar to determine PAUSED vs PAUSING display.
 type AgentBusyMsg struct{ Busy bool }
 
+// GitInfoMsg carries git repository status for the status bar.
+type GitInfoMsg struct {
+	Branch string // Branch name or "HEAD" if detached
+	Hash   string // Short commit hash (7 chars)
+	Dirty  bool   // Uncommitted changes exist
+	Ahead  int    // Commits ahead of remote
+	Behind int    // Commits behind remote
+	Valid  bool   // false if not a git repo
+}
+
 // formatDuration formats a duration as a human-readable string.
 // Examples: "1.2s", "345ms", "2m30s"
 func formatDuration(d time.Duration) string {

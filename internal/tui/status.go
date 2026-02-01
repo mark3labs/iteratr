@@ -33,6 +33,14 @@ type StatusBar struct {
 	spinner           Spinner
 	modifiedFileCount int  // Number of files modified in current iteration
 	prefixMode        bool // Whether waiting for second key after ctrl+x
+
+	// Git status fields
+	gitBranch string // Branch name or "HEAD" if detached
+	gitHash   string // Short commit hash (7 chars)
+	gitDirty  bool   // Uncommitted changes exist
+	gitAhead  int    // Commits ahead of remote
+	gitBehind int    // Commits behind remote
+	gitValid  bool   // false if not a git repo
 }
 
 // NewStatusBar creates a new StatusBar component.
@@ -83,6 +91,13 @@ func (s *StatusBar) buildLeft() string {
 	sep := theme.Current().S().HeaderSeparator.Render(" | ")
 	sessionInfo := theme.Current().S().HeaderInfo.Render(s.sessionName)
 
+	left := title + sep + sessionInfo
+
+	// Add git info if valid (after session name)
+	if s.gitValid {
+		left += sep + s.buildGitInfo()
+	}
+
 	// Use frozen duration if stopped, otherwise calculate from now
 	var elapsed time.Duration
 	if !s.stoppedAt.IsZero() {
@@ -91,7 +106,7 @@ func (s *StatusBar) buildLeft() string {
 		elapsed = time.Since(s.startedAt)
 	}
 	duration := s.formatDuration(elapsed)
-	left := title + sep + sessionInfo + sep + theme.Current().S().HeaderInfo.Render(duration)
+	left += sep + theme.Current().S().HeaderInfo.Render(duration)
 
 	// Add iteration info if available
 	if s.state != nil && len(s.state.Iterations) > 0 {
@@ -132,6 +147,32 @@ func (s *StatusBar) buildLeft() string {
 	}
 
 	return left
+}
+
+// buildGitInfo builds the git status segment: "branch* hash ↑N↓M"
+// Asterisk shown only if dirty, arrows shown only if ahead/behind > 0.
+func (s *StatusBar) buildGitInfo() string {
+	th := theme.Current().S()
+
+	// Branch name with dirty indicator
+	branch := s.gitBranch
+	if s.gitDirty {
+		branch += th.Warning.Render("*")
+	}
+	result := th.HeaderTitle.Render(branch)
+
+	// Short commit hash
+	result += " " + th.HeaderInfo.Render(s.gitHash)
+
+	// Ahead/behind counts (only if non-zero)
+	if s.gitAhead > 0 {
+		result += " " + th.HeaderInfo.Render(fmt.Sprintf("↑%d", s.gitAhead))
+	}
+	if s.gitBehind > 0 {
+		result += " " + th.HeaderInfo.Render(fmt.Sprintf("↓%d", s.gitBehind))
+	}
+
+	return result
 }
 
 // buildTaskStats builds a compact task status summary.
@@ -220,6 +261,16 @@ func (s *StatusBar) SetModifiedFileCount(count int) {
 // SetPrefixMode updates whether the app is waiting for a second key after ctrl+x.
 func (s *StatusBar) SetPrefixMode(prefixMode bool) {
 	s.prefixMode = prefixMode
+}
+
+// SetGitInfo updates the git repository status fields.
+func (s *StatusBar) SetGitInfo(msg GitInfoMsg) {
+	s.gitBranch = msg.Branch
+	s.gitHash = msg.Hash
+	s.gitDirty = msg.Dirty
+	s.gitAhead = msg.Ahead
+	s.gitBehind = msg.Behind
+	s.gitValid = msg.Valid
 }
 
 // Tick returns a command to start the spinner animation if needed.
