@@ -694,95 +694,6 @@ func (s *Sidebar) updateContent() {
 	s.notesScrollList.SetItems(noteItems)
 }
 
-// Render provides legacy string-based rendering for backward compatibility.
-// This method will be removed in Phase 12 once App is refactored to use Screen/Draw pattern.
-func (s *Sidebar) Render() string {
-	t := theme.Current()
-
-	// Guard against zero dimensions
-	if s.width < 10 || s.height < 5 {
-		return ""
-	}
-
-	// Calculate section heights (Logo fixed, then Tasks 55%, Notes 45% of remainder)
-	remainingHeight := s.height - logoHeight
-	if remainingHeight < 5 {
-		remainingHeight = 5
-	}
-
-	tasksHeight := int(float64(remainingHeight) * 0.55)
-	if tasksHeight < 3 {
-		tasksHeight = 3
-	}
-	notesHeight := remainingHeight - tasksHeight
-	if notesHeight < 2 {
-		notesHeight = 2
-		tasksHeight = remainingHeight - notesHeight
-	}
-
-	// Render logo section with gradient
-	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Primary))
-	innerWidth := s.width - 2
-	topBorder := "╭" + strings.Repeat("─", innerWidth) + "╮"
-	bottomBorder := "╰" + strings.Repeat("─", innerWidth) + "╯"
-	emptyLine := "│" + strings.Repeat(" ", innerWidth) + "│"
-
-	renderGradientLine := func(text string) string {
-		textLen := len([]rune(text))
-		padding := (innerWidth - textLen) / 2
-		if padding < 0 {
-			padding = 0
-		}
-		rightPadding := innerWidth - textLen - padding
-		if rightPadding < 0 {
-			rightPadding = 0
-		}
-
-		var result strings.Builder
-		result.WriteString(borderStyle.Render("│"))
-		result.WriteString(strings.Repeat(" ", padding))
-
-		runes := []rune(text)
-		for i, r := range runes {
-			pos := float64(i) / float64(len(runes)-1)
-			if len(runes) == 1 {
-				pos = 0
-			}
-			color := theme.InterpolateColor(t.Primary, t.Secondary, pos)
-			charStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
-			result.WriteString(charStyle.Render(string(r)))
-		}
-
-		result.WriteString(strings.Repeat(" ", rightPadding))
-		result.WriteString(borderStyle.Render("│"))
-		return result.String()
-	}
-
-	logoBox := lipgloss.JoinVertical(lipgloss.Left,
-		borderStyle.Render(topBorder),
-		borderStyle.Render(emptyLine),
-		renderGradientLine(logoText1),
-		renderGradientLine(logoText2),
-		borderStyle.Render(emptyLine),
-		borderStyle.Render(bottomBorder),
-	)
-
-	// Render tasks section
-	tasksHeader := styleSidebarHeader.Width(s.width - 2).Render("Tasks")
-	tasksContent := s.tasksScrollList.View()
-	tasksSection := lipgloss.JoinVertical(lipgloss.Left, tasksHeader, tasksContent)
-	tasksBox := styleSidebarBorder.Width(s.width).Height(tasksHeight).Render(tasksSection)
-
-	// Render notes section
-	notesHeader := styleSidebarHeader.Width(s.width - 2).Render("Notes")
-	notesContent := s.notesScrollList.View()
-	notesSection := lipgloss.JoinVertical(lipgloss.Left, notesHeader, notesContent)
-	notesBox := styleSidebarBorder.Width(s.width).Height(notesHeight).Render(notesSection)
-
-	// Join sections vertically
-	return lipgloss.JoinVertical(lipgloss.Left, logoBox, tasksBox, notesBox)
-}
-
 // Legacy methods for backward compatibility
 func (s *Sidebar) SetFocused(focused bool)                  { s.SetFocus(focused) }
 func (s *Sidebar) UpdateSize(width, height int) tea.Cmd     { s.SetSize(width, height); return nil }
@@ -865,13 +776,3 @@ func (s *Sidebar) ScrollNotes(lines int) {
 
 // Compile-time interface check
 var _ FocusableComponent = (*Sidebar)(nil)
-
-// Sidebar styles (used by legacy Render method, will be removed in Phase 12)
-var (
-	styleSidebarBorder = lipgloss.NewStyle()
-
-	styleSidebarHeader = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.Current().FgSubtle)).
-				Bold(true).
-				PaddingLeft(1)
-)

@@ -109,15 +109,6 @@ func (l *LogViewer) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// Render returns the log viewer view as a string.
-func (l *LogViewer) Render() string {
-	if len(l.events) == 0 {
-		s := theme.Current().S()
-		l.viewport.SetContent(s.EmptyState.Render("No events yet"))
-	}
-	return l.viewport.View()
-}
-
 // renderEvent renders a single event with appropriate styling.
 func (l *LogViewer) renderEvent(event session.Event) string {
 	s := theme.Current().S()
