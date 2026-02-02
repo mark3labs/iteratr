@@ -7,7 +7,7 @@ import (
 // TestCalculateLayout_Minimum tests layout at 80x24 (minimum terminal size)
 func TestCalculateLayout_Minimum(t *testing.T) {
 	width, height := 80, 24
-	layout := CalculateLayout(width, height)
+	layout := CalculateLayout(width, height, false)
 
 	// Should be compact mode
 	if layout.Mode != LayoutCompact {
@@ -48,7 +48,7 @@ func TestCalculateLayout_Minimum(t *testing.T) {
 // TestCalculateLayout_Standard tests layout at 120x40 (standard terminal size)
 func TestCalculateLayout_Standard(t *testing.T) {
 	width, height := 120, 40
-	layout := CalculateLayout(width, height)
+	layout := CalculateLayout(width, height, false)
 
 	// Should be desktop mode
 	if layout.Mode != LayoutDesktop {
@@ -104,7 +104,7 @@ func TestCalculateLayout_Standard(t *testing.T) {
 // TestCalculateLayout_Large tests layout at 200x60 (large terminal size)
 func TestCalculateLayout_Large(t *testing.T) {
 	width, height := 200, 60
-	layout := CalculateLayout(width, height)
+	layout := CalculateLayout(width, height, false)
 
 	// Should be desktop mode
 	if layout.Mode != LayoutDesktop {
@@ -187,7 +187,7 @@ func TestCalculateLayout_CompactModeTransition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			layout := CalculateLayout(tt.width, tt.height)
+			layout := CalculateLayout(tt.width, tt.height, false)
 			if layout.Mode != tt.wantMode {
 				t.Errorf("Mode mismatch at %dx%d: got %v, want %v",
 					tt.width, tt.height, layout.Mode, tt.wantMode)
@@ -209,7 +209,7 @@ func TestCalculateLayout_NoOverlaps(t *testing.T) {
 
 	for _, size := range sizes {
 		t.Run("no overlaps", func(t *testing.T) {
-			layout := CalculateLayout(size.width, size.height)
+			layout := CalculateLayout(size.width, size.height, false)
 
 			// Content should be at top
 			if layout.Content.Min.Y != 0 {
@@ -240,5 +240,74 @@ func TestCalculateLayout_NoOverlaps(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestCalculateLayout_SidebarHidden tests layout with sidebar hidden
+func TestCalculateLayout_SidebarHidden(t *testing.T) {
+	width, height := 120, 40
+
+	// Test with sidebar visible
+	layoutVisible := CalculateLayout(width, height, false)
+	if layoutVisible.Mode != LayoutDesktop {
+		t.Errorf("Expected LayoutDesktop mode at %dx%d, got %v", width, height, layoutVisible.Mode)
+	}
+	if layoutVisible.Sidebar.Dx() <= 0 {
+		t.Error("Sidebar should have width > 0 when visible")
+	}
+
+	// Test with sidebar hidden
+	layoutHidden := CalculateLayout(width, height, true)
+	if layoutHidden.Mode != LayoutDesktop {
+		t.Errorf("Expected LayoutDesktop mode at %dx%d, got %v", width, height, layoutHidden.Mode)
+	}
+
+	// When hidden, sidebar should be empty
+	if layoutHidden.Sidebar.Dx() > 0 || layoutHidden.Sidebar.Dy() > 0 {
+		t.Errorf("Sidebar should be empty when hidden, got %dx%d",
+			layoutHidden.Sidebar.Dx(), layoutHidden.Sidebar.Dy())
+	}
+
+	// When hidden, main should take full content width
+	if layoutHidden.Main.Dx() != width {
+		t.Errorf("Main width should equal total width when sidebar hidden: got %d, want %d",
+			layoutHidden.Main.Dx(), width)
+	}
+
+	// Main should be wider when sidebar is hidden
+	if layoutHidden.Main.Dx() <= layoutVisible.Main.Dx() {
+		t.Errorf("Main should be wider when sidebar hidden: got %d, want > %d",
+			layoutHidden.Main.Dx(), layoutVisible.Main.Dx())
+	}
+}
+
+// TestCalculateLayout_SidebarHiddenCompactMode tests that sidebar hidden flag
+// doesn't affect compact mode (sidebar already hidden)
+func TestCalculateLayout_SidebarHiddenCompactMode(t *testing.T) {
+	width, height := 80, 24
+
+	// Both should be compact mode and identical
+	layoutNotHidden := CalculateLayout(width, height, false)
+	layoutHidden := CalculateLayout(width, height, true)
+
+	if layoutNotHidden.Mode != LayoutCompact {
+		t.Errorf("Expected LayoutCompact mode at %dx%d", width, height)
+	}
+	if layoutHidden.Mode != LayoutCompact {
+		t.Errorf("Expected LayoutCompact mode at %dx%d", width, height)
+	}
+
+	// Both should have empty sidebar
+	if layoutNotHidden.Sidebar.Dx() > 0 {
+		t.Error("Sidebar should be empty in compact mode (not hidden)")
+	}
+	if layoutHidden.Sidebar.Dx() > 0 {
+		t.Error("Sidebar should be empty in compact mode (hidden)")
+	}
+
+	// Both should have same main width
+	if layoutNotHidden.Main.Dx() != layoutHidden.Main.Dx() {
+		t.Errorf("Main width should be same in compact mode regardless of hidden flag: got %d vs %d",
+			layoutNotHidden.Main.Dx(), layoutHidden.Main.Dx())
 	}
 }

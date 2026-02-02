@@ -161,7 +161,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Recalculate layout and propagate sizes
-		a.layout = CalculateLayout(a.width, a.height)
+		a.layout = CalculateLayout(a.width, a.height, !a.sidebarVisible)
 		a.propagateSizes()
 		a.layoutDirty = false
 		return a, nil
@@ -795,7 +795,7 @@ func (a *App) View() tea.View {
 
 	// Recalculate layout if needed
 	if a.layoutDirty {
-		a.layout = CalculateLayout(a.width, a.height)
+		a.layout = CalculateLayout(a.width, a.height, !a.sidebarVisible)
 		a.propagateSizes()
 		a.layoutDirty = false
 	}
@@ -1085,11 +1085,11 @@ func (a *App) propagateSizes() {
 	a.dashboard.SetSize(a.layout.Main.Dx(), a.layout.Main.Dy())
 	a.logs.SetSize(a.width, a.height)
 
-	// Propagate sidebar size based on layout mode
-	if a.layout.Mode == LayoutDesktop {
-		// Desktop mode: use dedicated sidebar area
+	// Propagate sidebar size based on layout mode and visibility
+	if a.layout.Mode == LayoutDesktop && a.sidebarVisible {
+		// Desktop mode with sidebar visible: use dedicated sidebar area
 		a.sidebar.SetSize(a.layout.Sidebar.Dx(), a.layout.Sidebar.Dy())
-	} else {
+	} else if a.layout.Mode == LayoutCompact {
 		// Compact mode: sidebar overlays with fixed width
 		sidebarWidth := SidebarWidthDesktop
 		if a.layout.Main.Dx()/2 < sidebarWidth {
@@ -1097,6 +1097,7 @@ func (a *App) propagateSizes() {
 		}
 		a.sidebar.SetSize(sidebarWidth, a.layout.Main.Dy())
 	}
+	// If desktop mode with sidebar hidden, skip size propagation to sidebar
 }
 
 // fetchGitInfo returns a command that fetches git repository status

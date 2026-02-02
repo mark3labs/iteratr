@@ -13,7 +13,7 @@ func TestIntegration_KeyboardNavigation(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 
 	// ctrl+x l toggles logs modal
 	msg := tea.KeyPressMsg{Text: "ctrl+x"}
@@ -46,7 +46,7 @@ func TestIntegration_StatePropagation(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 
 	// Create test state
 	testState := &session.State{
@@ -99,7 +99,7 @@ func TestIntegration_ViewportScrolling(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 	app.propagateSizes()
 
 	// Add content to logs that exceeds viewport height
@@ -144,7 +144,7 @@ func TestIntegration_SidebarScrolling(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 	app.propagateSizes()
 
 	// Add many tasks to sidebar
@@ -187,7 +187,7 @@ func TestIntegration_FocusManagement(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 
 	// Test focus on dashboard
 	app.dashboard.SetFocus(true)
@@ -253,7 +253,7 @@ func TestIntegration_CompactModeToggle(t *testing.T) {
 	// Set compact mode
 	app.width = 80
 	app.height = 24
-	app.layout = CalculateLayout(80, 24)
+	app.layout = CalculateLayout(80, 24, false)
 	app.propagateSizes()
 
 	if app.layout.Mode != LayoutCompact {
@@ -293,7 +293,7 @@ func TestIntegration_AgentOutputAppend(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 	app.propagateSizes()
 
 	// Send agent output message
@@ -309,7 +309,7 @@ func TestIntegration_EventHandling(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 	app.propagateSizes()
 
 	// Send event message
@@ -332,7 +332,7 @@ func TestIntegration_AllMessageTypes(t *testing.T) {
 	app := NewApp(context.Background(), nil, "test-session", "/tmp", t.TempDir(), nil, nil, nil)
 	app.width = 120
 	app.height = 40
-	app.layout = CalculateLayout(120, 40)
+	app.layout = CalculateLayout(120, 40, false)
 	app.propagateSizes()
 
 	// Test iteration divider

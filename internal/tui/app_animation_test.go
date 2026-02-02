@@ -16,7 +16,7 @@ func TestApp_AnimationsPauseWhenNotVisible(t *testing.T) {
 	app.height = 40
 
 	// Set desktop layout mode
-	app.layout = CalculateLayout(100, 40)
+	app.layout = CalculateLayout(100, 40, false)
 	if app.layout.Mode != LayoutDesktop {
 		t.Fatal("Expected desktop layout mode")
 	}

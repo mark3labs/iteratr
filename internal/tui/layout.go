@@ -40,7 +40,9 @@ func (l Layout) IsCompact() bool {
 }
 
 // CalculateLayout computes the layout rectangles based on terminal dimensions
-func CalculateLayout(width, height int) Layout {
+// and sidebar visibility state. When sidebarHidden is true in desktop mode,
+// the main area expands to fill the full content width.
+func CalculateLayout(width, height int, sidebarHidden bool) Layout {
 	// Determine layout mode based on breakpoints
 	mode := LayoutDesktop
 	if width < CompactWidthBreakpoint || height < CompactHeightBreakpoint {
@@ -57,7 +59,8 @@ func CalculateLayout(width, height int) Layout {
 
 	// Split content horizontally: main | sidebar (desktop mode only)
 	var mainRect, sidebarRect uv.Rectangle
-	if mode == LayoutDesktop {
+	if mode == LayoutDesktop && !sidebarHidden {
+		// Desktop mode with sidebar visible
 		// Calculate sidebar width (max 45, or 1/3 of content width)
 		sidebarWidth := SidebarWidthDesktop
 		if contentRect.Dx()/3 < sidebarWidth {
@@ -68,7 +71,7 @@ func CalculateLayout(width, height int) Layout {
 		mainRect, sidebarRect = uv.SplitHorizontal(contentRect, uv.Fixed(contentRect.Dx()-sidebarWidth))
 		mainRect.Max.X -= 1 // 1-char gap between main and sidebar
 	} else {
-		// Compact mode: no sidebar
+		// Compact mode or sidebar hidden: no sidebar, main takes full content width
 		mainRect = contentRect
 		sidebarRect = uv.Rectangle{} // Empty rectangle
 	}
