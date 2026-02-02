@@ -1,38 +1,41 @@
 # Iteratr Component Tree
 
 ## Overview
-Iteratr is a Go TUI application built with BubbleTea v2 that manages iterative development sessions with an AI agent. The application features a multi-pane interface with real-time updates via NATS messaging, agent output streaming, task/note management, and modal overlays.
+Iteratr is a Go TUI application built with BubbleTea v2 that manages iterative development sessions with an AI agent. The application features a multi-pane interface with real-time updates via NATS messaging, agent output streaming, task/note management, modal overlays, and subagent session replay.
 
 ## Architecture Pattern
 - **Screen/Draw pattern**: Components render directly to screen buffers using Ultraviolet
 - **Message-based updates**: State changes propagate via typed messages
 - **Lazy rendering**: ScrollList components only render visible items
-- **Hierarchical focus management**: Priority-based keyboard routing (Dialog > Modal > Global > View > Focus > Component)
+- **Hierarchical focus management**: Priority-based keyboard routing (Dialog > Prefix Mode > Modal > View > Focus > Component)
+- **Prefix key sequences**: ctrl+x initiates a two-key command sequence
 
 ---
 
 ## Component Tree
 
 ```
-App (internal/tui/app.go:17-656)
+App (internal/tui/app.go:29-1045)
 ├── Root BubbleTea Model
 ├── Implements: tea.Model (Init, Update, View)
-├── State Management: session.Store, NATS event subscription
+├── State Management: session.Store, NATS event subscription, Orchestrator control
 ├── Channels: eventChan (NATS events), sendChan (user input to orchestrator)
+├── Prefix Mode: awaitingPrefixKey for ctrl+x sequences
 │
-├─── Dashboard (internal/tui/dashboard.go:26-364)
+├─── Dashboard (internal/tui/dashboard.go:27-325)
 │    ├── Main content area component
 │    ├── Implements: FocusableComponent
 │    ├── Focus Management: FocusPane enum (FocusAgent, FocusTasks, FocusNotes, FocusInput)
 │    ├── Renders: "Agent Output" panel with title bar
 │    ├── Child Components:
-│    │   └── AgentOutput (shared reference, rendered by Dashboard)
+│    │   ├── AgentOutput (shared reference, rendered by Dashboard)
+│    │   └── Sidebar (shared reference for focus delegation)
 │    └── Message Handling:
 │        ├── KeyPress: Tab (cycle focus), i (focus input), Enter/Esc (input control)
 │        ├── UserInputMsg → emitted when user submits text
 │        └── Focus delegation to child components
 │
-├─── AgentOutput (internal/tui/agent.go:14-871)
+├─── AgentOutput (internal/tui/agent.go:15-903)
 │    ├── Streaming agent conversation display
 │    ├── Implements: Component (Draw, Update)
 │    ├── Child Components:
@@ -41,40 +44,44 @@ App (internal/tui/app.go:17-656)
 │    │   └── GradientSpinner (streaming animation)
 │    ├── Message Types (internal/tui/messages.go):
 │    │   ├── TextMessageItem (assistant text with markdown rendering)
+│    │   ├── UserMessageItem (user text, right-aligned)
 │    │   ├── ThinkingMessageItem (reasoning content, collapsible)
 │    │   ├── ToolMessageItem (tool calls with status, expandable)
+│    │   ├── SubagentMessageItem (subagent tasks with session viewer)
 │    │   ├── InfoMessageItem (model/provider/duration metadata)
 │    │   └── DividerMessageItem (iteration separator)
 │    ├── Layout: Vertical split (viewport: height-5, input area: 5 lines)
 │    ├── Renders:
 │    │   ├── ScrollList viewport with message items
 │    │   ├── Separator line
-│    │   ├── Input field ("> " prompt + text input)
-│    │   └── Help text ("Press i to type" or "Enter to send · Esc to cancel")
+│    │   ├── Input field ("> " prompt + text input + queue indicator)
+│    │   └── Help text (context-sensitive hints)
 │    ├── Mouse Interaction:
 │    │   ├── Click-to-expand: Toggles expandable messages (ToolMessageItem, ThinkingMessageItem)
+│    │   ├── Click SubagentMessageItem → opens SubagentModal
 │    │   └── Input area click: Focuses text input
 │    └── Message Handling:
 │        ├── AgentOutputMsg → AppendText()
 │        ├── AgentToolCallMsg → AppendToolCall()
 │        ├── AgentThinkingMsg → AppendThinking()
 │        ├── AgentFinishMsg → AppendFinish()
-│        ├── KeyPress: up/down (focus expand/collapse), j/k (vim scroll), space/enter (toggle expand)
+│        ├── KeyPress: up/down (scroll), j/k (vim scroll), space/enter (toggle expand)
 │        └── GradientSpinnerMsg → spinner animation updates
 │
-├─── Sidebar (internal/tui/sidebar.go:162-718)
-│    ├── Tasks and notes list display
+├─── Sidebar (internal/tui/sidebar.go:174-878)
+│    ├── Tasks and notes list display with logo
 │    ├── Implements: FocusableComponent
 │    ├── Child Components:
 │    │   ├── tasksScrollList (task items)
 │    │   ├── notesScrollList (note items)
 │    │   └── Pulse (animation effect for status changes)
-│    ├── Layout: Vertical split (Tasks: 60%, Notes: 40%)
+│    ├── Layout: Vertical split (Logo: 6, Tasks: 55%, Notes: 45% of remainder)
 │    ├── Renders:
+│    │   ├── Logo panel: gradient-colored "iteratr" ASCII art
 │    │   ├── Tasks panel: "Tasks" title + ScrollList of taskScrollItem
 │    │   └── Notes panel: "Notes" title + ScrollList of noteScrollItem
-│    ├── Task Item Format: " [icon] content" (icons: ►=in_progress, ○=remaining, ✓=completed, ⊘=blocked)
-│    ├── Note Item Format: " [emoji] content" (emojis: 💡=learning, 🚫=stuck, 💬=tip, ⚡=decision)
+│    ├── Task Item Format: " [icon] content" (icons: ►=in_progress, ○=remaining, ✓=completed, ⊘=blocked, ⊗=cancelled)
+│    ├── Note Item Format: " [icon] content" (icons: *=learning, !=stuck, ›=tip, ◇=decision)
 │    ├── Mouse Interaction:
 │    │   ├── TaskAtPosition() → opens TaskModal
 │    │   └── NoteAtPosition() → opens NoteModal
@@ -88,33 +95,37 @@ App (internal/tui/app.go:17-656)
 │        ├── noteIndex (ID → position lookup)
 │        └── pulsedTaskIDs (track status changes)
 │
-├─── StatusBar (internal/tui/status.go:14-246)
-│    ├── Session info and keybinding hints
+├─── StatusBar (internal/tui/status.go:18-374)
+│    ├── Session info, git status, and keybinding hints
 │    ├── Implements: FullComponent
 │    ├── Child Components:
 │    │   └── Spinner (bubbles v2 - activity indicator)
 │    ├── Layout: Single row at top of screen
-│    ├── Renders: "iteratr | session | Iteration #N [spinner]     ctrl+l logs  ctrl+c quit"
-│    ├── Left Side: title, session name, iteration number, task stats (✓3 ●1 ○5 ✗1)
-│    ├── Right Side: keybinding hints
+│    ├── Renders: "iteratr | session | branch* hash | H:MM:SS | Iteration #N | stats | [spinner] | PAUSED/PAUSING | hints"
+│    ├── Left Side: title, session name, git info, duration, iteration number, task stats, file count, spinner, pause state
+│    ├── Right Side: keybinding hints (ctrl+x p pause, ctrl+x l logs, ctrl+c quit)
+│    ├── Prefix Mode: Shows "(awaiting key...)" when waiting for second key
 │    └── Message Handling:
 │        ├── StateUpdateMsg → updates task stats, starts/stops spinner
-│        ├── SpinnerTickMsg → spinner animation
+│        ├── DurationTickMsg → updates elapsed time display
+│        ├── PauseStateMsg → updates pause indicator
+│        ├── AgentBusyMsg → determines PAUSING vs PAUSED display
+│        ├── GitInfoMsg → updates git status display
 │        └── ConnectionStatusMsg → updates connection indicator
 │
-├─── LogViewer (internal/tui/logs.go:14-223) [Modal Overlay]
+├─── LogViewer (internal/tui/logs.go:15-223) [Modal Overlay]
 │    ├── Event history modal
 │    ├── Implements: FocusableComponent
 │    ├── Child Components:
 │    │   └── viewport.Model (bubbles v2)
-│    ├── Visibility: Toggled by logsVisible flag in App
+│    ├── Visibility: Toggled by ctrl+x l
 │    ├── Renders: Centered modal (80% screen size) with event log
 │    ├── Event Format: "HH:MM:SS [TYPE] action data"
 │    └── Message Handling:
 │        ├── EventMsg → AddEvent() (appends to log, auto-scrolls to bottom)
-│        └── KeyPress: esc/ctrl+l (close), up/down (scroll)
+│        └── KeyPress: esc (close), up/down (scroll)
 │
-├─── TaskModal (internal/tui/modal.go:14-280) [Modal Overlay]
+├─── TaskModal (internal/tui/modal.go:15-303) [Modal Overlay]
 │    ├── Task detail view
 │    ├── Visibility: Controlled by App.taskModal.visible
 │    ├── Renders: Centered modal (60x20) with task details
@@ -125,7 +136,7 @@ App (internal/tui/app.go:17-656)
 │    └── Message Handling:
 │        └── KeyPress: esc (close)
 │
-├─── NoteModal (internal/tui/note_modal.go:12-217) [Modal Overlay]
+├─── NoteModal (internal/tui/note_modal.go:12-220) [Modal Overlay]
 │    ├── Note detail view
 │    ├── Visibility: Controlled by App.noteModal.visible
 │    ├── Renders: Centered modal (60x14) with note details
@@ -136,7 +147,59 @@ App (internal/tui/app.go:17-656)
 │    └── Message Handling:
 │        └── KeyPress: esc (close)
 │
-└─── Dialog (internal/tui/dialog.go:10-171) [Modal Overlay]
+├─── NoteInputModal (internal/tui/note_input_modal.go:14-512) [Modal Overlay]
+│    ├── Interactive note creation modal
+│    ├── Visibility: Controlled by ctrl+x n
+│    ├── Child Components:
+│    │   └── textarea.Model (bubbles v2 - multi-line input)
+│    ├── Focus Zones: focusTypeSelector, focusTextarea, focusSubmitButton
+│    ├── Renders: Centered modal with type badges, textarea, submit button
+│    ├── Type Selection: learning, stuck, tip, decision (cycle with left/right)
+│    ├── Mouse Interaction:
+│    │   ├── Button click → submits note
+│    │   └── Click outside → closes modal
+│    └── Message Handling:
+│        ├── KeyPress: Tab/Shift+Tab (cycle focus), left/right (cycle type)
+│        ├── KeyPress: ctrl+enter (submit), esc (close)
+│        └── CreateNoteMsg → emitted on submit
+│
+├─── TaskInputModal (internal/tui/task_input_modal.go:14-443) [Modal Overlay]
+│    ├── Interactive task creation modal
+│    ├── Visibility: Controlled by ctrl+x t
+│    ├── Child Components:
+│    │   └── textarea.Model (bubbles v2 - multi-line input)
+│    ├── Focus Zones: focusPrioritySelector, focusTextarea, focusSubmitButton
+│    ├── Renders: Centered modal with priority badges, textarea, submit button
+│    ├── Priority Selection: critical, high, medium, low, backlog (cycle with left/right)
+│    ├── Mouse Interaction:
+│    │   ├── Button click → submits task
+│    │   └── Click outside → closes modal
+│    └── Message Handling:
+│        ├── KeyPress: Tab/Shift+Tab (cycle focus), left/right (cycle priority)
+│        ├── KeyPress: ctrl+enter (submit), esc (close)
+│        └── CreateTaskMsg → emitted on submit
+│
+├─── SubagentModal (internal/tui/subagent_modal.go:17-630) [Modal Overlay]
+│    ├── Full-screen subagent session viewer
+│    ├── Visibility: Opened by clicking SubagentMessageItem with sessionID
+│    ├── Child Components:
+│    │   ├── ScrollList (message replay viewport)
+│    │   ├── GradientSpinner (loading state)
+│    │   └── SessionLoader (ACP subprocess for session replay)
+│    ├── States: loading (spinner), error (message), content (scroll list)
+│    ├── Renders: Full-screen modal with subagent conversation replay
+│    ├── Mouse Interaction:
+│    │   └── Click-to-expand: Toggles expandable messages
+│    └── Message Handling:
+│        ├── SubagentTextMsg → appendText()
+│        ├── SubagentToolCallMsg → appendToolCall()
+│        ├── SubagentThinkingMsg → appendThinking()
+│        ├── SubagentUserMsg → appendUserMessage()
+│        ├── SubagentDoneMsg → session replay complete
+│        ├── SubagentErrorMsg → displays error
+│        └── KeyPress: esc (close), up/down (scroll)
+│
+└─── Dialog (internal/tui/dialog.go:10-172) [Modal Overlay]
      ├── Simple confirmation dialog
      ├── Visibility: Controlled by App.dialog.visible
      ├── Renders: Centered rounded border dialog with title, message, OK button
@@ -151,30 +214,41 @@ App (internal/tui/app.go:17-656)
 
 ## Supporting Components (Non-BubbleTea Models)
 
-### ScrollList (internal/tui/scrolllist.go:21-470)
+### ScrollList (internal/tui/scrolllist.go:21-480)
 - **Purpose**: Lazy-rendering scrollable list (only renders visible items)
 - **Interface**: ScrollItem (ID(), Render(width), Height())
-- **Used By**: AgentOutput, Sidebar (tasks/notes)
-- **Features**: Offset-based scrolling, auto-scroll to bottom, keyboard navigation (pgup/pgdown/home/end, j/k)
+- **Used By**: AgentOutput, Sidebar (tasks/notes), SubagentModal
+- **Features**: Offset-based scrolling, auto-scroll to bottom, keyboard navigation (pgup/pgdown/home/end, j/k), selection highlighting
 
 ### Message Items (internal/tui/messages.go)
 All implement ScrollItem interface:
 
 | Item | Lines | Purpose |
 |------|-------|---------|
-| TextMessageItem | 44-101 | Assistant text with markdown rendering via glamour |
-| ThinkingMessageItem | 104-204 | Reasoning content, collapsible (last 10 lines when collapsed) |
-| ToolMessageItem | 206-453 | Tool execution: header, code output, diffs, expandable |
-| InfoMessageItem | 456-528 | Model/provider/duration metadata |
-| DividerMessageItem | 531-593 | Iteration separator |
+| TextMessageItem | 45-110 | Assistant text with markdown rendering via glamour |
+| UserMessageItem | 53-163 | User text, right-aligned with border |
+| ThinkingMessageItem | 165-266 | Reasoning content, collapsible (last 10 lines when collapsed) |
+| ToolMessageItem | 267-552 | Tool execution: header, code output, diffs, expandable |
+| SubagentMessageItem | 621-738 | Subagent task: spinner, status, click-to-view hint |
+| InfoMessageItem | 553-619 | Model/provider/duration metadata |
+| DividerMessageItem | 740-797 | Iteration separator |
 
 ### Animation Components (internal/tui/anim.go)
 
 | Component | Lines | Purpose | Used By |
 |-----------|-------|---------|---------|
-| Spinner | 13-51 | MiniDot activity indicator | StatusBar |
-| Pulse | 54-151 | 5-frame fade in/out effect | Sidebar (task status changes) |
-| GradientSpinner | 154-256 | Animated gradient text | AgentOutput ("Generating..."/"Thinking...") |
+| Spinner | 12-52 | MiniDot activity indicator | StatusBar, SubagentMessageItem |
+| Pulse | 54-153 | 5-frame fade in/out effect | Sidebar (task status changes) |
+| GradientSpinner | 155-229 | Animated gradient text | AgentOutput, SubagentModal ("Generating..."/"Thinking..."/"Loading...") |
+
+### NotesPanel (internal/tui/notes.go:15-223)
+- **Purpose**: Dedicated notes view (grouped by type)
+- **Used By**: Potential future view switch
+- **Features**: Color-coded type headers, word wrapping, viewport scrolling
+
+### Footer (internal/tui/footer.go:12-239)
+- **Purpose**: Navigation footer bar (not currently used in main app)
+- **Features**: View navigation hints, clickable buttons, condensed mode for narrow terminals
 
 ---
 
@@ -183,13 +257,15 @@ All implement ScrollItem interface:
 ### Initialization
 ```
 main → Orchestrator.Start()
-  → NewApp(ctx, store, sessionName, nc, sendChan)
+  → NewApp(ctx, store, sessionName, workDir, nc, sendChan, orchestrator)
     → App.Init() → tea.Batch(
         subscribeToEvents(),      // NATS subscription
         waitForEvents(),          // Event channel listener
         loadInitialState(),       // Load session from store
         agent.Init(),             // Initialize AgentOutput
-        checkConnectionHealth()   // Periodic health checks
+        checkConnectionHealth(),  // Periodic health checks
+        status.StartDurationTick(), // Start elapsed time timer
+        fetchGitInfo()            // Fetch git repository status
       )
 ```
 
@@ -233,6 +309,28 @@ Agent runner → orchestrator → NATS/direct
       → ScrollList.SetItems() → auto-scroll
 ```
 
+### Pause/Resume Flow
+```
+ctrl+x p → togglePause()
+  → orchestrator.IsPaused() check
+    ├→ Not paused: orchestrator.RequestPause() → PauseStateMsg{true}
+    ├→ Paused + busy: orchestrator.CancelPause() → PauseStateMsg{false}
+    └→ Paused + idle: orchestrator.Resume() → PauseStateMsg{false}
+  → StatusBar displays PAUSING... (agent busy) or PAUSED (agent idle)
+```
+
+### Subagent Modal Flow
+```
+Click SubagentMessageItem with sessionID
+  → OpenSubagentModalMsg{sessionID, subagentType}
+    → NewSubagentModal() → subagentModal.Start()
+      → agent.NewSessionLoader() → loader.LoadAndStream()
+        → streamNext() → SubagentTextMsg/SubagentToolCallMsg/...
+          → HandleUpdate() → append to messages → refreshContent()
+            → SubagentDoneMsg (on EOF)
+ESC → subagentModal.Close() → subagentModal = nil
+```
+
 ---
 
 ## Keyboard Routing Priority
@@ -240,11 +338,20 @@ Agent runner → orchestrator → NATS/direct
 ```
 App.handleKeyPress(KeyPressMsg)
   Priority 0: Dialog visible → Dialog.Update()
-  Priority 1: TaskModal visible → ESC closes
-  Priority 2: NoteModal visible → ESC closes
-  Priority 3: LogViewer visible → ESC/ctrl+l closes, else logs.Update()
-  Priority 4: Global keys (ctrl+c quit, ctrl+l logs, ctrl+s sidebar toggle)
-  Priority 5: dashboard.Update()
+  Priority 0.5: Global keys (ctrl+x prefix, ctrl+c quit)
+  Priority 1: Prefix mode (ctrl+x followed by l/s/n/t/p)
+    → ctrl+x l: toggle logs
+    → ctrl+x s: toggle sidebar
+    → ctrl+x n: create note (opens NoteInputModal)
+    → ctrl+x t: create task (opens TaskInputModal)
+    → ctrl+x p: toggle pause/resume
+  Priority 2: TaskModal visible → ESC closes
+  Priority 3: NoteModal visible → ESC closes
+  Priority 4: NoteInputModal visible → forward to modal Update()
+  Priority 5: TaskInputModal visible → forward to modal Update()
+  Priority 6: SubagentModal visible → ESC closes, else forward scroll keys
+  Priority 7: LogViewer visible → ESC closes, else logs.Update()
+  Priority 8: dashboard.Update()
     → 'i' focus input
     → Tab cycle focus
     → Forward to agent (FocusAgent) or sidebar (FocusTasks/FocusNotes)
@@ -254,16 +361,22 @@ App.handleKeyPress(KeyPressMsg)
 
 ## Layout Management
 
-### CalculateLayout() (internal/tui/layout.go)
-- **Desktop Mode** (width >= 120): 3-column layout (Status, Main, Sidebar)
-- **Compact Mode** (width < 120): 2-row layout (Status, Main), sidebar overlays on toggle
+### CalculateLayout() (internal/tui/layout.go:43-85)
+- **Desktop Mode** (width >= 100, height >= 25): 3-column layout (Status, Main, Sidebar)
+- **Compact Mode** (width < 100 or height < 25): 2-row layout (Status, Main), sidebar overlays on toggle
+
+### Layout Constants
+- `CompactWidthBreakpoint`: 100 chars
+- `CompactHeightBreakpoint`: 25 rows
+- `SidebarWidthDesktop`: 45 chars
+- `StatusHeight`: 1 row
 
 ### Resize Flow
 ```
 WindowSizeMsg → App.Update
   → CalculateLayout(width, height) → Layout{Mode, Status, Main, Sidebar}
     → propagateSizes()
-      ├→ status.SetSize()
+      ├→ status.SetSize() + status.SetLayoutMode()
       ├→ dashboard.SetSize() → agent.UpdateSize()
       ├→ logs.SetSize()
       └→ sidebar.SetSize()
@@ -280,13 +393,16 @@ App.View()
   3. Draw in order (back to front):
      ├─ dashboard.Draw(scr, layout.Main)
      ├─ status.Draw(scr, layout.Status)
-     ├─ sidebar.Draw(scr, layout.Sidebar)  [desktop mode]
-     ├─ logs.Draw(scr, area)               [if visible]
+     ├─ sidebar.Draw(scr, layout.Sidebar)  [desktop mode or sidebarVisible]
+     ├─ logs.Draw(scr, area)               [if logsVisible]
+     ├─ subagentModal.Draw(scr, area)      [if subagentModal != nil]
      ├─ taskModal.Draw(scr, area)          [if visible]
      ├─ noteModal.Draw(scr, area)          [if visible]
-     └─ dialog.Draw(scr, area)            [if visible]
+     ├─ noteInputModal.Draw(scr, area)     [if visible]
+     ├─ taskInputModal.Draw(scr, area)     [if visible]
+     └─ dialog.Draw(scr, area)             [if visible]
   4. canvas.Render() → string
-  5. Return tea.View{Content, AltScreen, MouseMode}
+  5. Return tea.View{Content, AltScreen, MouseMode, BackgroundColor}
 ```
 
 ---
@@ -295,20 +411,29 @@ App.View()
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `internal/tui/app.go` | Root BubbleTea model, message routing, layout | 656 |
-| `internal/tui/dashboard.go` | Main content area, focus management | 364 |
-| `internal/tui/agent.go` | Agent conversation display, user input | 871 |
-| `internal/tui/sidebar.go` | Tasks/notes lists with pulse animation | 718 |
-| `internal/tui/status.go` | Status bar with session info | 246 |
+| `internal/tui/app.go` | Root BubbleTea model, message routing, layout | 1045 |
+| `internal/tui/dashboard.go` | Main content area, focus management | 325 |
+| `internal/tui/agent.go` | Agent conversation display, user input | 903 |
+| `internal/tui/sidebar.go` | Tasks/notes lists with logo and pulse animation | 878 |
+| `internal/tui/status.go` | Status bar with session/git info, pause state | 374 |
 | `internal/tui/logs.go` | Event log modal overlay | 223 |
-| `internal/tui/modal.go` | Task detail modal | 280 |
-| `internal/tui/note_modal.go` | Note detail modal | 217 |
-| `internal/tui/dialog.go` | Simple confirmation dialog | 171 |
-| `internal/tui/scrolllist.go` | Lazy-rendering scroll container | 470 |
-| `internal/tui/messages.go` | Message item types | 1162 |
-| `internal/tui/anim.go` | Animation components | 256 |
-| `internal/tui/draw.go` | Drawing utilities | 104 |
+| `internal/tui/modal.go` | Task detail modal | 303 |
+| `internal/tui/note_modal.go` | Note detail modal | 220 |
+| `internal/tui/note_input_modal.go` | Note creation modal with textarea | 512 |
+| `internal/tui/task_input_modal.go` | Task creation modal with textarea | 443 |
+| `internal/tui/subagent_modal.go` | Subagent session viewer modal | 630 |
+| `internal/tui/dialog.go` | Simple confirmation dialog | 172 |
+| `internal/tui/scrolllist.go` | Lazy-rendering scroll container | 480 |
+| `internal/tui/messages.go` | Message item types for conversation display | 1488 |
+| `internal/tui/anim.go` | Animation components (Spinner, Pulse, GradientSpinner) | 229 |
+| `internal/tui/draw.go` | Drawing utilities (DrawText, DrawStyled, DrawPanel) | 122 |
+| `internal/tui/hints.go` | Keybinding hint rendering utilities | 118 |
 | `internal/tui/markdown.go` | Markdown rendering via glamour | 37 |
+| `internal/tui/styles.go` | Modal title rendering with gradient | 35 |
+| `internal/tui/notes.go` | NotesPanel component (grouped notes view) | 223 |
+| `internal/tui/footer.go` | Footer navigation bar (unused in main app) | 239 |
 | `internal/tui/interfaces.go` | Component interfaces | 63 |
-| `internal/tui/layout.go` | Layout calculation logic | — |
-| `internal/orchestrator/orchestrator.go` | Application orchestrator | — |
+| `internal/tui/layout.go` | Layout calculation logic | 85 |
+| `internal/tui/theme/` | Theme system (manager, styles, catppuccin) | — |
+| `internal/tui/wizard/` | Setup wizard components | — |
+| `internal/tui/setup/` | Setup flow components | — |

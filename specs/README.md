@@ -28,3 +28,4 @@
 | [mcp-tools-server](./mcp-tools-server.md) | Draft | Embedded MCP HTTP server replacing CLI tool injection |
 | [session-pause](./session-pause.md) | Draft | Pause/resume sessions via ctrl+x p, status bar indicator |
 | [git-status-bar](./git-status-bar.md) | Draft | Display git branch, hash, dirty state, ahead/behind in status bar |
+| [2026-02-02-dead-code-cleanup](./2026-02-02-dead-code-cleanup.md) | Draft | Remove ~720 lines of dead code: unused files, legacy methods, orphaned helpers |
