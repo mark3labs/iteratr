@@ -83,6 +83,10 @@ func NewApp(ctx context.Context, store *session.Store, sessionName, workDir, dat
 	// Load UI state from persistent storage
 	uiState := loadUIState(dataDir)
 
+	// Create status bar and initialize with sidebar state
+	statusBar := NewStatusBar(sessionName)
+	statusBar.SetSidebarHidden(!uiState.Sidebar.Visible)
+
 	return &App{
 		store:             store,
 		sessionName:       sessionName,
@@ -97,7 +101,7 @@ func NewApp(ctx context.Context, store *session.Store, sessionName, workDir, dat
 		dashboard:         NewDashboard(agent, sidebar),
 		logs:              NewLogViewer(),
 		agent:             agent,
-		status:            NewStatusBar(sessionName),
+		status:            statusBar,
 		sidebar:           sidebar,
 		dialog:            NewDialog(),
 		taskModal:         NewTaskModal(),
@@ -151,12 +155,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.sidebarVisible = false
 				// Don't set sidebarUserHidden - this is auto-hide
 				a.saveUIState()
+				a.status.SetSidebarHidden(true)
 			}
 		} else if !wasWide && isWide {
 			// Widening past threshold: auto-restore only if not user-hidden
 			if !a.sidebarUserHidden && !a.sidebarVisible {
 				a.sidebarVisible = true
 				a.saveUIState()
+				a.status.SetSidebarHidden(false)
 			}
 		}
 
@@ -746,6 +752,9 @@ func (a *App) handleSidebarToggle() tea.Cmd {
 
 	// Persist state
 	a.saveUIState()
+
+	// Update status bar to show/hide sidebar hint
+	a.status.SetSidebarHidden(!a.sidebarVisible)
 
 	// Move focus to messages panel if hiding sidebar while focus is on sidebar
 	if !a.sidebarVisible && a.dashboard != nil {

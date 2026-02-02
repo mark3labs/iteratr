@@ -33,6 +33,7 @@ type StatusBar struct {
 	spinner           Spinner
 	modifiedFileCount int  // Number of files modified in current iteration
 	prefixMode        bool // Whether waiting for second key after ctrl+x
+	sidebarHidden     bool // Whether sidebar is currently hidden
 
 	// Git status fields
 	gitBranch string // Branch name or "HEAD" if detached
@@ -230,6 +231,12 @@ func (s *StatusBar) buildRight() string {
 		return theme.Current().S().HintKey.Render("ctrl+x") + " " +
 			theme.Current().S().HintDesc.Render("(awaiting key...)")
 	}
+
+	// Show sidebar hint when hidden
+	if s.sidebarHidden {
+		return RenderHintBar(KeyCtrlXB, "sidebar", KeyCtrlXP, "pause", KeyCtrlXL, "logs", KeyCtrlC, "quit")
+	}
+
 	return HintStatus()
 }
 
@@ -262,6 +269,11 @@ func (s *StatusBar) SetModifiedFileCount(count int) {
 // SetPrefixMode updates whether the app is waiting for a second key after ctrl+x.
 func (s *StatusBar) SetPrefixMode(prefixMode bool) {
 	s.prefixMode = prefixMode
+}
+
+// SetSidebarHidden updates whether the sidebar is currently hidden.
+func (s *StatusBar) SetSidebarHidden(hidden bool) {
+	s.sidebarHidden = hidden
 }
 
 // SetGitInfo updates the git repository status fields.

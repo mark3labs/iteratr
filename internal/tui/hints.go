@@ -17,7 +17,7 @@ const (
 	KeyCtrlC    = "ctrl+c"
 	KeyCtrlX    = "ctrl+x"   // Prefix modifier key
 	KeyCtrlXL   = "ctrl+x l" // Toggle logs
-	KeyCtrlXS   = "ctrl+x s" // Toggle sidebar
+	KeyCtrlXB   = "ctrl+x b" // Toggle sidebar
 	KeyCtrlXN   = "ctrl+x n" // Create note
 	KeyCtrlXT   = "ctrl+x t" // Create task
 	KeyCtrlXP   = "ctrl+x p" // Pause/resume

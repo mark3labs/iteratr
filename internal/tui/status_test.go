@@ -168,3 +168,51 @@ func TestStatusBar_SpinnerStopsWhenDone(t *testing.T) {
 		t.Error("Expected Update to return nil when no longer working")
 	}
 }
+
+func TestStatusBar_SidebarHint(t *testing.T) {
+	tests := []struct {
+		name          string
+		sidebarHidden bool
+		expectHint    bool
+	}{
+		{
+			name:          "shows sidebar hint when hidden",
+			sidebarHidden: true,
+			expectHint:    true,
+		},
+		{
+			name:          "no sidebar hint when visible",
+			sidebarHidden: false,
+			expectHint:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sb := NewStatusBar("test-session")
+			sb.SetLayoutMode(LayoutDesktop)
+			sb.SetSidebarHidden(tt.sidebarHidden)
+
+			// Render the status bar
+			canvas := uv.NewScreenBuffer(150, 1)
+			area := uv.Rect(0, 0, 150, 1)
+			sb.Draw(canvas, area)
+			content := canvas.Render()
+
+			// Check for sidebar hint
+			hasSidebarHint := strings.Contains(content, "sidebar")
+
+			if tt.expectHint && !hasSidebarHint {
+				t.Errorf("Expected sidebar hint when hidden, got: %s", content)
+			}
+			if !tt.expectHint && hasSidebarHint {
+				t.Errorf("Expected no sidebar hint when visible, got: %s", content)
+			}
+
+			// Standard hints should always be present
+			if !strings.Contains(content, "quit") {
+				t.Errorf("Expected quit hint, got: %s", content)
+			}
+		})
+	}
+}
