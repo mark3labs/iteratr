@@ -194,7 +194,6 @@ func TestViewType_Constants(t *testing.T) {
 	views := []ViewType{
 		ViewDashboard,
 		ViewLogs,
-		ViewNotes,
 	}
 
 	seen := make(map[ViewType]bool)
@@ -205,8 +204,8 @@ func TestViewType_Constants(t *testing.T) {
 		seen[view] = true
 	}
 
-	if len(seen) != 3 {
-		t.Errorf("expected 3 distinct view types, got %d", len(seen))
+	if len(seen) != 2 {
+		t.Errorf("expected 2 distinct view types, got %d", len(seen))
 	}
 }
 

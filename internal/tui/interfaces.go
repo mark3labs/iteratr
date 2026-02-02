@@ -57,6 +57,4 @@ type ViewType int
 const (
 	ViewDashboard ViewType = iota
 	ViewLogs
-	ViewNotes
-	ViewInbox
 )
