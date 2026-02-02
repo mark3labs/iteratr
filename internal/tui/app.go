@@ -391,10 +391,9 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// ctrl+x l -> toggle logs
 			a.logsVisible = !a.logsVisible
 			return a, nil
-		case "s":
-			// ctrl+x s -> toggle sidebar
-			a.sidebarVisible = !a.sidebarVisible
-			return a, nil
+		case "b":
+			// ctrl+x b -> toggle sidebar
+			return a, a.handleSidebarToggle()
 		case "n":
 			// ctrl+x n -> create note
 			if a.dialog.IsVisible() || a.taskModal.IsVisible() || a.noteModal.IsVisible() ||
@@ -709,6 +708,45 @@ func (a *App) togglePause() tea.Cmd {
 		return func() tea.Msg {
 			return PauseStateMsg{Paused: false}
 		}
+	}
+}
+
+// handleSidebarToggle toggles the sidebar visibility and manages focus and persistence.
+// When hiding: moves focus from sidebar to messages panel and sets user-hidden flag.
+// When showing: restores sidebar and clears user-hidden flag.
+func (a *App) handleSidebarToggle() tea.Cmd {
+	// Toggle visibility
+	a.sidebarVisible = !a.sidebarVisible
+
+	// Set user-hidden flag when manually toggling
+	a.sidebarUserHidden = !a.sidebarVisible
+
+	// Persist state
+	a.saveUIState()
+
+	// Move focus to messages panel if hiding sidebar while focus is on sidebar
+	if !a.sidebarVisible && a.dashboard != nil {
+		if a.dashboard.focusPane == FocusTasks || a.dashboard.focusPane == FocusNotes {
+			a.dashboard.focusPane = FocusAgent
+			a.dashboard.updateScrollListFocus()
+		}
+	}
+
+	// Mark layout dirty to trigger recalculation
+	a.layoutDirty = true
+
+	return nil
+}
+
+// saveUIState persists the current UI state to disk.
+func (a *App) saveUIState() {
+	uiState := &state.UIState{
+		Sidebar: state.SidebarState{
+			Visible: a.sidebarVisible,
+		},
+	}
+	if err := state.Save(a.dataDir, uiState); err != nil {
+		logger.Warn("failed to save UI state: %v", err)
 	}
 }
 

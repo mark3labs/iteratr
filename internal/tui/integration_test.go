@@ -265,10 +265,10 @@ func TestIntegration_CompactModeToggle(t *testing.T) {
 		t.Error("Sidebar should be visible initially")
 	}
 
-	// Press ctrl+x s to hide sidebar
+	// Press ctrl+x b to hide sidebar
 	msg := tea.KeyPressMsg{Text: "ctrl+x"}
 	_, _ = app.Update(msg)
-	msg = tea.KeyPressMsg{Text: "s"}
+	msg = tea.KeyPressMsg{Text: "b"}
 	_, _ = app.Update(msg)
 
 	// Sidebar should now be hidden
@@ -276,10 +276,10 @@ func TestIntegration_CompactModeToggle(t *testing.T) {
 		t.Error("Sidebar should be hidden after toggle")
 	}
 
-	// Press ctrl+x s again to show
+	// Press ctrl+x b again to show
 	msg = tea.KeyPressMsg{Text: "ctrl+x"}
 	_, _ = app.Update(msg)
-	msg = tea.KeyPressMsg{Text: "s"}
+	msg = tea.KeyPressMsg{Text: "b"}
 	_, _ = app.Update(msg)
 
 	// Sidebar should be visible

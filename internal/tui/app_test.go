@@ -219,28 +219,28 @@ func TestApp_HandleKeyPress_SidebarToggle(t *testing.T) {
 		t.Error("expected sidebar to be visible initially")
 	}
 
-	// Press ctrl+x s to toggle sidebar hidden
+	// Press ctrl+x b to toggle sidebar hidden
 	msg := tea.KeyPressMsg{Text: "ctrl+x"}
 	updatedModel, _ := app.handleKeyPress(msg)
 	app = updatedModel.(*App)
-	msg = tea.KeyPressMsg{Text: "s"}
+	msg = tea.KeyPressMsg{Text: "b"}
 	updatedModel, _ = app.handleKeyPress(msg)
 	app = updatedModel.(*App)
 
 	if app.sidebarVisible {
-		t.Error("expected sidebar to be hidden after ctrl+x s")
+		t.Error("expected sidebar to be hidden after ctrl+x b")
 	}
 
-	// Press ctrl+x s again to toggle sidebar visible
+	// Press ctrl+x b again to toggle sidebar visible
 	msg = tea.KeyPressMsg{Text: "ctrl+x"}
 	updatedModel, _ = app.handleKeyPress(msg)
 	app = updatedModel.(*App)
-	msg = tea.KeyPressMsg{Text: "s"}
+	msg = tea.KeyPressMsg{Text: "b"}
 	updatedModel, _ = app.handleKeyPress(msg)
 	app = updatedModel.(*App)
 
 	if !app.sidebarVisible {
-		t.Error("expected sidebar to be visible after second ctrl+x s")
+		t.Error("expected sidebar to be visible after second ctrl+x b")
 	}
 }
 
@@ -290,17 +290,17 @@ func TestApp_HandleKeyPress_PrefixKeySequence_Sidebar(t *testing.T) {
 		t.Error("expected sidebar to be visible initially")
 	}
 
-	// Press ctrl+x then 's' to toggle sidebar hidden
+	// Press ctrl+x then 'b' to toggle sidebar hidden
 	msg := tea.KeyPressMsg{Text: "ctrl+x"}
 	updatedModel, _ := app.handleKeyPress(msg)
 	app = updatedModel.(*App)
 
-	msg = tea.KeyPressMsg{Text: "s"}
+	msg = tea.KeyPressMsg{Text: "b"}
 	updatedModel, _ = app.handleKeyPress(msg)
 	app = updatedModel.(*App)
 
 	if app.sidebarVisible {
-		t.Error("expected sidebar to be hidden after ctrl+x s")
+		t.Error("expected sidebar to be hidden after ctrl+x b")
 	}
 	if app.awaitingPrefixKey {
 		t.Error("expected awaitingPrefixKey to be false after completing sequence")
