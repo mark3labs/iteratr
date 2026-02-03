@@ -376,3 +376,176 @@ func TestQuestionView_AutoAppendTypeYourOwn(t *testing.T) {
 		t.Errorf("expected description 'Enter custom text', got %q", lastItem.description)
 	}
 }
+
+func TestQuestionView_MultiSelectIndices(t *testing.T) {
+	questions := []Question{
+		{
+			Header:   "Multi-select Question",
+			Question: "Select multiple options",
+			Options: []Option{
+				{Label: "Option A"},
+				{Label: "Option B"},
+				{Label: "Option C"},
+				{Label: "Option D"},
+			},
+			Multiple: true,
+		},
+	}
+
+	answers := []QuestionAnswer{
+		{Value: []string{}, IsMulti: true},
+	}
+
+	qv := NewQuestionView(questions, answers, 0)
+
+	// Select Option A (index 0)
+	qv.optionSelector.Toggle()
+	indices := qv.optionSelector.SelectedIndices()
+	if len(indices) != 1 || indices[0] != 0 {
+		t.Errorf("expected indices [0], got %v", indices)
+	}
+
+	// Select Option C (index 2)
+	qv.optionSelector.CursorDown()
+	qv.optionSelector.CursorDown()
+	qv.optionSelector.Toggle()
+	indices = qv.optionSelector.SelectedIndices()
+	if len(indices) != 2 || indices[0] != 0 || indices[1] != 2 {
+		t.Errorf("expected indices [0, 2], got %v", indices)
+	}
+
+	// Deselect Option A (index 0)
+	qv.optionSelector.cursor = 0
+	qv.optionSelector.Toggle()
+	indices = qv.optionSelector.SelectedIndices()
+	if len(indices) != 1 || indices[0] != 2 {
+		t.Errorf("expected indices [2], got %v", indices)
+	}
+
+	// Save answer and verify it contains correct labels
+	qv.saveCurrentAnswer()
+	saved := qv.answers[0]
+	if !saved.IsMulti {
+		t.Error("expected answer to be marked as multi-select")
+	}
+
+	labels, ok := saved.Value.([]string)
+	if !ok {
+		t.Fatalf("expected answer value to be []string, got %T", saved.Value)
+	}
+
+	if len(labels) != 1 || labels[0] != "Option C" {
+		t.Errorf("expected labels [Option C], got %v", labels)
+	}
+}
+
+func TestQuestionView_MultiSelectWithMultipleSelections(t *testing.T) {
+	questions := []Question{
+		{
+			Header:   "Multi-select Question",
+			Question: "Select multiple options",
+			Options: []Option{
+				{Label: "Option 1"},
+				{Label: "Option 2"},
+				{Label: "Option 3"},
+			},
+			Multiple: true,
+		},
+	}
+
+	answers := []QuestionAnswer{
+		{Value: []string{}, IsMulti: true},
+	}
+
+	qv := NewQuestionView(questions, answers, 0)
+
+	// Select all three options
+	qv.optionSelector.Toggle() // Select Option 1
+	qv.optionSelector.CursorDown()
+	qv.optionSelector.Toggle() // Select Option 2
+	qv.optionSelector.CursorDown()
+	qv.optionSelector.Toggle() // Select Option 3
+
+	// Verify indices
+	indices := qv.optionSelector.SelectedIndices()
+	if len(indices) != 3 || indices[0] != 0 || indices[1] != 1 || indices[2] != 2 {
+		t.Errorf("expected indices [0, 1, 2], got %v", indices)
+	}
+
+	// Verify labels
+	labels := qv.optionSelector.SelectedLabels()
+	expectedLabels := []string{"Option 1", "Option 2", "Option 3"}
+	if len(labels) != len(expectedLabels) {
+		t.Fatalf("expected %d labels, got %d", len(expectedLabels), len(labels))
+	}
+	for i, expected := range expectedLabels {
+		if labels[i] != expected {
+			t.Errorf("expected label %q at index %d, got %q", expected, i, labels[i])
+		}
+	}
+
+	// Save and verify answer
+	qv.saveCurrentAnswer()
+	saved := qv.answers[0]
+	savedLabels, ok := saved.Value.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", saved.Value)
+	}
+
+	if len(savedLabels) != 3 {
+		t.Errorf("expected 3 saved labels, got %d", len(savedLabels))
+	}
+}
+
+func TestQuestionView_MultiSelectCustomOption(t *testing.T) {
+	questions := []Question{
+		{
+			Header:   "Multi-select Question",
+			Question: "Select options or type your own",
+			Options: []Option{
+				{Label: "Option 1"},
+				{Label: "Option 2"},
+			},
+			Multiple: true,
+		},
+	}
+
+	answers := []QuestionAnswer{
+		{Value: []string{}, IsMulti: true},
+	}
+
+	qv := NewQuestionView(questions, answers, 0)
+
+	// Select Option 1 and Option 2
+	qv.optionSelector.Toggle()
+	qv.optionSelector.CursorDown()
+	qv.optionSelector.Toggle()
+
+	labels := qv.optionSelector.SelectedLabels()
+	if len(labels) != 2 {
+		t.Errorf("expected 2 selections, got %v", labels)
+	}
+
+	// Now select "Type your own answer" (should deselect all others)
+	qv.optionSelector.cursor = len(qv.optionSelector.items) - 1
+	qv.optionSelector.Toggle()
+
+	labels = qv.optionSelector.SelectedLabels()
+	if len(labels) != 1 || labels[0] != "Type your own answer" {
+		t.Errorf("expected only [Type your own answer], got %v", labels)
+	}
+
+	// Set custom text and save
+	qv.customInput.SetValue("My custom answer")
+	qv.saveCurrentAnswer()
+
+	saved := qv.answers[0]
+	savedLabels, ok := saved.Value.([]string)
+	if !ok {
+		t.Fatalf("expected []string, got %T", saved.Value)
+	}
+
+	if len(savedLabels) != 1 || savedLabels[0] != "My custom answer" {
+		t.Errorf("expected [My custom answer], got %v", savedLabels)
+	}
+}
