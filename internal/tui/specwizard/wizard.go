@@ -244,9 +244,23 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SaveSpecMsg:
 		// User clicked Save button in review step
-		// TODO: Implement save logic (will be done in TAS-47)
 		logger.Debug("Save spec button clicked")
-		return m, nil
+
+		// Save spec to file and update README
+		specPath, err := saveSpec(m.cfg.SpecDir, m.result.Title, m.result.Description, m.result.SpecContent)
+		if err != nil {
+			logger.Error("Failed to save spec: %v", err)
+			// Show error to user
+			// TODO: Add error handling UI (could show error modal)
+			return m, nil
+		}
+
+		logger.Debug("Spec saved to %s", specPath)
+
+		// Advance to completion step with saved path
+		return m, func() tea.Msg {
+			return SpecSavedMsg{Path: specPath}
+		}
 
 	case StartBuildMsg:
 		// User clicked Start Build button in completion step
