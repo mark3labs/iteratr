@@ -98,6 +98,82 @@ func TestQuestionOptions_KeyboardNavigation(t *testing.T) {
 	}
 }
 
+func TestQuestionOptions_KeyboardMessages(t *testing.T) {
+	items := []OptionItem{
+		{label: "Option 1"},
+		{label: "Option 2"},
+		{label: "Option 3"},
+	}
+
+	opts := NewQuestionOptions(items, false)
+	opts.Focus()
+
+	// Test "down" key
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "down"})
+	if opts.cursor != 1 {
+		t.Errorf("down key: expected cursor at 1, got %d", opts.cursor)
+	}
+
+	// Test "j" key (vim-style)
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "j"})
+	if opts.cursor != 2 {
+		t.Errorf("j key: expected cursor at 2, got %d", opts.cursor)
+	}
+
+	// Test "up" key
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "up"})
+	if opts.cursor != 1 {
+		t.Errorf("up key: expected cursor at 1, got %d", opts.cursor)
+	}
+
+	// Test "k" key (vim-style)
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "k"})
+	if opts.cursor != 0 {
+		t.Errorf("k key: expected cursor at 0, got %d", opts.cursor)
+	}
+
+	// Test space key for toggle - use direct Toggle() since KeyPressMsg space handling varies
+	opts.Toggle()
+	if !opts.items[0].selected {
+		t.Error("toggle: expected first item to be selected")
+	}
+
+	// Test that toggling again keeps it selected in single-select (replaces selection)
+	opts.Toggle()
+	if !opts.items[0].selected {
+		t.Error("toggle again: expected first item to remain selected")
+	}
+
+	// Test enter key for toggle
+	opts.items[0].selected = false // Reset
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "enter"})
+	if !opts.items[0].selected {
+		t.Error("enter key: expected first item to be selected")
+	}
+
+	// Test cursor bounds (down at bottom)
+	opts.cursor = 2
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "down"})
+	if opts.cursor != 2 {
+		t.Errorf("down at bottom: expected cursor to stay at 2, got %d", opts.cursor)
+	}
+
+	// Test cursor bounds (up at top)
+	opts.cursor = 0
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "up"})
+	if opts.cursor != 0 {
+		t.Errorf("up at top: expected cursor to stay at 0, got %d", opts.cursor)
+	}
+
+	// Test focus/blur handling
+	opts.Blur()
+	opts.cursor = 0
+	opts, _ = opts.Update(tea.KeyPressMsg{Text: "down"})
+	if opts.cursor != 0 {
+		t.Errorf("blurred: expected cursor to stay at 0 (no movement when blurred), got %d", opts.cursor)
+	}
+}
+
 func TestQuestionView_AnswerPersistence(t *testing.T) {
 	questions := []Question{
 		{
