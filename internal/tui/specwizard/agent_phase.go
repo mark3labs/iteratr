@@ -151,7 +151,7 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		return a, nil
 
 	case SubmitAnswersMsg:
-		// Validate all answers
+		// Validate current answer
 		if !a.questionView.validateAnswer() {
 			return a, func() tea.Msg {
 				return ShowErrorMsg{err: "Please select an answer or enter custom text"}
@@ -161,6 +161,26 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		// Save final answer
 		a.questionView.saveCurrentAnswer()
 		a.answers = a.questionView.answers
+
+		// Validate all answers are non-empty
+		for i, ans := range a.answers {
+			if ans.IsMulti {
+				values, ok := ans.Value.([]string)
+				if !ok || len(values) == 0 {
+					return a, func() tea.Msg {
+						return ShowErrorMsg{err: "All questions must be answered. Please go back and answer all questions."}
+					}
+				}
+			} else {
+				value, ok := ans.Value.(string)
+				if !ok || value == "" {
+					return a, func() tea.Msg {
+						return ShowErrorMsg{err: "All questions must be answered. Please go back and answer all questions."}
+					}
+				}
+			}
+			logger.Debug("Answer %d: %+v", i, ans)
+		}
 
 		// Send answers back to MCP handler
 		logger.Debug("Agent phase: submitting %d answers", len(a.answers))

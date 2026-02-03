@@ -474,6 +474,282 @@ func TestAgentPhase_SubmitAnswers(t *testing.T) {
 	}
 }
 
+func TestAgentPhase_SubmitAnswers_ValidationFailsCurrentQuestion(t *testing.T) {
+	mcpServer := specmcp.New("test-spec", "./specs")
+	phase := NewAgentPhase(mcpServer)
+
+	resultCh := make(chan []interface{}, 1)
+
+	// Setup with 2 questions
+	req := specmcp.QuestionRequest{
+		Questions: []specmcp.Question{
+			{
+				Question: "Question 1?",
+				Header:   "Q1",
+				Options:  []specmcp.Option{{Label: "Red", Description: ""}},
+				Multiple: false,
+			},
+			{
+				Question: "Question 2?",
+				Header:   "Q2",
+				Options:  []specmcp.Option{{Label: "Feature A", Description: ""}},
+				Multiple: false,
+			},
+		},
+		ResultCh: resultCh,
+	}
+
+	phase, _ = phase.Update(QuestionRequestMsg{Request: req})
+
+	// Answer first question
+	phase.questionView.optionSelector.items[0].selected = true
+
+	// Go to second question (this saves the first answer)
+	phase, _ = phase.Update(NextQuestionMsg{})
+
+	// Don't answer second question - leave it empty
+
+	// Try to submit answers
+	phase, cmd := phase.Update(SubmitAnswersMsg{})
+
+	// Should stay in question state
+	assert.False(t, phase.waitingForAgent, "should stay in question state")
+	assert.NotNil(t, phase.questionView, "question view should still exist")
+	assert.NotNil(t, phase.currentReq, "request should not be cleared")
+
+	// Should return error command
+	require.NotNil(t, cmd, "should return error command")
+
+	// Execute command and verify it returns ShowErrorMsg
+	msg := cmd()
+	errorMsg, ok := msg.(ShowErrorMsg)
+	assert.True(t, ok, "command should return ShowErrorMsg")
+	assert.Contains(t, errorMsg.err, "Please select an answer", "error should mention selection")
+
+	// Verify no answers were sent to result channel
+	select {
+	case <-resultCh:
+		t.Fatal("should not send answers when validation fails")
+	case <-time.After(10 * time.Millisecond):
+		// Expected - no answers sent
+	}
+}
+
+func TestAgentPhase_SubmitAnswers_ValidationFailsPreviousQuestion(t *testing.T) {
+	mcpServer := specmcp.New("test-spec", "./specs")
+	phase := NewAgentPhase(mcpServer)
+
+	resultCh := make(chan []interface{}, 1)
+
+	// Setup with 3 questions
+	req := specmcp.QuestionRequest{
+		Questions: []specmcp.Question{
+			{
+				Question: "Question 1?",
+				Header:   "Q1",
+				Options:  []specmcp.Option{{Label: "Red", Description: ""}},
+				Multiple: false,
+			},
+			{
+				Question: "Question 2?",
+				Header:   "Q2",
+				Options:  []specmcp.Option{{Label: "Blue", Description: ""}},
+				Multiple: false,
+			},
+			{
+				Question: "Question 3?",
+				Header:   "Q3",
+				Options:  []specmcp.Option{{Label: "Green", Description: ""}},
+				Multiple: false,
+			},
+		},
+		ResultCh: resultCh,
+	}
+
+	phase, _ = phase.Update(QuestionRequestMsg{Request: req})
+
+	// Answer first question
+	phase.questionView.optionSelector.items[0].selected = true
+	phase, _ = phase.Update(NextQuestionMsg{})
+
+	// Skip second question - don't answer it, just go to third
+	phase, _ = phase.Update(NextQuestionMsg{}) // This should fail validation and stay on Q2
+
+	// Since validation failed on Q2, we're still on Q2. Let's manually skip it by not answering
+	// and force navigation (simulate user clearing answer after initial selection)
+	phase.currentIndex = 2 // Manually move to Q3
+	phase.questionView = NewQuestionView(phase.questions, phase.answers, phase.currentIndex)
+
+	// Answer third question
+	phase.questionView.optionSelector.items[0].selected = true
+
+	// Try to submit - should fail because Q2 was never answered
+	phase, cmd := phase.Update(SubmitAnswersMsg{})
+
+	// Should stay in question state
+	assert.False(t, phase.waitingForAgent, "should stay in question state")
+	assert.NotNil(t, phase.questionView, "question view should still exist")
+
+	// Should return error command
+	require.NotNil(t, cmd, "should return error command")
+
+	// Execute command and verify it returns ShowErrorMsg
+	msg := cmd()
+	errorMsg, ok := msg.(ShowErrorMsg)
+	assert.True(t, ok, "command should return ShowErrorMsg")
+	assert.Contains(t, errorMsg.err, "All questions must be answered", "error should mention all questions")
+
+	// Verify no answers were sent to result channel
+	select {
+	case <-resultCh:
+		t.Fatal("should not send answers when validation fails")
+	case <-time.After(10 * time.Millisecond):
+		// Expected - no answers sent
+	}
+}
+
+func TestAgentPhase_SubmitAnswers_ValidationFailsMultiSelectEmpty(t *testing.T) {
+	mcpServer := specmcp.New("test-spec", "./specs")
+	phase := NewAgentPhase(mcpServer)
+
+	resultCh := make(chan []interface{}, 1)
+
+	// Setup with 3 questions - first is single, second is multi-select, third is single
+	req := specmcp.QuestionRequest{
+		Questions: []specmcp.Question{
+			{
+				Question: "Question 1?",
+				Header:   "Q1",
+				Options:  []specmcp.Option{{Label: "Red", Description: ""}},
+				Multiple: false,
+			},
+			{
+				Question: "Select features",
+				Header:   "Q2",
+				Options: []specmcp.Option{
+					{Label: "Feature A", Description: ""},
+					{Label: "Feature B", Description: ""},
+				},
+				Multiple: true,
+			},
+			{
+				Question: "Question 3?",
+				Header:   "Q3",
+				Options:  []specmcp.Option{{Label: "Blue", Description: ""}},
+				Multiple: false,
+			},
+		},
+		ResultCh: resultCh,
+	}
+
+	phase, _ = phase.Update(QuestionRequestMsg{Request: req})
+
+	// Answer first question
+	phase.questionView.optionSelector.items[0].selected = true
+	phase, _ = phase.Update(NextQuestionMsg{})
+
+	// Skip second question without answering - force move to third question
+	// by manually advancing index (simulating bug or edge case)
+	phase.currentIndex = 2
+	phase.questionView = NewQuestionView(phase.questions, phase.answers, phase.currentIndex)
+	phase.answers[1] = QuestionAnswer{Value: []string{}, IsMulti: true} // Second question left empty
+
+	// Answer third question
+	phase.questionView.optionSelector.items[0].selected = true
+
+	// Try to submit - should fail because multi-select question was never answered
+	phase, cmd := phase.Update(SubmitAnswersMsg{})
+
+	// Should stay in question state
+	assert.False(t, phase.waitingForAgent, "should stay in question state")
+	assert.NotNil(t, phase.questionView, "question view should still exist")
+
+	// Should return error command
+	require.NotNil(t, cmd, "should return error command")
+
+	// Execute command and verify it returns ShowErrorMsg
+	msg := cmd()
+	errorMsg, ok := msg.(ShowErrorMsg)
+	assert.True(t, ok, "command should return ShowErrorMsg")
+	assert.Contains(t, errorMsg.err, "All questions must be answered", "error should mention all questions")
+
+	// Verify no answers were sent to result channel
+	select {
+	case <-resultCh:
+		t.Fatal("should not send answers when validation fails")
+	case <-time.After(10 * time.Millisecond):
+		// Expected - no answers sent
+	}
+}
+
+func TestAgentPhase_SubmitAnswers_AllAnswersValid(t *testing.T) {
+	mcpServer := specmcp.New("test-spec", "./specs")
+	phase := NewAgentPhase(mcpServer)
+
+	resultCh := make(chan []interface{}, 1)
+
+	// Setup with 3 questions - mix of single-select and multi-select
+	req := specmcp.QuestionRequest{
+		Questions: []specmcp.Question{
+			{
+				Question: "Question 1?",
+				Header:   "Q1",
+				Options:  []specmcp.Option{{Label: "Red", Description: ""}},
+				Multiple: false,
+			},
+			{
+				Question: "Select features",
+				Header:   "Q2",
+				Options: []specmcp.Option{
+					{Label: "Feature A", Description: ""},
+					{Label: "Feature B", Description: ""},
+				},
+				Multiple: true,
+			},
+			{
+				Question: "Question 3?",
+				Header:   "Q3",
+				Options:  []specmcp.Option{{Label: "Blue", Description: ""}},
+				Multiple: false,
+			},
+		},
+		ResultCh: resultCh,
+	}
+
+	phase, _ = phase.Update(QuestionRequestMsg{Request: req})
+
+	// Answer first question
+	phase.questionView.optionSelector.items[0].selected = true
+	phase, _ = phase.Update(NextQuestionMsg{})
+
+	// Answer second question (multi-select)
+	phase.questionView.optionSelector.items[0].selected = true
+	phase, _ = phase.Update(NextQuestionMsg{})
+
+	// Answer third question
+	phase.questionView.optionSelector.items[0].selected = true
+
+	// Submit answers - should succeed
+	phase, cmd := phase.Update(SubmitAnswersMsg{})
+
+	// Should return to waiting state
+	assert.True(t, phase.waitingForAgent, "should return to waiting state")
+	assert.Nil(t, phase.questionView, "question view should be cleared")
+	assert.Nil(t, phase.currentReq, "request should be cleared")
+	assert.NotNil(t, cmd, "should return command for spinner tick + wait for next questions")
+
+	// Verify answers were sent to result channel
+	select {
+	case answers := <-resultCh:
+		require.Len(t, answers, 3)
+		assert.Equal(t, "Red", answers[0])
+		assert.Equal(t, []string{"Feature A"}, answers[1])
+		assert.Equal(t, "Blue", answers[2])
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected answers to be sent to result channel")
+	}
+}
+
 func TestAgentPhase_WindowSize(t *testing.T) {
 	mcpServer := specmcp.New("test-spec", "./specs")
 	phase := NewAgentPhase(mcpServer)
