@@ -200,16 +200,16 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.Title = msg.Title
 		m.step = StepDescription
 		m.buttonFocused = false
-		m.initCurrentStep()
-		return m, nil
+		cmd := m.initCurrentStep()
+		return m, cmd
 
 	case DescriptionSubmittedMsg:
 		// Description submitted, advance to model selection
 		m.result.Description = msg.Description
 		m.step = StepModel
 		m.buttonFocused = false
-		m.initCurrentStep()
-		return m, nil
+		cmd := m.initCurrentStep()
+		return m, cmd
 
 	case wizard.ModelSelectedMsg:
 		// Model selected, advance to agent phase
@@ -224,16 +224,16 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.SpecContent = msg.Content
 		m.step = StepReview
 		m.buttonFocused = false
-		m.initCurrentStep()
-		return m, nil
+		cmd := m.initCurrentStep()
+		return m, cmd
 
 	case SpecSavedMsg:
 		// Spec saved, advance to completion
 		m.result.SpecPath = msg.Path
 		m.step = StepCompletion
 		m.buttonFocused = false
-		m.initCurrentStep()
-		return m, nil
+		cmd := m.initCurrentStep()
+		return m, cmd
 
 	case AgentErrorMsg:
 		// Agent failed to start or encountered error
@@ -259,8 +259,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.mcpServer.Stop()
 			m.mcpServer = nil
 		}
-		m.initCurrentStep()
-		return m, nil
+		cmd := m.initCurrentStep()
+		return m, cmd
 
 	case CancelWizardMsg:
 		// User confirmed cancellation during agent phase
@@ -397,28 +397,31 @@ func (m *WizardModel) View() tea.View {
 	return view
 }
 
-// initCurrentStep initializes the current step component.
-func (m *WizardModel) initCurrentStep() {
+// initCurrentStep initializes the current step component and returns any init commands.
+func (m *WizardModel) initCurrentStep() tea.Cmd {
+	var cmd tea.Cmd
 	switch m.step {
 	case StepTitle:
 		m.titleStep = NewTitleStep()
+		cmd = m.titleStep.Init()
 	case StepDescription:
 		m.descriptionStep = NewDescriptionStep()
+		cmd = m.descriptionStep.Init()
 	case StepModel:
 		m.modelStep = wizard.NewModelSelectorStep()
+		cmd = m.modelStep.Init()
 	case StepAgent:
 		// Agent phase initialized by startAgentPhase(), but create placeholder if needed
 		if m.agentStep == nil && m.mcpServer != nil {
 			m.agentStep = NewAgentPhase(m.mcpServer)
 		}
 	case StepReview:
-		// TODO: Initialize review step
 		m.reviewStep = NewReviewStep(m.result.SpecContent, m.cfg)
 	case StepCompletion:
-		// TODO: Initialize completion step
 		m.completionStep = NewCompletionStep(m.result.SpecPath)
 	}
 	m.updateCurrentStepSize()
+	return cmd
 }
 
 // updateCurrentStep forwards a message to the current step.
@@ -735,7 +738,8 @@ func (m *WizardModel) goBack() (tea.Model, tea.Cmd) {
 
 		m.step--
 		m.buttonFocused = false
-		m.initCurrentStep()
+		cmd := m.initCurrentStep()
+		return m, cmd
 	}
 	return m, nil
 }
