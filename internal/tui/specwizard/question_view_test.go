@@ -764,3 +764,339 @@ func TestQuestionView_ButtonBarValidation(t *testing.T) {
 		t.Errorf("expected NextQuestionMsg, got %T", msg)
 	}
 }
+
+// TestQuestionView_AnswerPersistenceFlow tests the complete flow of navigating
+// back and forth between questions and verifying answers are preserved.
+func TestQuestionView_AnswerPersistenceFlow(t *testing.T) {
+	questions := []Question{
+		{
+			Header:   "Question 1",
+			Question: "What is your first choice?",
+			Options: []Option{
+				{Label: "Q1 Option A"},
+				{Label: "Q1 Option B"},
+			},
+			Multiple: false,
+		},
+		{
+			Header:   "Question 2",
+			Question: "What is your second choice?",
+			Options: []Option{
+				{Label: "Q2 Option X"},
+				{Label: "Q2 Option Y"},
+			},
+			Multiple: false,
+		},
+		{
+			Header:   "Question 3",
+			Question: "Select multiple",
+			Options: []Option{
+				{Label: "Q3 Option 1"},
+				{Label: "Q3 Option 2"},
+				{Label: "Q3 Option 3"},
+			},
+			Multiple: true,
+		},
+	}
+
+	// Initialize empty answers
+	answers := []QuestionAnswer{
+		{Value: "", IsMulti: false},
+		{Value: "", IsMulti: false},
+		{Value: []string{}, IsMulti: true},
+	}
+
+	// Step 1: Answer Q1 with "Q1 Option B"
+	qv1 := NewQuestionView(questions, answers, 0)
+	qv1.optionSelector.CursorDown() // Move to Option B
+	qv1.optionSelector.Toggle()     // Select it
+	qv1.saveCurrentAnswer()
+	answers = qv1.answers
+
+	// Verify Q1 answer was saved
+	if answers[0].Value != "Q1 Option B" {
+		t.Errorf("Q1: expected 'Q1 Option B', got %v", answers[0].Value)
+	}
+
+	// Step 2: Navigate to Q2 and answer with "Q2 Option X"
+	qv2 := NewQuestionView(questions, answers, 1)
+	qv2.optionSelector.Toggle() // Select first option (Q2 Option X)
+	qv2.saveCurrentAnswer()
+	answers = qv2.answers
+
+	// Verify Q2 answer was saved
+	if answers[1].Value != "Q2 Option X" {
+		t.Errorf("Q2: expected 'Q2 Option X', got %v", answers[1].Value)
+	}
+
+	// Step 3: Navigate back to Q1 and verify answer is restored
+	qv1b := NewQuestionView(questions, answers, 0)
+	selected := qv1b.optionSelector.SelectedLabels()
+	if len(selected) != 1 || selected[0] != "Q1 Option B" {
+		t.Errorf("Q1 restored: expected [Q1 Option B], got %v", selected)
+	}
+
+	// Step 4: Change Q1 answer to "Q1 Option A"
+	qv1b.optionSelector.cursor = 0
+	qv1b.optionSelector.Toggle() // Select Option A
+	qv1b.saveCurrentAnswer()
+	answers = qv1b.answers
+
+	// Verify Q1 answer was updated
+	if answers[0].Value != "Q1 Option A" {
+		t.Errorf("Q1 updated: expected 'Q1 Option A', got %v", answers[0].Value)
+	}
+
+	// Step 5: Navigate to Q3 and select multiple options
+	qv3 := NewQuestionView(questions, answers, 2)
+	qv3.optionSelector.Toggle() // Select Q3 Option 1
+	qv3.optionSelector.CursorDown()
+	qv3.optionSelector.CursorDown()
+	qv3.optionSelector.Toggle() // Select Q3 Option 3
+	qv3.saveCurrentAnswer()
+	answers = qv3.answers
+
+	// Verify Q3 answer (multi-select)
+	q3Answer, ok := answers[2].Value.([]string)
+	if !ok {
+		t.Fatalf("Q3: expected []string, got %T", answers[2].Value)
+	}
+	if len(q3Answer) != 2 || q3Answer[0] != "Q3 Option 1" || q3Answer[1] != "Q3 Option 3" {
+		t.Errorf("Q3: expected [Q3 Option 1, Q3 Option 3], got %v", q3Answer)
+	}
+
+	// Step 6: Navigate back to Q2 and verify answer is still preserved
+	qv2b := NewQuestionView(questions, answers, 1)
+	selected2 := qv2b.optionSelector.SelectedLabels()
+	if len(selected2) != 1 || selected2[0] != "Q2 Option X" {
+		t.Errorf("Q2 restored: expected [Q2 Option X], got %v", selected2)
+	}
+
+	// Step 7: Navigate back to Q3 and verify multi-select answer is restored
+	qv3b := NewQuestionView(questions, answers, 2)
+	selected3 := qv3b.optionSelector.SelectedLabels()
+	if len(selected3) != 2 || selected3[0] != "Q3 Option 1" || selected3[1] != "Q3 Option 3" {
+		t.Errorf("Q3 restored: expected [Q3 Option 1, Q3 Option 3], got %v", selected3)
+	}
+
+	// Final verification: all answers are preserved
+	if answers[0].Value != "Q1 Option A" {
+		t.Errorf("Final Q1: expected 'Q1 Option A', got %v", answers[0].Value)
+	}
+	if answers[1].Value != "Q2 Option X" {
+		t.Errorf("Final Q2: expected 'Q2 Option X', got %v", answers[1].Value)
+	}
+	finalQ3, _ := answers[2].Value.([]string)
+	if len(finalQ3) != 2 {
+		t.Errorf("Final Q3: expected 2 items, got %v", finalQ3)
+	}
+}
+
+// TestQuestionView_CustomTextPersistenceFlow tests custom text answer persistence.
+func TestQuestionView_CustomTextPersistenceFlow(t *testing.T) {
+	questions := []Question{
+		{
+			Header:   "Question 1",
+			Question: "Enter something",
+			Options: []Option{
+				{Label: "Predefined Option"},
+			},
+			Multiple: false,
+		},
+		{
+			Header:   "Question 2",
+			Question: "Another question",
+			Options: []Option{
+				{Label: "Choice A"},
+			},
+			Multiple: false,
+		},
+	}
+
+	answers := []QuestionAnswer{
+		{Value: "", IsMulti: false},
+		{Value: "", IsMulti: false},
+	}
+
+	// Step 1: Answer Q1 with custom text
+	qv1 := NewQuestionView(questions, answers, 0)
+	qv1.optionSelector.cursor = len(qv1.optionSelector.items) - 1 // "Type your own answer"
+	qv1.optionSelector.Toggle()
+	qv1.customInput.SetValue("My custom answer for Q1")
+	qv1.saveCurrentAnswer()
+	answers = qv1.answers
+
+	// Verify custom text was saved
+	if answers[0].Value != "My custom answer for Q1" {
+		t.Errorf("Q1: expected 'My custom answer for Q1', got %v", answers[0].Value)
+	}
+
+	// Step 2: Answer Q2 with predefined option
+	qv2 := NewQuestionView(questions, answers, 1)
+	qv2.optionSelector.Toggle() // Select "Choice A"
+	qv2.saveCurrentAnswer()
+	answers = qv2.answers
+
+	// Step 3: Navigate back to Q1 and verify custom text is restored
+	qv1b := NewQuestionView(questions, answers, 0)
+	if !qv1b.showCustom {
+		t.Error("Q1 restored: expected custom input to be visible")
+	}
+	if qv1b.customInput.Value() != "My custom answer for Q1" {
+		t.Errorf("Q1 restored: expected 'My custom answer for Q1', got %q", qv1b.customInput.Value())
+	}
+	selected := qv1b.optionSelector.SelectedLabels()
+	if len(selected) != 1 || selected[0] != "Type your own answer" {
+		t.Errorf("Q1 restored: expected [Type your own answer], got %v", selected)
+	}
+
+	// Step 4: Change Q1 custom text
+	qv1b.customInput.SetValue("Updated custom answer")
+	qv1b.saveCurrentAnswer()
+	answers = qv1b.answers
+
+	// Verify update
+	if answers[0].Value != "Updated custom answer" {
+		t.Errorf("Q1 updated: expected 'Updated custom answer', got %v", answers[0].Value)
+	}
+
+	// Step 5: Navigate forward and back again to verify persistence
+	qv2b := NewQuestionView(questions, answers, 1)
+	qv2b.View() // Just to exercise the view
+
+	qv1c := NewQuestionView(questions, answers, 0)
+	if qv1c.customInput.Value() != "Updated custom answer" {
+		t.Errorf("Q1 re-restored: expected 'Updated custom answer', got %q", qv1c.customInput.Value())
+	}
+}
+
+// TestQuestionView_MultiSelectCustomPersistence tests multi-select with custom text persistence.
+func TestQuestionView_MultiSelectCustomPersistence(t *testing.T) {
+	questions := []Question{
+		{
+			Header:   "Multi Question",
+			Question: "Select multiple or type your own",
+			Options: []Option{
+				{Label: "Option 1"},
+				{Label: "Option 2"},
+			},
+			Multiple: true,
+		},
+		{
+			Header:   "Next Question",
+			Question: "Another one",
+			Options: []Option{
+				{Label: "Choice X"},
+			},
+			Multiple: false,
+		},
+	}
+
+	answers := []QuestionAnswer{
+		{Value: []string{}, IsMulti: true},
+		{Value: "", IsMulti: false},
+	}
+
+	// Step 1: Answer Q1 with custom text in multi-select
+	qv1 := NewQuestionView(questions, answers, 0)
+	qv1.optionSelector.cursor = len(qv1.optionSelector.items) - 1
+	qv1.optionSelector.Toggle()
+	qv1.customInput.SetValue("My custom multi-select answer")
+	qv1.saveCurrentAnswer()
+	answers = qv1.answers
+
+	// Verify custom text was saved as []string with one element
+	q1Answer, ok := answers[0].Value.([]string)
+	if !ok {
+		t.Fatalf("Q1: expected []string, got %T", answers[0].Value)
+	}
+	if len(q1Answer) != 1 || q1Answer[0] != "My custom multi-select answer" {
+		t.Errorf("Q1: expected [My custom multi-select answer], got %v", q1Answer)
+	}
+
+	// Step 2: Answer Q2
+	qv2 := NewQuestionView(questions, answers, 1)
+	qv2.optionSelector.Toggle()
+	qv2.saveCurrentAnswer()
+	answers = qv2.answers
+
+	// Step 3: Navigate back to Q1 and verify custom text is restored
+	qv1b := NewQuestionView(questions, answers, 0)
+	if !qv1b.showCustom {
+		t.Error("Q1 restored: expected custom input to be visible")
+	}
+	if qv1b.customInput.Value() != "My custom multi-select answer" {
+		t.Errorf("Q1 restored: expected 'My custom multi-select answer', got %q", qv1b.customInput.Value())
+	}
+	selected := qv1b.optionSelector.SelectedLabels()
+	if len(selected) != 1 || selected[0] != "Type your own answer" {
+		t.Errorf("Q1 restored: expected [Type your own answer], got %v", selected)
+	}
+}
+
+// TestQuestionView_EmptyAnswerHandling tests persistence of empty/no answers.
+func TestQuestionView_EmptyAnswerHandling(t *testing.T) {
+	questions := []Question{
+		{
+			Header:   "Question 1",
+			Question: "Select one",
+			Options: []Option{
+				{Label: "Option A"},
+				{Label: "Option B"},
+			},
+			Multiple: false,
+		},
+		{
+			Header:   "Question 2",
+			Question: "Select multiple",
+			Options: []Option{
+				{Label: "Item 1"},
+				{Label: "Item 2"},
+			},
+			Multiple: true,
+		},
+	}
+
+	answers := []QuestionAnswer{
+		{Value: "", IsMulti: false},
+		{Value: []string{}, IsMulti: true},
+	}
+
+	// Step 1: View Q1 without selecting anything
+	qv1 := NewQuestionView(questions, answers, 0)
+	qv1.saveCurrentAnswer() // Save empty answer
+	answers = qv1.answers
+
+	// Verify empty single-select answer
+	if answers[0].Value != "" {
+		t.Errorf("Q1: expected empty string, got %v", answers[0].Value)
+	}
+
+	// Step 2: View Q2 without selecting anything
+	qv2 := NewQuestionView(questions, answers, 1)
+	qv2.saveCurrentAnswer() // Save empty answer
+	answers = qv2.answers
+
+	// Verify empty multi-select answer
+	q2Answer, ok := answers[1].Value.([]string)
+	if !ok {
+		t.Fatalf("Q2: expected []string, got %T", answers[1].Value)
+	}
+	if len(q2Answer) != 0 {
+		t.Errorf("Q2: expected empty array, got %v", q2Answer)
+	}
+
+	// Step 3: Navigate back to Q1 and verify nothing is selected
+	qv1b := NewQuestionView(questions, answers, 0)
+	selected := qv1b.optionSelector.SelectedLabels()
+	if len(selected) != 0 {
+		t.Errorf("Q1 restored: expected no selection, got %v", selected)
+	}
+
+	// Step 4: Navigate to Q2 and verify nothing is selected
+	qv2b := NewQuestionView(questions, answers, 1)
+	selected2 := qv2b.optionSelector.SelectedLabels()
+	if len(selected2) != 0 {
+		t.Errorf("Q2 restored: expected no selection, got %v", selected2)
+	}
+}
