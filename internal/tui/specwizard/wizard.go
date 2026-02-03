@@ -222,6 +222,32 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.agentError = &msg.Err
 		return m, nil
 
+	case RestartWizardMsg:
+		// User confirmed restart - go back to title step
+		logger.Debug("Restarting wizard from title step")
+		m.step = StepTitle
+		m.buttonFocused = false
+		m.agentError = nil
+		// Reset result
+		m.result = WizardResult{}
+		// Clean up agent resources
+		if m.agentRunner != nil {
+			m.agentRunner.Stop()
+			m.agentRunner = nil
+		}
+		if m.mcpServer != nil {
+			_ = m.mcpServer.Stop()
+			m.mcpServer = nil
+		}
+		m.initCurrentStep()
+		return m, nil
+
+	case SaveSpecMsg:
+		// User clicked Save button in review step
+		// TODO: Implement save logic (will be done in TAS-47)
+		logger.Debug("Save spec button clicked")
+		return m, nil
+
 	case wizard.TabExitForwardMsg:
 		// Tab from last input - move to buttons
 		m.buttonFocused = true
@@ -587,6 +613,12 @@ func (m *WizardModel) activateButton(btnID wizard.ButtonID) (tea.Model, tea.Cmd)
 // goBack moves to the previous step.
 func (m *WizardModel) goBack() (tea.Model, tea.Cmd) {
 	if m.step > StepTitle {
+		// Special handling for review step - show confirmation modal in review step itself
+		if m.step == StepReview && m.reviewStep != nil {
+			m.reviewStep.showConfirmRestart = true
+			return m, nil
+		}
+
 		m.step--
 		m.buttonFocused = false
 		m.initCurrentStep()

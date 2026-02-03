@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/mark3labs/iteratr/internal/config"
 )
 
 func TestBuildSpecPrompt(t *testing.T) {
@@ -386,4 +387,125 @@ func TestGoBackOnFirstStep(t *testing.T) {
 	if wizModel.cancelled {
 		t.Error("Expected wizard to not be cancelled")
 	}
+}
+
+func TestRestartWizardMsg(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard and advance to review step with some data
+	m := &WizardModel{
+		step:      StepReview,
+		cancelled: false,
+		cfg:       cfg,
+		width:     80,
+		height:    24,
+		result: WizardResult{
+			Title:       "Test Feature",
+			Description: "Test description",
+			Model:       "claude-3-5-sonnet-20241022",
+			SpecContent: "# Test Spec\n\nContent here",
+		},
+	}
+	m.reviewStep = NewReviewStep(m.result.SpecContent, cfg)
+
+	// Send RestartWizardMsg
+	updatedModel, _ := m.Update(RestartWizardMsg{})
+
+	wizModel := updatedModel.(*WizardModel)
+
+	// Should reset to title step
+	if wizModel.step != StepTitle {
+		t.Errorf("Expected step to be StepTitle, got %v", wizModel.step)
+	}
+
+	// Should clear result
+	if wizModel.result.Title != "" {
+		t.Error("Expected title to be cleared")
+	}
+	if wizModel.result.Description != "" {
+		t.Error("Expected description to be cleared")
+	}
+	if wizModel.result.Model != "" {
+		t.Error("Expected model to be cleared")
+	}
+	if wizModel.result.SpecContent != "" {
+		t.Error("Expected spec content to be cleared")
+	}
+
+	// Should clear error
+	if wizModel.agentError != nil {
+		t.Error("Expected agent error to be cleared")
+	}
+
+	// Should clear button focus
+	if wizModel.buttonFocused {
+		t.Error("Expected button focus to be cleared")
+	}
+}
+
+func TestGoBackFromReviewShowsConfirmation(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard at review step
+	m := &WizardModel{
+		step:      StepReview,
+		cancelled: false,
+		cfg:       cfg,
+		width:     80,
+		height:    24,
+		result: WizardResult{
+			SpecContent: "# Test Spec",
+		},
+	}
+	m.reviewStep = NewReviewStep(m.result.SpecContent, cfg)
+
+	// Call goBack
+	updatedModel, _ := m.goBack()
+
+	wizModel := updatedModel.(*WizardModel)
+
+	// Should stay on review step
+	if wizModel.step != StepReview {
+		t.Errorf("Expected to stay on StepReview, got %v", wizModel.step)
+	}
+
+	// Should show confirmation modal in review step
+	if !wizModel.reviewStep.showConfirmRestart {
+		t.Error("Expected confirmation modal to be shown")
+	}
+}
+
+func TestSaveSpecMsg(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard at review step
+	m := &WizardModel{
+		step:      StepReview,
+		cancelled: false,
+		cfg:       cfg,
+		width:     80,
+		height:    24,
+		result: WizardResult{
+			SpecContent: "# Test Spec",
+		},
+	}
+	m.reviewStep = NewReviewStep(m.result.SpecContent, cfg)
+
+	// Send SaveSpecMsg
+	updatedModel, _ := m.Update(SaveSpecMsg{})
+
+	wizModel := updatedModel.(*WizardModel)
+
+	// Should stay on review step (save logic not yet implemented)
+	if wizModel.step != StepReview {
+		t.Errorf("Expected to stay on StepReview, got %v", wizModel.step)
+	}
+
+	// Note: Actual save functionality will be tested in TAS-47
 }

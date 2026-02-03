@@ -257,3 +257,242 @@ func TestRenderHintBar(t *testing.T) {
 		})
 	}
 }
+
+func TestReviewStep_ButtonBar(t *testing.T) {
+	content := "# Test Spec\n\nSome content."
+	cfg := &config.Config{}
+	step := NewReviewStep(content, cfg)
+	step.SetSize(80, 20)
+
+	// Verify button bar exists
+	if step.buttonBar == nil {
+		t.Fatal("Expected button bar to be initialized")
+	}
+
+	// View should contain button bar rendering
+	view := step.View()
+	if !strings.Contains(view, "Restart") {
+		t.Error("Expected view to contain 'Restart' button")
+	}
+	if !strings.Contains(view, "Save") {
+		t.Error("Expected view to contain 'Save' button")
+	}
+}
+
+func TestReviewStep_TabNavigationToButtons(t *testing.T) {
+	content := "# Test Spec"
+	cfg := &config.Config{}
+	step := NewReviewStep(content, cfg)
+	step.SetSize(80, 20)
+
+	// Initially buttons not focused
+	if step.buttonFocused {
+		t.Error("Expected buttons not focused initially")
+	}
+
+	// Press Tab to move to buttons
+	cmd := step.Update(tea.KeyPressMsg{Text: "tab"})
+	if cmd != nil {
+		t.Error("Expected nil command from tab")
+	}
+
+	// Buttons should now be focused
+	if !step.buttonFocused {
+		t.Error("Expected buttons to be focused after Tab")
+	}
+	if !step.buttonBar.IsFocused() {
+		t.Error("Expected button bar to be focused")
+	}
+}
+
+func TestReviewStep_ButtonActivation(t *testing.T) {
+	tests := []struct {
+		name          string
+		focusedButton int // 0 = Restart, 1 = Save
+		expectedMsg   string
+		expectModal   bool
+	}{
+		{
+			name:          "activate restart button",
+			focusedButton: 0,
+			expectModal:   true,
+		},
+		{
+			name:          "activate save button",
+			focusedButton: 1,
+			expectedMsg:   "SaveSpecMsg",
+			expectModal:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := "# Test Spec"
+			cfg := &config.Config{}
+			step := NewReviewStep(content, cfg)
+			step.SetSize(80, 20)
+
+			// Focus buttons
+			step.buttonFocused = true
+			if tt.focusedButton == 0 {
+				step.buttonBar.FocusFirst()
+			} else {
+				step.buttonBar.FocusLast()
+			}
+
+			// Activate button with Enter
+			cmd := step.Update(tea.KeyPressMsg{Text: "enter"})
+
+			if tt.expectModal {
+				// Should show confirmation modal
+				if !step.showConfirmRestart {
+					t.Error("Expected confirmation modal to be shown")
+				}
+				if cmd != nil {
+					t.Error("Expected nil command when showing modal")
+				}
+			} else {
+				// Should return SaveSpecMsg
+				if cmd == nil {
+					t.Fatal("Expected command from save button")
+				}
+				msg := cmd()
+				if _, ok := msg.(SaveSpecMsg); !ok {
+					t.Errorf("Expected SaveSpecMsg, got %T", msg)
+				}
+			}
+		})
+	}
+}
+
+func TestReviewStep_RestartConfirmation(t *testing.T) {
+	tests := []struct {
+		name      string
+		key       string
+		expectMsg bool
+		msgType   string
+	}{
+		{
+			name:      "confirm with Y",
+			key:       "Y",
+			expectMsg: true,
+			msgType:   "RestartWizardMsg",
+		},
+		{
+			name:      "confirm with y",
+			key:       "y",
+			expectMsg: true,
+			msgType:   "RestartWizardMsg",
+		},
+		{
+			name:      "cancel with N",
+			key:       "N",
+			expectMsg: false,
+		},
+		{
+			name:      "cancel with n",
+			key:       "n",
+			expectMsg: false,
+		},
+		{
+			name:      "cancel with ESC",
+			key:       "esc",
+			expectMsg: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := "# Test Spec"
+			cfg := &config.Config{}
+			step := NewReviewStep(content, cfg)
+			step.SetSize(80, 20)
+
+			// Show confirmation modal
+			step.showConfirmRestart = true
+
+			// Send key
+			cmd := step.Update(tea.KeyPressMsg{Text: tt.key})
+
+			// Modal should be hidden
+			if step.showConfirmRestart {
+				t.Error("Expected confirmation modal to be hidden")
+			}
+
+			if tt.expectMsg {
+				if cmd == nil {
+					t.Fatal("Expected command from confirmation")
+				}
+				msg := cmd()
+				if _, ok := msg.(RestartWizardMsg); !ok {
+					t.Errorf("Expected RestartWizardMsg, got %T", msg)
+				}
+			} else {
+				if cmd != nil {
+					t.Error("Expected nil command from cancel")
+				}
+			}
+		})
+	}
+}
+
+func TestReviewStep_ConfirmationModalView(t *testing.T) {
+	content := "# Test Spec"
+	cfg := &config.Config{}
+	step := NewReviewStep(content, cfg)
+	step.SetSize(80, 20)
+
+	// Show confirmation modal
+	step.showConfirmRestart = true
+
+	// View should show modal
+	view := step.View()
+	if !strings.Contains(view, "Restart Wizard") {
+		t.Error("Expected view to contain 'Restart Wizard' in modal")
+	}
+	if !strings.Contains(view, "Press Y to restart") {
+		t.Error("Expected view to contain restart instructions")
+	}
+	if !strings.Contains(view, "discard") {
+		t.Error("Expected view to contain warning about discarding")
+	}
+
+	// Should not show viewport content when modal is visible
+	if strings.Contains(view, "Test Spec") {
+		t.Error("Expected viewport content to be hidden when modal is visible")
+	}
+}
+
+func TestReviewStep_ConfirmationModalBlocksInput(t *testing.T) {
+	content := "# Test Spec"
+	cfg := &config.Config{}
+	step := NewReviewStep(content, cfg)
+	step.SetSize(80, 20)
+
+	// Show confirmation modal
+	step.showConfirmRestart = true
+
+	// Try to scroll (should be blocked)
+	cmd := step.Update(tea.KeyPressMsg{Text: "down"})
+	if cmd != nil {
+		t.Error("Expected input to be blocked by modal")
+	}
+
+	// Try to open editor (should be blocked)
+	if err := os.Setenv("EDITOR", "vim"); err != nil {
+		t.Fatalf("Failed to set EDITOR: %v", err)
+	}
+	defer func() {
+		_ = os.Unsetenv("EDITOR")
+	}()
+
+	cmd = step.Update(tea.KeyPressMsg{Text: "e"})
+	if cmd != nil {
+		t.Error("Expected editor key to be blocked by modal")
+	}
+
+	// Modal should still be shown
+	if !step.showConfirmRestart {
+		t.Error("Expected modal to still be shown")
+	}
+}
