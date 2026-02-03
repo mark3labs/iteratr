@@ -386,3 +386,75 @@ func TestAgentPhase_View_WithQuestion(t *testing.T) {
 	assert.Contains(t, view, "Color")
 	assert.Contains(t, view, "What is your favorite color?")
 }
+
+func TestAgentPhase_SpecContentRequest(t *testing.T) {
+	mcpServer := specmcp.New("test-spec", "./specs")
+	phase := NewAgentPhase(mcpServer)
+
+	// Create spec content request
+	resultCh := make(chan error, 1)
+	req := specmcp.SpecContentRequest{
+		Content:  "## Overview\n\nTest spec content\n\n## Tasks\n\n- [ ] Task 1",
+		ResultCh: resultCh,
+	}
+
+	// Send spec content request message
+	msg := SpecContentRequestMsg{Request: req}
+	phase, cmd := phase.Update(msg)
+
+	// Should store the request
+	assert.NotNil(t, phase.currentSpecReq, "should store spec content request")
+	assert.Equal(t, req.Content, phase.currentSpecReq.Content)
+
+	// Should return command that emits SpecContentReceivedMsg
+	require.NotNil(t, cmd, "should return command")
+
+	// Execute command and verify it returns SpecContentReceivedMsg
+	resultMsg := cmd()
+	specContentMsg, ok := resultMsg.(SpecContentReceivedMsg)
+	assert.True(t, ok, "command should return SpecContentReceivedMsg")
+	assert.Equal(t, req.Content, specContentMsg.Content, "content should match")
+}
+
+func TestAgentPhase_ConfirmSpecSave(t *testing.T) {
+	mcpServer := specmcp.New("test-spec", "./specs")
+	phase := NewAgentPhase(mcpServer)
+
+	// Create spec content request
+	resultCh := make(chan error, 1)
+	req := specmcp.SpecContentRequest{
+		Content:  "## Overview\n\nTest spec",
+		ResultCh: resultCh,
+	}
+
+	// Send spec content request
+	phase, _ = phase.Update(SpecContentRequestMsg{Request: req})
+	assert.NotNil(t, phase.currentSpecReq)
+
+	// Confirm save
+	phase.ConfirmSpecSave()
+
+	// Should send nil to result channel
+	select {
+	case err := <-resultCh:
+		assert.Nil(t, err, "should send nil to indicate success")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected confirmation to be sent to result channel")
+	}
+
+	// Should clear current request
+	assert.Nil(t, phase.currentSpecReq, "should clear current spec request")
+}
+
+func TestAgentPhase_Init_StartsListeningForBothChannels(t *testing.T) {
+	mcpServer := specmcp.New("test-spec", "./specs")
+	phase := NewAgentPhase(mcpServer)
+
+	// Verify channels are set up
+	assert.NotNil(t, phase.questionReqCh, "question channel should be set")
+	assert.NotNil(t, phase.specContentCh, "spec content channel should be set")
+
+	// Init should return batch command with spinner + both listeners
+	cmd := phase.Init()
+	assert.NotNil(t, cmd, "init should return command")
+}

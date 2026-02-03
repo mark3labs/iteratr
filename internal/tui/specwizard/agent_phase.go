@@ -33,6 +33,10 @@ type AgentPhase struct {
 	questionReqCh <-chan specmcp.QuestionRequest
 	currentReq    *specmcp.QuestionRequest // Current pending request
 
+	// Channel for receiving spec content from finish-spec
+	specContentCh  <-chan specmcp.SpecContentRequest
+	currentSpecReq *specmcp.SpecContentRequest // Current pending spec content request
+
 	// Dimensions
 	width  int
 	height int
@@ -43,6 +47,7 @@ func NewAgentPhase(mcpServer *specmcp.Server) *AgentPhase {
 	return &AgentPhase{
 		mcpServer:       mcpServer,
 		questionReqCh:   mcpServer.QuestionChan(),
+		specContentCh:   mcpServer.SpecContentChan(),
 		waitingForAgent: true,
 		spinner:         tui.NewDefaultSpinner(),
 		statusText:      "Agent is analyzing requirements...",
@@ -51,10 +56,11 @@ func NewAgentPhase(mcpServer *specmcp.Server) *AgentPhase {
 
 // Init initializes the agent phase.
 func (a *AgentPhase) Init() tea.Cmd {
-	// Start listening for question requests
+	// Start listening for question requests and spec content
 	return tea.Batch(
 		a.spinner.Tick(),
 		waitForQuestionRequest(a.questionReqCh),
+		waitForSpecContent(a.specContentCh),
 	)
 }
 
@@ -186,7 +192,20 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		return a, tea.Batch(
 			a.spinner.Tick(),
 			waitForQuestionRequest(a.questionReqCh),
+			waitForSpecContent(a.specContentCh),
 		)
+
+	case SpecContentRequestMsg:
+		// Received spec content from finish-spec handler
+		logger.Debug("Agent phase: received spec content (%d bytes)", len(msg.Request.Content))
+
+		// Store the request so we can respond after user review
+		a.currentSpecReq = &msg.Request
+
+		// Emit SpecContentReceivedMsg to wizard so it can transition to review step
+		return a, func() tea.Msg {
+			return SpecContentReceivedMsg{Content: msg.Request.Content}
+		}
 
 	case ShowErrorMsg:
 		// TODO: Display error message (for now just log)
@@ -249,6 +268,18 @@ func (a *AgentPhase) SetSize(width, height int) {
 	}
 }
 
+// ConfirmSpecSave sends confirmation to the finish-spec MCP handler that the spec was saved.
+// This unblocks the MCP handler and allows the agent to complete.
+func (a *AgentPhase) ConfirmSpecSave() {
+	if a.currentSpecReq != nil {
+		resultCh := a.currentSpecReq.ResultCh
+		go func() {
+			resultCh <- nil // Send nil to indicate success
+		}()
+		a.currentSpecReq = nil
+	}
+}
+
 // QuestionRequestMsg wraps a question request from the MCP server.
 type QuestionRequestMsg struct {
 	Request specmcp.QuestionRequest
@@ -259,6 +290,14 @@ func waitForQuestionRequest(ch <-chan specmcp.QuestionRequest) tea.Cmd {
 	return func() tea.Msg {
 		req := <-ch
 		return QuestionRequestMsg{Request: req}
+	}
+}
+
+// waitForSpecContent returns a command that waits for spec content from finish-spec.
+func waitForSpecContent(ch <-chan specmcp.SpecContentRequest) tea.Cmd {
+	return func() tea.Msg {
+		req := <-ch
+		return SpecContentRequestMsg{Request: req}
 	}
 }
 

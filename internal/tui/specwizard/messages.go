@@ -1,5 +1,7 @@
 package specwizard
 
+import "github.com/mark3labs/iteratr/internal/specmcp"
+
 // TitleSubmittedMsg is sent when the user submits the title.
 type TitleSubmittedMsg struct {
 	Title string
@@ -23,4 +25,9 @@ type SpecSavedMsg struct {
 // AgentErrorMsg is sent when there's an error starting or running the agent.
 type AgentErrorMsg struct {
 	Err error
+}
+
+// SpecContentRequestMsg wraps a spec content request from the MCP finish-spec handler.
+type SpecContentRequestMsg struct {
+	Request specmcp.SpecContentRequest
 }
