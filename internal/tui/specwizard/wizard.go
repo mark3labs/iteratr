@@ -549,6 +549,13 @@ func (m *WizardModel) renderCurrentStep() string {
 		}
 	}
 
+	// Button bar (for steps that have buttons)
+	var buttonBarContent string
+	if m.hasButtons() {
+		m.ensureButtonBar()
+		buttonBarContent = m.buttonBar.Render()
+	}
+
 	// Hint
 	hint := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(currentTheme.FgMuted)).
@@ -561,13 +568,26 @@ func (m *WizardModel) renderCurrentStep() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(currentTheme.BorderDefault))
 
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		stepContent,
-		"",
-		hint,
-	)
+	var content string
+	if buttonBarContent != "" {
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			title,
+			stepContent,
+			"",
+			buttonBarContent,
+			"",
+			hint,
+		)
+	} else {
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			title,
+			stepContent,
+			"",
+			hint,
+		)
+	}
 
 	return modalStyle.Render(content)
 }

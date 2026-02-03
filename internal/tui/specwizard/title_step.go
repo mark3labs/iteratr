@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
+	"github.com/mark3labs/iteratr/internal/tui/wizard"
 )
 
 // TitleStep handles the title input with validation.
@@ -55,8 +56,15 @@ func (t *TitleStep) Update(msg tea.Msg) tea.Cmd {
 		t.height = msg.Height
 		return nil
 
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyMsg, tea.KeyPressMsg:
+		var keyStr string
+		switch k := msg.(type) {
+		case tea.KeyMsg:
+			keyStr = k.String()
+		case tea.KeyPressMsg:
+			keyStr = k.String()
+		}
+		switch keyStr {
 		case "enter":
 			// Validate before proceeding
 			value := strings.TrimSpace(t.input.Value())
@@ -67,7 +75,17 @@ func (t *TitleStep) Update(msg tea.Msg) tea.Cmd {
 			// Clear error and notify completion
 			t.err = ""
 			return func() tea.Msg {
-				return TitleCompletedMsg{Title: value}
+				return TitleSubmittedMsg{Title: value}
+			}
+		case "tab":
+			// Signal to wizard to move focus to buttons
+			return func() tea.Msg {
+				return wizard.TabExitForwardMsg{}
+			}
+		case "shift+tab":
+			// Signal to wizard to move focus to buttons from end
+			return func() tea.Msg {
+				return wizard.TabExitBackwardMsg{}
 			}
 		default:
 			// Clear error on any other input
@@ -152,9 +170,4 @@ func (t *TitleStep) Submit() tea.Cmd {
 	return func() tea.Msg {
 		return TitleSubmittedMsg{Title: value}
 	}
-}
-
-// TitleCompletedMsg is sent when the user completes the title input.
-type TitleCompletedMsg struct {
-	Title string
 }

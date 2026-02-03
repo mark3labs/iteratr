@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
+	"github.com/mark3labs/iteratr/internal/tui/wizard"
 )
 
 // DescriptionStep handles the description textarea input with validation.
@@ -73,6 +74,16 @@ func (d *DescriptionStep) Update(msg tea.Msg) tea.Cmd {
 			d.err = ""
 			return func() tea.Msg {
 				return DescriptionSubmittedMsg{Description: value}
+			}
+		case "tab":
+			// Signal to wizard to move focus to buttons
+			return func() tea.Msg {
+				return wizard.TabExitForwardMsg{}
+			}
+		case "shift+tab":
+			// Signal to wizard to move focus to buttons from end
+			return func() tea.Msg {
+				return wizard.TabExitBackwardMsg{}
 			}
 		default:
 			// Clear error on any other input
