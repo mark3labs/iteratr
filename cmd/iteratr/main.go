@@ -54,6 +54,7 @@ Getting Started:
   iteratr config - view settings`
 
 	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(specCmd)
 	rootCmd.AddCommand(genTemplateCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(setupCmd)
