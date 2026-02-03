@@ -53,7 +53,16 @@ func (s *Server) registerTools() error {
 		s.handleAskQuestions,
 	)
 
-	// TODO: Register finish-spec tool in next task
+	// finish-spec: finalize the spec with markdown content
+	s.mcpServer.AddTool(
+		mcp.NewTool("finish-spec",
+			mcp.WithDescription("Finalize the feature specification with complete markdown content"),
+			mcp.WithString("content", mcp.Required(),
+				mcp.Description("Complete specification in markdown format"),
+			),
+		),
+		s.handleFinishSpec,
+	)
 
 	return nil
 }
@@ -63,4 +72,52 @@ func (s *Server) registerTools() error {
 func (s *Server) handleAskQuestions(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// TODO: Implement in TAS-16
 	return mcp.NewToolResultError("ask-questions handler not yet implemented"), nil
+}
+
+// handleFinishSpec handles the finish-spec tool call.
+// It validates the content parameter and sends it to the UI via the specContentCh channel,
+// blocking until the UI confirms the save operation.
+func (s *Server) handleFinishSpec(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Extract arguments
+	args := request.GetArguments()
+	if args == nil {
+		return mcp.NewToolResultError("no arguments provided"), nil
+	}
+
+	// Extract and validate content parameter
+	content, ok := args["content"].(string)
+	if !ok {
+		return mcp.NewToolResultError("content parameter must be a string"), nil
+	}
+
+	if content == "" {
+		return mcp.NewToolResultError("content cannot be empty"), nil
+	}
+
+	// Create response channel for this request
+	resultCh := make(chan error, 1)
+
+	// Send request to UI via channel
+	req := SpecContentRequest{
+		Content:  content,
+		ResultCh: resultCh,
+	}
+
+	select {
+	case s.specContentCh <- req:
+		// Request sent, now block waiting for UI response
+	case <-ctx.Done():
+		return mcp.NewToolResultError("request cancelled"), nil
+	}
+
+	// Block until UI confirms save
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText("Spec saved successfully"), nil
+	case <-ctx.Done():
+		return mcp.NewToolResultError("request cancelled"), nil
+	}
 }
