@@ -240,6 +240,15 @@ func (a *AgentPhase) View() string {
 	return "Initializing..."
 }
 
+// SetSize updates the size of the agent phase.
+func (a *AgentPhase) SetSize(width, height int) {
+	a.width = width
+	a.height = height
+	if a.questionView != nil {
+		a.questionView.SetSize(width, height)
+	}
+}
+
 // QuestionRequestMsg wraps a question request from the MCP server.
 type QuestionRequestMsg struct {
 	Request specmcp.QuestionRequest

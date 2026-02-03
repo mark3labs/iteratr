@@ -7,7 +7,6 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
 )
 
@@ -83,20 +82,9 @@ func (t *TitleStep) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// View renders the title step.
-func (t *TitleStep) View() tea.View {
-	var view tea.View
-	view.AltScreen = true
-
+// View renders the title step content (returns string for embedding in wizard).
+func (t *TitleStep) View() string {
 	currentTheme := theme.Current()
-
-	// Title
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color(currentTheme.Primary)).
-		MarginBottom(1)
-
-	title := titleStyle.Render("Spec Wizard - Step 1: Title")
 
 	// Instruction
 	instructionStyle := lipgloss.NewStyle().
@@ -123,46 +111,47 @@ func (t *TitleStep) View() tea.View {
 		errorText = errorStyle.Render("✗ " + t.err)
 	}
 
-	// Hint
-	hintStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(currentTheme.FgMuted)).
-		MarginTop(1)
-
-	hint := hintStyle.Render("enter to continue • esc to cancel")
-
 	// Combine all parts
-	content := lipgloss.JoinVertical(
+	return lipgloss.JoinVertical(
 		lipgloss.Left,
-		title,
 		instruction,
 		input,
 		errorText,
-		hint,
 	)
-
-	// Center on screen
-	centered := lipgloss.Place(
-		t.width,
-		t.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		content,
-	)
-
-	// Draw to canvas using ultraviolet
-	canvas := uv.NewScreenBuffer(t.width, t.height)
-	uv.NewStyledString(centered).Draw(canvas, uv.Rectangle{
-		Min: uv.Position{X: 0, Y: 0},
-		Max: uv.Position{X: t.width, Y: t.height},
-	})
-
-	view.Content = lipgloss.NewLayer(canvas.Render())
-	return view
 }
 
 // GetTitle returns the current title value (trimmed).
 func (t *TitleStep) GetTitle() string {
 	return strings.TrimSpace(t.input.Value())
+}
+
+// SetSize updates the size of the title step.
+func (t *TitleStep) SetSize(width, height int) {
+	t.width = width
+	t.height = height
+}
+
+// Focus focuses the title input.
+func (t *TitleStep) Focus() {
+	t.input.Focus()
+}
+
+// Blur blurs the title input.
+func (t *TitleStep) Blur() {
+	t.input.Blur()
+}
+
+// Submit submits the title (validates and sends TitleSubmittedMsg).
+func (t *TitleStep) Submit() tea.Cmd {
+	value := strings.TrimSpace(t.input.Value())
+	if err := validateTitle(value); err != nil {
+		t.err = err.Error()
+		return nil
+	}
+	t.err = ""
+	return func() tea.Msg {
+		return TitleSubmittedMsg{Title: value}
+	}
 }
 
 // TitleCompletedMsg is sent when the user completes the title input.

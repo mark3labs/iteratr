@@ -627,6 +627,12 @@ func (q *QuestionView) View() string {
 	return b.String()
 }
 
+// SetSize updates the dimensions of the question view.
+func (q *QuestionView) SetSize(width, height int) {
+	q.width = width
+	q.height = height
+}
+
 // PrevQuestionMsg is sent when the user navigates to the previous question.
 type PrevQuestionMsg struct{}
 
