@@ -127,6 +127,9 @@ func (s *Server) Start(ctx context.Context) (int, error) {
 	select {
 	case err := <-errCh:
 		if err != nil {
+			s.httpServer = nil
+			s.mcpServer = nil
+			s.port = 0
 			return 0, fmt.Errorf("failed to start HTTP server: %w", err)
 		}
 	case <-time.After(100 * time.Millisecond):
