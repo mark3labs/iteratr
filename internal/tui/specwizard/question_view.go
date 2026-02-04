@@ -252,6 +252,9 @@ func NewQuestionView(questions []Question, answers []QuestionAnswer, currentInde
 	qv.restoreAnswer()
 	qv.optionSelector.Focus()
 
+	// Initialize button bar
+	qv.rebuildButtonBar()
+
 	return qv
 }
 
@@ -598,11 +601,6 @@ func (q *QuestionView) View() string {
 	var b strings.Builder
 	currentTheme := theme.Current()
 
-	// Ensure button bar is initialized
-	if q.buttonBar == nil {
-		q.rebuildButtonBar()
-	}
-
 	// Question counter
 	counterStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(currentTheme.FgMuted))
 	b.WriteString(counterStyle.Render(
@@ -641,6 +639,9 @@ func (q *QuestionView) View() string {
 func (q *QuestionView) SetSize(width, height int) {
 	q.width = width
 	q.height = height
+	if q.buttonBar != nil {
+		q.buttonBar.SetWidth(width)
+	}
 }
 
 // PrevQuestionMsg is sent when the user navigates to the previous question.
