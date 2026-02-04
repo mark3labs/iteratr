@@ -395,9 +395,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKeyPress processes keyboard input using hierarchical priority routing.
-// Priority: Dialog → Prefix Mode/Global → Modal → View → Focus → Component
+// Priority: Global Keys (ctrl+c) → Dialog → Prefix Mode → Modal → View → Focus → Component
 func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	// 0. Dialog gets priority when visible
+	// 0. Global keys (ctrl+x, ctrl+c) - must work everywhere, even with dialog open
+	if cmd := a.handleGlobalKeys(msg); cmd != nil {
+		return a, cmd
+	}
+
+	// 1. Dialog gets priority when visible (after global keys)
 	if a.dialog.IsVisible() {
 		if cmd := a.dialog.Update(msg); cmd != nil {
 			return a, cmd
@@ -405,12 +410,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil // Consume all keys when dialog is visible
 	}
 
-	// 0.5. Global keys (ctrl+x, ctrl+c) - must come before modals to work everywhere
-	if cmd := a.handleGlobalKeys(msg); cmd != nil {
-		return a, cmd
-	}
-
-	// 1. Handle prefix key sequences (ctrl+x followed by another key)
+	// 2. Handle prefix key sequences (ctrl+x followed by another key)
 	if a.awaitingPrefixKey {
 		a.awaitingPrefixKey = false // Exit prefix mode after handling
 		a.status.SetPrefixMode(false)
@@ -455,7 +455,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// 2. Modal gets priority when visible
+	// 3. Modal gets priority when visible
 	if a.taskModal != nil && a.taskModal.IsVisible() {
 		// ESC key closes the modal
 		if msg.String() == "esc" {
@@ -502,7 +502,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, a.subagentModal.Update(msg)
 	}
 
-	// 3. Logs modal captures remaining keys when visible
+	// 4. Logs modal captures remaining keys when visible
 	if a.logsVisible {
 		switch msg.String() {
 		case "esc":
@@ -514,7 +514,7 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// 4. Delegate to dashboard for focused component handling
+	// 5. Delegate to dashboard for focused component handling
 	return a, a.dashboard.Update(msg)
 }
 
