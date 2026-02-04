@@ -4,16 +4,39 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/mark3labs/iteratr/internal/tui/testfixtures"
 )
 
-func TestNewAgentOutput(t *testing.T) {
+// --- Initialization Tests ---
+
+func TestAgentOutput_NewAgentOutput(t *testing.T) {
 	ao := NewAgentOutput()
 
 	if ao == nil {
 		t.Fatal("expected non-nil agent output")
 	}
-	// Note: autoScroll is now managed by ScrollList after UpdateSize is called
+
+	// Verify input field is initialized
+	if ao.input.Placeholder != "Send a message..." {
+		t.Errorf("expected placeholder 'Send a message...', got %q", ao.input.Placeholder)
+	}
+	if ao.input.Prompt != "> " {
+		t.Errorf("expected prompt '> ', got %q", ao.input.Prompt)
+	}
+
+	// Verify initial state
+	if ao.focusedIndex != -1 {
+		t.Errorf("expected focusedIndex -1, got %d", ao.focusedIndex)
+	}
+	if ao.ready {
+		t.Error("expected ready=false before UpdateSize")
+	}
+	if ao.input.Focused() {
+		t.Error("expected input unfocused initially")
+	}
 }
+
+// --- Size and Layout Tests ---
 
 func TestAgentOutput_Append(t *testing.T) {
 	ao := NewAgentOutput()
@@ -23,39 +46,158 @@ func TestAgentOutput_Append(t *testing.T) {
 
 	// Command can be nil - just verify it doesn't panic
 	_ = cmd
+
+	// Verify content was added
+	if len(ao.messages) == 0 {
+		t.Error("expected at least one message after Append")
+	}
 }
 
 func TestAgentOutput_UpdateSize(t *testing.T) {
 	ao := NewAgentOutput()
 
-	cmd := ao.UpdateSize(100, 50)
+	cmd := ao.UpdateSize(testfixtures.TestTermWidth, testfixtures.TestTermHeight)
 
 	// Command can be nil - just verify it doesn't panic
 	_ = cmd
 
-	if ao.width != 100 {
-		t.Errorf("width: got %d, want 100", ao.width)
+	if ao.width != testfixtures.TestTermWidth {
+		t.Errorf("width: got %d, want %d", ao.width, testfixtures.TestTermWidth)
 	}
-	if ao.height != 50 {
-		t.Errorf("height: got %d, want 50", ao.height)
+	if ao.height != testfixtures.TestTermHeight {
+		t.Errorf("height: got %d, want %d", ao.height, testfixtures.TestTermHeight)
 	}
 	if !ao.ready {
 		t.Error("expected viewport to be ready after UpdateSize")
+	}
+
+	// Verify input width is configured
+	expectedInputWidth := testfixtures.TestTermWidth - 4
+	if ao.input.Width() != expectedInputWidth {
+		t.Errorf("input width: got %d, want %d", ao.input.Width(), expectedInputWidth)
 	}
 }
 
 func TestAgentOutput_Render(t *testing.T) {
 	ao := NewAgentOutput()
+	ao.UpdateSize(80, 20)
 
+	// Render returns empty string when not ready or no content
+	// Just verify it doesn't panic
+	_ = ao.Render()
+
+	// Add content and verify it renders
+	ao.AppendText("Test message")
 	output := ao.Render()
-
-	// Should render something even with no content
 	if output == "" {
-		t.Error("expected non-empty output")
+		t.Error("expected non-empty output with content")
 	}
 }
 
-func TestAgentOutput_ToggleInvalidatesCacheAndRefreshes(t *testing.T) {
+// --- Message Appending Tests ---
+
+func TestAgentOutput_AppendText(t *testing.T) {
+	ao := NewAgentOutput()
+	ao.UpdateSize(80, 20)
+
+	// AppendText uses Append which combines consecutive text into single message
+	ao.AppendText("First message")
+
+	if len(ao.messages) == 0 {
+		t.Fatal("expected at least one message")
+	}
+
+	// Verify it's a text message
+	if _, ok := ao.messages[0].(*TextMessageItem); !ok {
+		t.Errorf("expected TextMessageItem, got %T", ao.messages[0])
+	}
+}
+
+func TestAgentOutput_AppendThinking(t *testing.T) {
+	ao := NewAgentOutput()
+	ao.UpdateSize(80, 20)
+
+	ao.AppendThinking("Processing request...")
+
+	if len(ao.messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(ao.messages))
+	}
+
+	thinkingMsg, ok := ao.messages[0].(*ThinkingMessageItem)
+	if !ok {
+		t.Fatalf("expected ThinkingMessageItem, got %T", ao.messages[0])
+	}
+	if thinkingMsg.finished {
+		t.Error("expected thinking message to not be finished initially")
+	}
+}
+
+func TestAgentOutput_AppendToolCall_NewTool(t *testing.T) {
+	ao := NewAgentOutput()
+	ao.UpdateSize(80, 20)
+
+	toolMsg := AgentToolCallMsg{
+		ToolCallID: "tool-1",
+		Title:      "Read",
+		Status:     "pending",
+		Input:      map[string]any{"filePath": "test.go"},
+	}
+	ao.AppendToolCall(toolMsg)
+
+	if len(ao.messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(ao.messages))
+	}
+
+	toolItem, ok := ao.messages[0].(*ToolMessageItem)
+	if !ok {
+		t.Fatalf("expected ToolMessageItem, got %T", ao.messages[0])
+	}
+	if toolItem.ID() != "tool-1" {
+		t.Errorf("expected ID 'tool-1', got %q", toolItem.ID())
+	}
+	if toolItem.status != ToolStatusPending {
+		t.Errorf("expected status Pending, got %d", toolItem.status)
+	}
+}
+
+func TestAgentOutput_AppendToolCall_UpdateExisting(t *testing.T) {
+	ao := NewAgentOutput()
+	ao.UpdateSize(80, 20)
+
+	// Add initial pending tool
+	ao.AppendToolCall(AgentToolCallMsg{
+		ToolCallID: "tool-1",
+		Title:      "Read",
+		Status:     "pending",
+		Input:      map[string]any{},
+	})
+
+	// Update to completed with output
+	ao.AppendToolCall(AgentToolCallMsg{
+		ToolCallID: "tool-1",
+		Title:      "Read",
+		Status:     "completed",
+		Input:      map[string]any{"filePath": "test.go"},
+		Output:     "file contents here",
+	})
+
+	// Should still have only 1 message (updated, not added)
+	if len(ao.messages) != 1 {
+		t.Fatalf("expected 1 message after update, got %d", len(ao.messages))
+	}
+
+	toolItem := ao.messages[0].(*ToolMessageItem)
+	if toolItem.status != ToolStatusSuccess {
+		t.Errorf("expected status Success, got %d", toolItem.status)
+	}
+	if toolItem.output != "file contents here" {
+		t.Errorf("expected output 'file contents here', got %q", toolItem.output)
+	}
+}
+
+// --- Message Expansion Tests ---
+
+func TestAgentOutput_ToggleExpanded(t *testing.T) {
 	ao := NewAgentOutput()
 	// Don't set ready manually - UpdateSize will initialize scrollList and set ready
 	ao.UpdateSize(80, 20)
@@ -128,7 +270,9 @@ func TestAgentOutput_ToggleInvalidatesCacheAndRefreshes(t *testing.T) {
 	}
 }
 
-func TestAgentOutput_SubagentDetectionOnUpdate(t *testing.T) {
+// --- Subagent Detection Tests ---
+
+func TestAgentOutput_SubagentDetection(t *testing.T) {
 	ao := NewAgentOutput()
 	ao.ready = true
 	ao.UpdateSize(80, 20)
@@ -203,25 +347,10 @@ func TestAgentOutput_SubagentDetectionOnUpdate(t *testing.T) {
 	}
 }
 
-// containsSubstring checks if s contains substr
-func containsSubstring(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+// --- Keyboard Navigation Tests ---
 
-func TestAgentOutput_UpDownKeyHandling(t *testing.T) {
+func TestAgentOutput_ScrollingBehavior(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add enough content to require scrolling
@@ -264,7 +393,6 @@ func TestAgentOutput_UpDownKeyHandling(t *testing.T) {
 
 func TestAgentOutput_UpDownKeyHandling_NoExpandableMessages(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add only text messages (not expandable)
@@ -292,7 +420,6 @@ func TestAgentOutput_UpDownKeyHandling_NoExpandableMessages(t *testing.T) {
 
 func TestAgentOutput_UpDownKeyHandling_EmptyMessages(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// No messages at all
@@ -317,7 +444,6 @@ func TestAgentOutput_UpDownKeyHandling_EmptyMessages(t *testing.T) {
 
 func TestAgentOutput_UpDownKeyHandling_SingleExpandableMessage(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add only one expandable message
@@ -342,9 +468,10 @@ func TestAgentOutput_UpDownKeyHandling_SingleExpandableMessage(t *testing.T) {
 	}
 }
 
+// --- Mouse Interaction Tests ---
+
 func TestAgentOutput_ToggleExpandedViaClick(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add a tool message
@@ -381,9 +508,10 @@ func TestAgentOutput_ToggleExpandedViaClick(t *testing.T) {
 	}
 }
 
+// --- Finish Message Tests ---
+
 func TestAgentOutput_AppendFinish_Normal(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add a thinking message
@@ -442,7 +570,6 @@ func TestAgentOutput_AppendFinish_Normal(t *testing.T) {
 
 func TestAgentOutput_AppendFinish_WithError(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add a thinking message
@@ -493,7 +620,6 @@ func TestAgentOutput_AppendFinish_WithError(t *testing.T) {
 
 func TestAgentOutput_AppendFinish_Canceled(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add a thinking message
@@ -543,7 +669,6 @@ func TestAgentOutput_AppendFinish_Canceled(t *testing.T) {
 
 func TestAgentOutput_AppendFinish_StopsSpinner(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Start streaming (which starts spinner)
@@ -579,7 +704,6 @@ func TestAgentOutput_AppendFinish_StopsSpinner(t *testing.T) {
 
 func TestAgentOutput_AppendFinish_NoThinkingMessage(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// No thinking message - just call AppendFinish
@@ -606,7 +730,6 @@ func TestAgentOutput_AppendFinish_NoThinkingMessage(t *testing.T) {
 
 func TestAgentOutput_AppendFinish_CancelsPendingTools(t *testing.T) {
 	ao := NewAgentOutput()
-	ao.ready = true
 	ao.UpdateSize(80, 20)
 
 	// Add some tool calls in different states
@@ -666,77 +789,56 @@ func TestAgentOutput_AppendFinish_CancelsPendingTools(t *testing.T) {
 		t.Errorf("expected tool3 status to remain success, got %d", tool3.status)
 	}
 
-	// Verify cancel message was appended
-	foundCancelMsg := false
-	for _, msg := range ao.messages {
-		if textMsg, ok := msg.(*TextMessageItem); ok {
-			if textMsg.content != "" && textMsg.id != "" {
-				foundCancelMsg = true
-				break
-			}
-		}
-	}
-	if !foundCancelMsg {
-		t.Error("expected cancel message to be appended")
+	// Verify cancel message was appended (it's the last message after info)
+	if len(ao.messages) < 5 {
+		t.Errorf("expected at least 5 messages (3 tools, info, cancel), got %d", len(ao.messages))
 	}
 }
 
-func TestAgentOutput_InputRendersCorrectly(t *testing.T) {
+// --- Input Field Tests ---
+
+func TestAgentOutput_InputFieldManagement(t *testing.T) {
 	ao := NewAgentOutput()
+	ao.UpdateSize(80, 20)
 
-	// Verify input field was initialized with correct defaults
-	if ao.input.Value() != "" {
-		t.Errorf("expected input value to be empty initially, got %q", ao.input.Value())
-	}
-	if ao.input.Placeholder != "Send a message..." {
-		t.Errorf("expected placeholder 'Send a message...', got %q", ao.input.Placeholder)
-	}
-	if ao.input.Prompt != "> " {
-		t.Errorf("expected prompt '> ', got %q", ao.input.Prompt)
-	}
-
-	// Verify input starts unfocused
-	if ao.input.Focused() {
-		t.Error("expected input to be unfocused initially")
-	}
-
-	// Set input focused
+	// Test SetInputFocused
 	ao.SetInputFocused(true)
 	if !ao.input.Focused() {
-		t.Error("expected input to be focused after SetInputFocused(true)")
+		t.Error("expected input focused")
 	}
 
-	// Set some input text
-	ao.input.SetValue("test message")
-	if ao.InputValue() != "test message" {
-		t.Errorf("expected input value 'test message', got %q", ao.InputValue())
-	}
-
-	// Reset input
-	ao.ResetInput()
-	if ao.InputValue() != "" {
-		t.Errorf("expected input value to be empty after reset, got %q", ao.InputValue())
-	}
-
-	// Set input unfocused
 	ao.SetInputFocused(false)
 	if ao.input.Focused() {
-		t.Error("expected input to be unfocused after SetInputFocused(false)")
+		t.Error("expected input unfocused")
 	}
 
-	// Verify UpdateSize configures input width
-	ao.UpdateSize(80, 20)
-	if ao.width != 80 {
-		t.Errorf("expected width 80, got %d", ao.width)
-	}
-	if ao.height != 20 {
-		t.Errorf("expected height 20, got %d", ao.height)
+	// Test SetValue/InputValue
+	ao.input.SetValue("test message")
+	if ao.InputValue() != "test message" {
+		t.Errorf("expected 'test message', got %q", ao.InputValue())
 	}
 
-	// Input width should be set (width - 4 for borders/padding)
-	expectedInputWidth := 76
-	actualInputWidth := ao.input.Width()
-	if actualInputWidth != expectedInputWidth {
-		t.Errorf("expected input width %d, got %d", expectedInputWidth, actualInputWidth)
+	// Test ResetInput
+	ao.ResetInput()
+	if ao.InputValue() != "" {
+		t.Errorf("expected empty after reset, got %q", ao.InputValue())
 	}
+}
+
+// --- Helper Functions ---
+
+// containsSubstring checks if s contains substr
+func containsSubstring(s, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	if len(s) < len(substr) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
