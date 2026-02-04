@@ -2,10 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/mark3labs/iteratr/internal/tui/testfixtures"
 	"github.com/stretchr/testify/require"
 )
 
@@ -985,4 +988,71 @@ func TestWidthCachingTeatest_AllMessageTypes(t *testing.T) {
 		require.NotEmpty(t, result3, "re-render should not be empty")
 		require.NotEqual(t, result1, result3, "divider should render differently at different widths")
 	})
+}
+
+// --- Golden Tests for Error States ---
+
+// TestToolMessageItemTeatest_RenderError_Golden tests tool error message rendering with golden file
+func TestToolMessageItemTeatest_RenderError_Golden(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "tool-error-1",
+		toolName: "mcp_bash",
+		kind:     "bash",
+		status:   ToolStatusError,
+		input:    map[string]any{"command": "go build ./...", "description": "Run build command"},
+		output:   "exit status 1: compilation failed\nundefined: missingFunction",
+		expanded: true,
+	}
+
+	result := item.Render(testfixtures.TestTermWidth)
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 10)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 10)
+	uv.NewStyledString(result).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "tool_message_error.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
+}
+
+// TestRenderDiagnosticsTeatest_SingleError_Golden tests single diagnostic error rendering with golden file
+func TestRenderDiagnosticsTeatest_SingleError_Golden(t *testing.T) {
+	t.Parallel()
+
+	output := `<diagnostics file="/home/user/project/internal/app/handler.go">
+ERROR [153:21] undefined: conn
+</diagnostics>`
+
+	result := renderDiagnostics(output, testfixtures.TestTermWidth)
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 5)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 5)
+	uv.NewStyledString(result).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "diagnostic_single_error.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
+}
+
+// TestRenderDiagnosticsTeatest_MultipleErrors_Golden tests multiple diagnostic errors rendering with golden file
+func TestRenderDiagnosticsTeatest_MultipleErrors_Golden(t *testing.T) {
+	t.Parallel()
+
+	output := `<diagnostics file="/home/user/project/internal/server/server.go">
+ERROR [153:21] undefined: conn
+ERROR [153:38] undefined: sessID
+ERROR [175:15] cannot use result (variable of type *Result) as string value in return statement
+</diagnostics>`
+
+	result := renderDiagnostics(output, testfixtures.TestTermWidth)
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 8)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 8)
+	uv.NewStyledString(result).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "diagnostic_multiple_errors.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
 }
