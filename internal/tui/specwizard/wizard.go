@@ -254,6 +254,10 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reset result
 		m.result = WizardResult{}
 		// Clean up agent resources
+		if m.agentStep != nil {
+			m.agentStep.Cleanup()
+			m.agentStep = nil
+		}
 		if m.agentRunner != nil {
 			m.agentRunner.Stop()
 			m.agentRunner = nil
@@ -270,6 +274,10 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Debug("Cancelling wizard from agent phase")
 		m.cancelled = true
 		// Clean up agent resources before quitting
+		if m.agentStep != nil {
+			m.agentStep.Cleanup()
+			m.agentStep = nil
+		}
 		if m.agentRunner != nil {
 			m.agentRunner.Stop()
 			m.agentRunner = nil

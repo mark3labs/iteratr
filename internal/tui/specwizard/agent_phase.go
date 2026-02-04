@@ -38,6 +38,10 @@ type AgentPhase struct {
 	specContentCh  <-chan specmcp.SpecContentRequest
 	currentSpecReq *specmcp.SpecContentRequest // Current pending spec content request
 
+	// Listener lifecycle management
+	listenerCtx    context.Context
+	listenerCancel context.CancelFunc
+
 	// Cancel confirmation modal
 	showConfirmCancel bool // True if cancel confirmation modal is visible
 
@@ -48,6 +52,7 @@ type AgentPhase struct {
 
 // NewAgentPhase creates a new agent phase component.
 func NewAgentPhase(mcpServer *specmcp.Server) *AgentPhase {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &AgentPhase{
 		mcpServer:       mcpServer,
 		questionReqCh:   mcpServer.QuestionChan(),
@@ -55,6 +60,8 @@ func NewAgentPhase(mcpServer *specmcp.Server) *AgentPhase {
 		waitingForAgent: true,
 		spinner:         tui.NewDefaultSpinner(),
 		statusText:      "Agent is analyzing requirements...",
+		listenerCtx:     ctx,
+		listenerCancel:  cancel,
 	}
 }
 
@@ -63,8 +70,8 @@ func (a *AgentPhase) Init() tea.Cmd {
 	// Start listening for question requests and spec content
 	return tea.Batch(
 		a.spinner.Tick(),
-		waitForQuestionRequest(a.questionReqCh),
-		waitForSpecContent(a.specContentCh),
+		waitForQuestionRequest(a.listenerCtx, a.questionReqCh),
+		waitForSpecContent(a.listenerCtx, a.specContentCh),
 	)
 }
 
@@ -238,10 +245,16 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		a.questionView = nil
 		a.currentReq = nil
 
+		// Cancel old listeners and create new context
+		a.listenerCancel()
+		ctx, cancel := context.WithCancel(context.Background())
+		a.listenerCtx = ctx
+		a.listenerCancel = cancel
+
 		return a, tea.Batch(
 			a.spinner.Tick(),
-			waitForQuestionRequest(a.questionReqCh),
-			waitForSpecContent(a.specContentCh),
+			waitForQuestionRequest(a.listenerCtx, a.questionReqCh),
+			waitForSpecContent(a.listenerCtx, a.specContentCh),
 		)
 
 	case SpecContentRequestMsg:
@@ -388,6 +401,13 @@ func (a *AgentPhase) SetSize(width, height int) {
 	}
 }
 
+// Cleanup cancels any active channel listeners to prevent goroutine leaks.
+func (a *AgentPhase) Cleanup() {
+	if a.listenerCancel != nil {
+		a.listenerCancel()
+	}
+}
+
 // ConfirmSpecSave sends confirmation to the finish-spec MCP handler that the spec was saved.
 // This unblocks the MCP handler and allows the agent to complete.
 func (a *AgentPhase) ConfirmSpecSave() {
@@ -410,19 +430,27 @@ type QuestionRequestMsg struct {
 	Request specmcp.QuestionRequest
 }
 
-// waitForQuestionRequest returns a command that waits for a question request.
-func waitForQuestionRequest(ch <-chan specmcp.QuestionRequest) tea.Cmd {
+// waitForQuestionRequest returns a command that waits for a question request with context.
+func waitForQuestionRequest(ctx context.Context, ch <-chan specmcp.QuestionRequest) tea.Cmd {
 	return func() tea.Msg {
-		req := <-ch
-		return QuestionRequestMsg{Request: req}
+		select {
+		case req := <-ch:
+			return QuestionRequestMsg{Request: req}
+		case <-ctx.Done():
+			return nil
+		}
 	}
 }
 
-// waitForSpecContent returns a command that waits for spec content from finish-spec.
-func waitForSpecContent(ch <-chan specmcp.SpecContentRequest) tea.Cmd {
+// waitForSpecContent returns a command that waits for spec content with context.
+func waitForSpecContent(ctx context.Context, ch <-chan specmcp.SpecContentRequest) tea.Cmd {
 	return func() tea.Msg {
-		req := <-ch
-		return SpecContentRequestMsg{Request: req}
+		select {
+		case req := <-ch:
+			return SpecContentRequestMsg{Request: req}
+		case <-ctx.Done():
+			return nil
+		}
 	}
 }
 
