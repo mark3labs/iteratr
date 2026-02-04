@@ -5,23 +5,17 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/mark3labs/iteratr/internal/session"
+	"github.com/mark3labs/iteratr/internal/tui/testfixtures"
 )
 
 // TestSidebar_TaskNavigation_Down tests navigating down through tasks with j/down keys
 func TestSidebar_TaskNavigation_Down(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = true
-
-	// Create state with 3 tasks
-	state := &session.State{
-		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "First task", Status: "remaining", Priority: 1},
-			"task2": {ID: "task2", Content: "Second task", Status: "in_progress", Priority: 1},
-			"task3": {ID: "task3", Content: "Third task", Status: "completed", Priority: 1},
-		},
-	}
-	sidebar.SetState(state)
+	sidebar.SetState(testfixtures.StateWithTasks())
 
 	// Initial cursor should be at 0
 	if sidebar.cursor != 0 {
@@ -49,19 +43,12 @@ func TestSidebar_TaskNavigation_Down(t *testing.T) {
 
 // TestSidebar_TaskNavigation_Up tests navigating up through tasks with k/up keys
 func TestSidebar_TaskNavigation_Up(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = true
-
-	// Create state with 3 tasks
-	state := &session.State{
-		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "First task", Status: "remaining", Priority: 1},
-			"task2": {ID: "task2", Content: "Second task", Status: "in_progress", Priority: 1},
-			"task3": {ID: "task3", Content: "Third task", Status: "completed", Priority: 1},
-		},
-	}
-	sidebar.SetState(state)
+	sidebar.SetState(testfixtures.StateWithTasks())
 
 	// Move to last task
 	sidebar.cursor = 2
@@ -87,20 +74,14 @@ func TestSidebar_TaskNavigation_Up(t *testing.T) {
 
 // TestSidebar_TaskNavigation_EnterOpensModal tests that pressing Enter on a task opens the modal
 func TestSidebar_TaskNavigation_EnterOpensModal(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = true
+	sidebar.SetState(testfixtures.StateWithTasks())
 
-	// Create state with 2 tasks
-	state := &session.State{
-		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "First task", Status: "remaining", Priority: 1},
-			"task2": {ID: "task2", Content: "Second task", Status: "in_progress", Priority: 1},
-		},
-	}
-	sidebar.SetState(state)
-
-	// Navigate to second task
+	// Navigate to second task (TAS-2)
 	sidebar.cursor = 1
 	sidebar.updateContent()
 
@@ -117,29 +98,23 @@ func TestSidebar_TaskNavigation_EnterOpensModal(t *testing.T) {
 		t.Fatalf("Expected OpenTaskModalMsg, got %T", msg)
 	}
 
-	// Verify correct task is selected
-	if openMsg.Task.ID != "task2" {
-		t.Errorf("OpenTaskModalMsg task ID: got %s, want task2", openMsg.Task.ID)
+	// Verify correct task is selected (should be TAS-2 based on alphabetical ID order)
+	if openMsg.Task.ID != "TAS-2" {
+		t.Errorf("OpenTaskModalMsg task ID: got %s, want TAS-2", openMsg.Task.ID)
 	}
-	if openMsg.Task.Content != "Second task" {
-		t.Errorf("OpenTaskModalMsg task content: got %s, want 'Second task'", openMsg.Task.Content)
+	if openMsg.Task.Content != "[P1] Implement feature X" {
+		t.Errorf("OpenTaskModalMsg task content: got %s, want '[P1] Implement feature X'", openMsg.Task.Content)
 	}
 }
 
 // TestSidebar_TaskNavigation_NoFocus tests that navigation doesn't work when not focused
 func TestSidebar_TaskNavigation_NoFocus(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = false // Not focused
-
-	// Create state with tasks
-	state := &session.State{
-		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "First task", Status: "remaining", Priority: 1},
-			"task2": {ID: "task2", Content: "Second task", Status: "in_progress", Priority: 1},
-		},
-	}
-	sidebar.SetState(state)
+	sidebar.SetState(testfixtures.StateWithTasks())
 
 	initialCursor := sidebar.cursor
 
@@ -149,8 +124,7 @@ func TestSidebar_TaskNavigation_NoFocus(t *testing.T) {
 		t.Errorf("Cursor should not change when not focused: got %d, want %d", sidebar.cursor, initialCursor)
 	}
 
-	sidebar.Update(tea.KeyPressMsg{Text: "enter"})
-	// Should return nil since not focused
+	// Try Enter - should return nil since not focused
 	cmd := sidebar.Update(tea.KeyPressMsg{Text: "enter"})
 	if cmd != nil {
 		t.Error("Enter should not work when sidebar not focused")
@@ -159,15 +133,12 @@ func TestSidebar_TaskNavigation_NoFocus(t *testing.T) {
 
 // TestSidebar_TaskNavigation_EmptyList tests navigation with no tasks
 func TestSidebar_TaskNavigation_EmptyList(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = true
-
-	// Create empty state
-	state := &session.State{
-		Tasks: map[string]*session.Task{},
-	}
-	sidebar.SetState(state)
+	sidebar.SetState(testfixtures.EmptyState())
 
 	// Try navigation on empty list
 	sidebar.Update(tea.KeyPressMsg{Text: "j"})
@@ -184,6 +155,8 @@ func TestSidebar_TaskNavigation_EmptyList(t *testing.T) {
 
 // TestSidebar_TaskNavigation_SingleTask tests navigation with only one task
 func TestSidebar_TaskNavigation_SingleTask(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = true
@@ -191,7 +164,7 @@ func TestSidebar_TaskNavigation_SingleTask(t *testing.T) {
 	// Create state with single task
 	state := &session.State{
 		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "Only task", Status: "remaining", Priority: 1},
+			"TAS-1": {ID: "TAS-1", Content: "Only task", Status: "remaining", Priority: 1},
 		},
 	}
 	sidebar.SetState(state)
@@ -222,19 +195,12 @@ func TestSidebar_TaskNavigation_SingleTask(t *testing.T) {
 
 // TestSidebar_TaskNavigation_CursorPersistence tests cursor position maintained across state updates
 func TestSidebar_TaskNavigation_CursorPersistence(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = true
-
-	// Create initial state
-	state := &session.State{
-		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "First task", Status: "remaining", Priority: 1},
-			"task2": {ID: "task2", Content: "Second task", Status: "remaining", Priority: 1},
-			"task3": {ID: "task3", Content: "Third task", Status: "remaining", Priority: 1},
-		},
-	}
-	sidebar.SetState(state)
+	sidebar.SetState(testfixtures.StateWithTasks())
 
 	// Navigate to second task
 	sidebar.Update(tea.KeyPressMsg{Text: "j"})
@@ -242,14 +208,9 @@ func TestSidebar_TaskNavigation_CursorPersistence(t *testing.T) {
 		t.Fatalf("Cursor should be at 1, got %d", sidebar.cursor)
 	}
 
-	// Update state (task status change)
-	updatedState := &session.State{
-		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "First task", Status: "remaining", Priority: 1},
-			"task2": {ID: "task2", Content: "Second task", Status: "in_progress", Priority: 1},
-			"task3": {ID: "task3", Content: "Third task", Status: "remaining", Priority: 1},
-		},
-	}
+	// Update state (task status change) - use StateWithTasks and modify
+	updatedState := testfixtures.StateWithTasks()
+	updatedState.Tasks["TAS-2"].Status = "completed" // Change status
 	sidebar.SetState(updatedState)
 
 	// Cursor should remain at position 1
@@ -260,19 +221,12 @@ func TestSidebar_TaskNavigation_CursorPersistence(t *testing.T) {
 
 // TestSidebar_TaskNavigation_BoundaryConditions tests edge cases
 func TestSidebar_TaskNavigation_BoundaryConditions(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 	sidebar.tasksFocused = true
-
-	// Create state with tasks
-	state := &session.State{
-		Tasks: map[string]*session.Task{
-			"task1": {ID: "task1", Content: "First task", Status: "remaining", Priority: 1},
-			"task2": {ID: "task2", Content: "Second task", Status: "remaining", Priority: 1},
-			"task3": {ID: "task3", Content: "Third task", Status: "remaining", Priority: 1},
-		},
-	}
-	sidebar.SetState(state)
+	sidebar.SetState(testfixtures.StateWithTasks())
 
 	// Test multiple down presses beyond boundary
 	for i := 0; i < 10; i++ {
@@ -293,6 +247,8 @@ func TestSidebar_TaskNavigation_BoundaryConditions(t *testing.T) {
 
 // TestSidebar_TaskNavigation_ScrollToItem tests that navigation triggers scroll
 func TestSidebar_TaskNavigation_ScrollToItem(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 10) // Small height to force scrolling
 	sidebar.tasksFocused = true
@@ -300,7 +256,7 @@ func TestSidebar_TaskNavigation_ScrollToItem(t *testing.T) {
 	// Create state with many tasks
 	tasks := make(map[string]*session.Task)
 	for i := 0; i < 20; i++ {
-		taskID := string(rune('a' + i))
+		taskID := testfixtures.FixedSessionName + "-" + string(rune('a'+i))
 		tasks[taskID] = &session.Task{
 			ID:       taskID,
 			Content:  "Task " + taskID,
@@ -329,15 +285,17 @@ func TestSidebar_TaskNavigation_ScrollToItem(t *testing.T) {
 
 // TestSidebar_TaskOrdering tests that tasks are displayed in ID alphabetical order
 func TestSidebar_TaskOrdering(t *testing.T) {
+	t.Parallel()
+
 	sidebar := NewSidebar()
 	sidebar.SetSize(40, 30)
 
 	// Create tasks with different IDs (getTasks sorts by ID)
 	state := &session.State{
 		Tasks: map[string]*session.Task{
-			"task-c": {ID: "task-c", Content: "Third alphabetically", Status: "remaining", Priority: 1},
-			"task-a": {ID: "task-a", Content: "First alphabetically", Status: "remaining", Priority: 3},
-			"task-b": {ID: "task-b", Content: "Second alphabetically", Status: "remaining", Priority: 0},
+			"TAS-3": {ID: "TAS-3", Content: "Third alphabetically", Status: "remaining", Priority: 1},
+			"TAS-1": {ID: "TAS-1", Content: "First alphabetically", Status: "remaining", Priority: 3},
+			"TAS-2": {ID: "TAS-2", Content: "Second alphabetically", Status: "remaining", Priority: 0},
 		},
 	}
 	sidebar.SetState(state)
@@ -350,14 +308,70 @@ func TestSidebar_TaskOrdering(t *testing.T) {
 		t.Fatalf("Expected 3 tasks, got %d", len(tasks))
 	}
 
-	// Task order should be alphabetical: task-a, task-b, task-c
-	if tasks[0].ID != "task-a" {
-		t.Errorf("First task should be task-a, got %s", tasks[0].ID)
+	// Task order should be alphabetical: TAS-1, TAS-2, TAS-3
+	if tasks[0].ID != "TAS-1" {
+		t.Errorf("First task should be TAS-1, got %s", tasks[0].ID)
 	}
-	if tasks[1].ID != "task-b" {
-		t.Errorf("Second task should be task-b, got %s", tasks[1].ID)
+	if tasks[1].ID != "TAS-2" {
+		t.Errorf("Second task should be TAS-2, got %s", tasks[1].ID)
 	}
-	if tasks[2].ID != "task-c" {
-		t.Errorf("Third task should be task-c, got %s", tasks[2].ID)
+	if tasks[2].ID != "TAS-3" {
+		t.Errorf("Third task should be TAS-3, got %s", tasks[2].ID)
+	}
+}
+
+// TestSidebar_TaskNavigation_CursorClampedOnStateChange tests cursor is clamped when task list shrinks
+func TestSidebar_TaskNavigation_CursorClampedOnStateChange(t *testing.T) {
+	t.Parallel()
+
+	sidebar := NewSidebar()
+	sidebar.SetSize(40, 30)
+	sidebar.tasksFocused = true
+	sidebar.SetState(testfixtures.StateWithTasks())
+
+	// Navigate to last task
+	sidebar.cursor = 2
+
+	// Update to state with fewer tasks
+	state := &session.State{
+		Tasks: map[string]*session.Task{
+			"TAS-1": {ID: "TAS-1", Content: "First task", Status: "remaining", Priority: 1},
+		},
+	}
+	sidebar.SetState(state)
+
+	// Cursor should be clamped to 0 (only task)
+	if sidebar.cursor != 0 {
+		t.Errorf("Cursor should be clamped to 0: got %d", sidebar.cursor)
+	}
+}
+
+// TestSidebar_TaskNavigation_EnterWithKeyboardAndMouse tests both keyboard and coordinate-based selection
+func TestSidebar_TaskNavigation_EnterWithKeyboardAndMouse(t *testing.T) {
+	t.Parallel()
+
+	sidebar := NewSidebar()
+	sidebar.SetSize(40, 30)
+	sidebar.tasksFocused = true
+	sidebar.SetState(testfixtures.StateWithTasks())
+
+	// Test keyboard navigation to select task
+	sidebar.cursor = 1
+	sidebar.updateContent()
+
+	cmd := sidebar.Update(tea.KeyPressMsg{Text: "enter"})
+	if cmd == nil {
+		t.Fatal("Enter should return command")
+	}
+
+	msg := cmd()
+	openMsg, ok := msg.(OpenTaskModalMsg)
+	if !ok {
+		t.Fatalf("Expected OpenTaskModalMsg, got %T", msg)
+	}
+
+	// Should select TAS-2 (second task alphabetically)
+	if openMsg.Task.ID != "TAS-2" {
+		t.Errorf("Expected TAS-2, got %s", openMsg.Task.ID)
 	}
 }
