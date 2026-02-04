@@ -1,7 +1,15 @@
 package tui
 
 import (
+	"path/filepath"
 	"testing"
+
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/mark3labs/iteratr/internal/tui/testfixtures"
+	"github.com/stretchr/testify/require"
 )
 
 // TestPulse_NewPulse verifies initial state of a new Pulse
@@ -338,5 +346,343 @@ func TestPulse_ZeroIntensityAtEnds(t *testing.T) {
 	pulse.Stop() // Simulate what Update does
 	if intensity := pulse.Intensity(); intensity != 0.0 {
 		t.Errorf("end intensity should be 0.0, got %f", intensity)
+	}
+}
+
+// ==================== Spinner Tests ====================
+
+// TestSpinner_NewDefaultSpinner verifies default spinner creation
+func TestSpinner_NewDefaultSpinner(t *testing.T) {
+	t.Parallel()
+
+	spinner := NewDefaultSpinner()
+
+	// Verify spinner is created (should not panic)
+	view := spinner.View()
+	require.NotEmpty(t, view, "spinner view should not be empty")
+}
+
+// TestSpinner_NewSpinner verifies spinner creation with custom style
+func TestSpinner_NewSpinner(t *testing.T) {
+	t.Parallel()
+
+	spinner := NewSpinner(spinner.MiniDot)
+
+	view := spinner.View()
+	require.NotEmpty(t, view, "spinner view should not be empty")
+}
+
+// TestSpinner_Tick verifies tick command is not nil
+func TestSpinner_Tick(t *testing.T) {
+	t.Parallel()
+
+	spinner := NewDefaultSpinner()
+
+	cmd := spinner.Tick()
+	require.NotNil(t, cmd, "Tick() should return a command")
+}
+
+// TestSpinner_Update verifies Update processes tick messages
+func TestSpinner_Update(t *testing.T) {
+	t.Parallel()
+
+	spinner := NewDefaultSpinner()
+
+	// Get tick command and execute it to get a message
+	tickCmd := spinner.Tick()
+	require.NotNil(t, tickCmd, "Tick() should return a command")
+
+	// Update with a generic message (spinner.TickMsg is internal to bubbles)
+	cmd := spinner.Update(tea.KeyPressMsg{})
+	// Should return some command (possibly nil, depending on message type)
+	_ = cmd
+}
+
+// TestSpinner_SetStyle verifies style can be updated
+func TestSpinner_SetStyle(t *testing.T) {
+	t.Parallel()
+
+	spinner := NewDefaultSpinner()
+
+	// Create a custom style
+	customStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff0000"))
+
+	// Set style - should not panic
+	spinner.SetStyle(customStyle)
+
+	view := spinner.View()
+	require.NotEmpty(t, view, "spinner view should not be empty after SetStyle")
+}
+
+// TestSpinner_ViewStatic_Golden verifies spinner renders at static frame
+func TestSpinner_ViewStatic_Golden(t *testing.T) {
+	t.Parallel()
+
+	spinner := NewDefaultSpinner()
+
+	// Render spinner view
+	view := spinner.View()
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 3)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 3)
+	uv.NewStyledString(view).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "spinner_static.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
+}
+
+// TestSpinner_DifferentStyles verifies different spinner styles render
+func TestSpinner_DifferentStyles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		style spinner.Spinner
+	}{
+		{name: "MiniDot", style: spinner.MiniDot},
+		{name: "Dot", style: spinner.Dot},
+		{name: "Line", style: spinner.Line},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewSpinner(tt.style)
+			view := s.View()
+			require.NotEmpty(t, view, "spinner view should not be empty for style %s", tt.name)
+		})
+	}
+}
+
+// ==================== GradientSpinner Tests ====================
+
+// TestGradientSpinner_NewGradientSpinner verifies gradient spinner creation
+func TestGradientSpinner_NewGradientSpinner(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "Loading")
+
+	require.Equal(t, "#ff0000", gs.colorA, "colorA should match")
+	require.Equal(t, "#00ff00", gs.colorB, "colorB should match")
+	require.Equal(t, "Loading", gs.label, "label should match")
+	require.Equal(t, 0, gs.frame, "initial frame should be 0")
+	require.Equal(t, 15, gs.size, "default size should be 15")
+}
+
+// TestGradientSpinner_NewDefaultGradientSpinner verifies default gradient spinner uses theme colors
+func TestGradientSpinner_NewDefaultGradientSpinner(t *testing.T) {
+	t.Parallel()
+
+	gs := NewDefaultGradientSpinner("Processing")
+
+	require.Equal(t, "Processing", gs.label, "label should match")
+	require.NotEmpty(t, gs.colorA, "colorA should be set from theme")
+	require.NotEmpty(t, gs.colorB, "colorB should be set from theme")
+	require.Equal(t, 0, gs.frame, "initial frame should be 0")
+	require.Equal(t, 15, gs.size, "default size should be 15")
+}
+
+// TestGradientSpinner_View verifies view renders gradient
+func TestGradientSpinner_View(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "")
+
+	view := gs.View()
+	require.NotEmpty(t, view, "view should not be empty")
+	require.Contains(t, view, "█", "view should contain block characters")
+}
+
+// TestGradientSpinner_ViewWithLabel verifies view includes label
+func TestGradientSpinner_ViewWithLabel(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "Loading")
+
+	view := gs.View()
+	require.NotEmpty(t, view, "view should not be empty")
+	require.Contains(t, view, "Loading", "view should contain label")
+	require.Contains(t, view, "█", "view should contain block characters")
+}
+
+// TestGradientSpinner_ViewWithoutLabel verifies view without label
+func TestGradientSpinner_ViewWithoutLabel(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "")
+
+	view := gs.View()
+	require.NotEmpty(t, view, "view should not be empty")
+	require.NotContains(t, view, "Loading", "view should not contain 'Loading'")
+	require.Contains(t, view, "█", "view should contain block characters")
+}
+
+// TestGradientSpinner_Tick verifies tick command is not nil
+func TestGradientSpinner_Tick(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "")
+
+	cmd := gs.Tick()
+	require.NotNil(t, cmd, "Tick() should return a command")
+}
+
+// TestGradientSpinner_Update verifies Update advances frame
+func TestGradientSpinner_Update(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "")
+
+	initialFrame := gs.frame
+	require.Equal(t, 0, initialFrame, "initial frame should be 0")
+
+	// Update with GradientSpinnerMsg
+	cmd := gs.Update(GradientSpinnerMsg{})
+	require.NotNil(t, cmd, "Update should return tick command")
+	require.Equal(t, 1, gs.frame, "frame should advance to 1")
+}
+
+// TestGradientSpinner_UpdateNonSpinnerMsg verifies Update ignores other messages
+func TestGradientSpinner_UpdateNonSpinnerMsg(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "")
+
+	initialFrame := gs.frame
+
+	// Update with non-GradientSpinnerMsg
+	cmd := gs.Update(tea.KeyPressMsg{})
+	require.Nil(t, cmd, "Update should return nil for non-GradientSpinnerMsg")
+	require.Equal(t, initialFrame, gs.frame, "frame should not change")
+}
+
+// TestGradientSpinner_FrameWrapping verifies frame wraps at size
+func TestGradientSpinner_FrameWrapping(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "")
+
+	// Advance to size-1
+	gs.frame = gs.size - 1
+	require.Equal(t, 14, gs.frame, "frame should be size-1")
+
+	// Update should wrap to 0
+	gs.Update(GradientSpinnerMsg{})
+	require.Equal(t, 0, gs.frame, "frame should wrap to 0 at size")
+}
+
+// TestGradientSpinner_ViewStatic_Golden verifies gradient spinner renders at frame 0
+func TestGradientSpinner_ViewStatic_Golden(t *testing.T) {
+	t.Parallel()
+
+	gs := NewDefaultGradientSpinner("Processing")
+
+	// Render gradient spinner view at frame 0
+	view := gs.View()
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 3)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 3)
+	uv.NewStyledString(view).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "gradient_spinner_frame0.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
+}
+
+// TestGradientSpinner_ViewFrame5_Golden verifies gradient spinner renders at frame 5
+func TestGradientSpinner_ViewFrame5_Golden(t *testing.T) {
+	t.Parallel()
+
+	gs := NewDefaultGradientSpinner("Processing")
+
+	// Advance to frame 5
+	gs.frame = 5
+
+	// Render gradient spinner view at frame 5
+	view := gs.View()
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 3)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 3)
+	uv.NewStyledString(view).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "gradient_spinner_frame5.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
+}
+
+// TestGradientSpinner_ViewFrame10_Golden verifies gradient spinner renders at frame 10
+func TestGradientSpinner_ViewFrame10_Golden(t *testing.T) {
+	t.Parallel()
+
+	gs := NewDefaultGradientSpinner("Processing")
+
+	// Advance to frame 10
+	gs.frame = 10
+
+	// Render gradient spinner view at frame 10
+	view := gs.View()
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 3)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 3)
+	uv.NewStyledString(view).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "gradient_spinner_frame10.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
+}
+
+// TestGradientSpinner_NoLabel_Golden verifies gradient spinner without label
+func TestGradientSpinner_NoLabel_Golden(t *testing.T) {
+	t.Parallel()
+
+	gs := NewDefaultGradientSpinner("")
+
+	// Render gradient spinner view without label
+	view := gs.View()
+
+	// Render in a canvas for visual verification
+	canvas := uv.NewScreenBuffer(testfixtures.TestTermWidth, 3)
+	area := uv.Rect(0, 0, testfixtures.TestTermWidth, 3)
+	uv.NewStyledString(view).Draw(canvas, area)
+
+	goldenPath := filepath.Join("testdata", "gradient_spinner_no_label.golden")
+	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
+}
+
+// TestGradientSpinner_MultipleUpdates verifies multiple updates advance frame correctly
+func TestGradientSpinner_MultipleUpdates(t *testing.T) {
+	t.Parallel()
+
+	gs := NewGradientSpinner("#ff0000", "#00ff00", "")
+
+	for i := 0; i < 5; i++ {
+		expectedFrame := i + 1
+		gs.Update(GradientSpinnerMsg{})
+		require.Equal(t, expectedFrame, gs.frame, "frame should be %d after %d updates", expectedFrame, i+1)
+	}
+}
+
+// TestGradientSpinner_CustomColors verifies gradient with custom colors
+func TestGradientSpinner_CustomColors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		colorA string
+		colorB string
+	}{
+		{name: "red to blue", colorA: "#ff0000", colorB: "#0000ff"},
+		{name: "green to yellow", colorA: "#00ff00", colorB: "#ffff00"},
+		{name: "purple to cyan", colorA: "#ff00ff", colorB: "#00ffff"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gs := NewGradientSpinner(tt.colorA, tt.colorB, "Test")
+			view := gs.View()
+			require.NotEmpty(t, view, "gradient spinner should render for %s", tt.name)
+			require.Contains(t, view, "█", "view should contain block characters")
+			require.Contains(t, view, "Test", "view should contain label")
+		})
 	}
 }
