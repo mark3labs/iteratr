@@ -1,0 +1,988 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+// --- InfoMessageItem Tests ---
+
+func TestInfoMessageItemTeatest_RenderFullInfo(t *testing.T) {
+	t.Parallel()
+
+	item := InfoMessageItem{
+		id:       "test1",
+		model:    "claude-3-5-sonnet",
+		provider: "Anthropic",
+		duration: 2*time.Second + 500*time.Millisecond,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "◇", "should contain diamond icon")
+	require.Contains(t, result, "claude-3-5-sonnet", "should contain model")
+	require.Contains(t, result, "via", "should contain 'via'")
+	require.Contains(t, result, "Anthropic", "should contain provider")
+	require.Contains(t, result, "⏱", "should contain timer icon")
+	require.Contains(t, result, "2.5s", "should contain formatted duration")
+}
+
+func TestInfoMessageItemTeatest_RenderModelOnly(t *testing.T) {
+	t.Parallel()
+
+	item := InfoMessageItem{
+		id:       "test2",
+		model:    "gpt-4",
+		provider: "",
+		duration: 1 * time.Second,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "gpt-4", "should contain model")
+	require.NotContains(t, result, "via", "should not contain 'via' when no provider")
+	require.Contains(t, result, "⏱", "should contain timer icon")
+	require.Contains(t, result, "1s", "should contain duration")
+}
+
+func TestInfoMessageItemTeatest_RenderCaching(t *testing.T) {
+	t.Parallel()
+
+	item := InfoMessageItem{
+		id:       "test3",
+		model:    "claude-3-5-sonnet",
+		provider: "Anthropic",
+		duration: 500 * time.Millisecond,
+	}
+
+	result1 := item.Render(80)
+	result2 := item.Render(80)
+
+	require.Equal(t, result1, result2, "cached render should match original")
+
+	result3 := item.Render(100)
+	require.NotEmpty(t, result3, "render with different width should not be empty")
+}
+
+// --- TextMessageItem Tests ---
+
+func TestTextMessageItemTeatest_RenderShortText(t *testing.T) {
+	t.Parallel()
+
+	item := &TextMessageItem{
+		id:      "test",
+		content: "Hello world",
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "Hello", "should contain content")
+	require.Contains(t, result, "world", "should contain content")
+}
+
+func TestTextMessageItemTeatest_RenderMultilineContent(t *testing.T) {
+	t.Parallel()
+
+	item := &TextMessageItem{
+		id:      "test",
+		content: "Line 1\nLine 2\nLine 3",
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Equal(t, 80, item.cachedWidth, "cached width should be set")
+
+	height := item.Height()
+	require.Greater(t, height, 0, "height should be positive")
+}
+
+func TestTextMessageItemTeatest_RenderWidthCapping(t *testing.T) {
+	t.Parallel()
+
+	item := &TextMessageItem{
+		id:      "test",
+		content: "Content",
+	}
+
+	// Wide terminal should be capped at 120
+	result := item.Render(200)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Equal(t, 200, item.cachedWidth, "cached width should match requested")
+	// Verify effective width capping by ensuring we don't use the full 200 width
+	require.NotContains(t, result, strings.Repeat(" ", 150), "should not use uncapped width")
+}
+
+func TestTextMessageItemTeatest_CacheInvalidation(t *testing.T) {
+	t.Parallel()
+
+	item := &TextMessageItem{
+		id:      "test",
+		content: "This is test content that will be rendered",
+	}
+
+	// First render at width 80
+	result1 := item.Render(80)
+	require.NotEmpty(t, result1, "first render should not be empty")
+	require.Equal(t, 80, item.cachedWidth, "cached width should be 80")
+
+	// Second render at same width - should return cached
+	result2 := item.Render(80)
+	require.Equal(t, result1, result2, "cached render should match")
+
+	// Third render at different width - should re-render
+	result3 := item.Render(100)
+	require.NotEmpty(t, result3, "re-render should not be empty")
+	require.Equal(t, 100, item.cachedWidth, "cached width should update to 100")
+}
+
+func TestTextMessageItemTeatest_HeightCalculation(t *testing.T) {
+	t.Parallel()
+
+	item := &TextMessageItem{
+		id:      "test",
+		content: "Line 1\nLine 2\nLine 3",
+	}
+
+	item.Render(80)
+
+	height := item.Height()
+	expectedHeight := strings.Count(item.cachedRender, "\n") + 1
+
+	require.Equal(t, expectedHeight, height, "height should match newline count")
+}
+
+// --- ThinkingMessageItem Tests ---
+
+func TestThinkingMessageItemTeatest_RenderShortContentExpanded(t *testing.T) {
+	t.Parallel()
+
+	item := &ThinkingMessageItem{
+		id:        "test",
+		content:   "Line 1\nLine 2\nLine 3",
+		collapsed: false,
+		duration:  0,
+		finished:  false,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.NotContains(t, result, "lines hidden", "should not show truncation for short content")
+}
+
+func TestThinkingMessageItemTeatest_RenderShortContentCollapsed(t *testing.T) {
+	t.Parallel()
+
+	item := &ThinkingMessageItem{
+		id:        "test",
+		content:   "Line 1\nLine 2\nLine 3",
+		collapsed: true,
+		duration:  0,
+		finished:  false,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.NotContains(t, result, "lines hidden", "should not truncate <=10 lines")
+}
+
+func TestThinkingMessageItemTeatest_RenderLongContentCollapsed(t *testing.T) {
+	t.Parallel()
+
+	content := "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15"
+	item := &ThinkingMessageItem{
+		id:        "test",
+		content:   content,
+		collapsed: true,
+		duration:  0,
+		finished:  false,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "lines hidden", "should show truncation hint for >10 lines")
+}
+
+func TestThinkingMessageItemTeatest_RenderLongContentExpanded(t *testing.T) {
+	t.Parallel()
+
+	content := "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15"
+	item := &ThinkingMessageItem{
+		id:        "test",
+		content:   content,
+		collapsed: false,
+		duration:  0,
+		finished:  false,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.NotContains(t, result, "lines hidden", "should not show truncation when expanded")
+}
+
+func TestThinkingMessageItemTeatest_RenderFinishedWithDuration(t *testing.T) {
+	t.Parallel()
+
+	item := &ThinkingMessageItem{
+		id:        "test",
+		content:   "Thinking...",
+		collapsed: false,
+		duration:  2 * time.Second,
+		finished:  true,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "Thought for", "should show footer when finished")
+	require.Contains(t, result, "2s", "should show duration in footer")
+}
+
+func TestThinkingMessageItemTeatest_ToggleExpanded(t *testing.T) {
+	t.Parallel()
+
+	content := "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12"
+	item := &ThinkingMessageItem{
+		id:        "test",
+		content:   content,
+		collapsed: true,
+	}
+
+	// Initial render (collapsed)
+	result1 := item.Render(80)
+	require.Contains(t, result1, "lines hidden", "should show truncation when collapsed")
+
+	// Toggle to expanded
+	item.ToggleExpanded()
+	require.True(t, item.IsExpanded(), "should be expanded after toggle")
+	require.Equal(t, 0, item.cachedWidth, "cache should be invalidated")
+
+	// Render expanded
+	result2 := item.Render(80)
+	require.NotContains(t, result2, "lines hidden", "should not show truncation when expanded")
+	require.NotEqual(t, result1, result2, "collapsed and expanded renders should differ")
+
+	// Toggle back to collapsed
+	item.ToggleExpanded()
+	require.False(t, item.IsExpanded(), "should be collapsed after second toggle")
+
+	result3 := item.Render(80)
+	require.Contains(t, result3, "lines hidden", "should show truncation when collapsed again")
+}
+
+// --- DividerMessageItem Tests ---
+
+func TestDividerMessageItemTeatest_RenderStandardWidth(t *testing.T) {
+	t.Parallel()
+
+	item := &DividerMessageItem{
+		id:        "test",
+		iteration: 1,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, " Iteration #", "should contain iteration label")
+	require.Contains(t, result, "─", "should contain horizontal rule character")
+	require.Equal(t, 80, item.cachedWidth, "cached width should be set")
+}
+
+func TestDividerMessageItemTeatest_RenderVaryingWidths(t *testing.T) {
+	t.Parallel()
+
+	item := &DividerMessageItem{
+		id:        "test",
+		iteration: 5,
+	}
+
+	result80 := item.Render(80)
+	result120 := item.Render(120)
+
+	require.NotEmpty(t, result80, "render at 80 should not be empty")
+	require.NotEmpty(t, result120, "render at 120 should not be empty")
+	require.NotEqual(t, result80, result120, "different widths should produce different renders")
+}
+
+func TestDividerMessageItemTeatest_RenderCentering(t *testing.T) {
+	t.Parallel()
+
+	item := &DividerMessageItem{
+		id:        "test",
+		iteration: 5,
+	}
+
+	result := item.Render(80)
+
+	require.Contains(t, result, " Iteration #5 ", "should contain centered label")
+	ruleCount := strings.Count(result, "─")
+	require.Greater(t, ruleCount, 10, "should have multiple horizontal rule characters")
+}
+
+func TestDividerMessageItemTeatest_RenderNarrowWidth(t *testing.T) {
+	t.Parallel()
+
+	item := &DividerMessageItem{
+		id:        "test",
+		iteration: 100,
+	}
+
+	result := item.Render(15)
+
+	require.NotEmpty(t, result, "render should not be empty for narrow width")
+	require.Contains(t, result, "Iteration", "should contain iteration label")
+	require.Contains(t, result, "─", "should contain horizontal rules")
+}
+
+func TestDividerMessageItemTeatest_Height(t *testing.T) {
+	t.Parallel()
+
+	item := &DividerMessageItem{
+		id:        "test",
+		iteration: 3,
+	}
+
+	item.Render(80)
+	height := item.Height()
+
+	require.Greater(t, height, 0, "height should be positive")
+}
+
+// --- formatDuration Tests ---
+
+func TestFormatDurationTeatest_Milliseconds(t *testing.T) {
+	t.Parallel()
+
+	got := formatDuration(500 * time.Millisecond)
+	require.Equal(t, "500ms", got, "should format milliseconds")
+}
+
+func TestFormatDurationTeatest_Seconds(t *testing.T) {
+	t.Parallel()
+
+	got := formatDuration(2*time.Second + 500*time.Millisecond)
+	require.Equal(t, "2.5s", got, "should format seconds with decimal")
+}
+
+func TestFormatDurationTeatest_Minutes(t *testing.T) {
+	t.Parallel()
+
+	got := formatDuration(2*time.Minute + 30*time.Second)
+	require.Equal(t, "2m30s", got, "should format minutes and seconds")
+}
+
+// --- formatToolParams Tests ---
+
+func TestFormatToolParamsTeatest_EmptyParams(t *testing.T) {
+	t.Parallel()
+
+	got := formatToolParams(map[string]any{}, 100)
+	require.Equal(t, "", got, "empty params should return empty string")
+}
+
+func TestFormatToolParamsTeatest_CommandOnly(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"command": "git status",
+	}
+	got := formatToolParams(input, 100)
+
+	require.Equal(t, "git status", got, "should return command only")
+}
+
+func TestFormatToolParamsTeatest_FilePathOnly(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"filePath": "/path/to/file.go",
+	}
+	got := formatToolParams(input, 100)
+
+	require.Equal(t, "/path/to/file.go", got, "should return filePath only")
+}
+
+func TestFormatToolParamsTeatest_CommandWithAdditionalParams(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"command": "npm install",
+		"workdir": "/app",
+		"timeout": 5000,
+	}
+	got := formatToolParams(input, 100)
+
+	require.True(t, strings.HasPrefix(got, "npm install ("), "should start with command")
+	require.Contains(t, got, "workdir=/app", "should contain workdir param")
+	require.Contains(t, got, "timeout=5000", "should contain timeout param")
+}
+
+func TestFormatToolParamsTeatest_Truncation(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"command": "very long command that exceeds the maximum width limit",
+	}
+	got := formatToolParams(input, 30)
+
+	require.LessOrEqual(t, len(got), 30, "result should not exceed maxWidth")
+	require.True(t, strings.HasSuffix(got, "..."), "should end with ellipsis when truncated")
+}
+
+func TestFormatToolParamsTeatest_NonPrimaryParams(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"pattern": "*.go",
+		"path":    "/src",
+	}
+	got := formatToolParams(input, 100)
+
+	require.True(t, strings.HasPrefix(got, "("), "should start with parenthesis")
+	require.True(t, strings.HasSuffix(got, ")"), "should end with parenthesis")
+	require.Contains(t, got, "pattern=*.go", "should contain pattern param")
+	require.Contains(t, got, "path=/src", "should contain path param")
+}
+
+// --- ToolMessageItem Tests ---
+
+func TestToolMessageItemTeatest_RenderPending(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "test1",
+		toolName: "Bash",
+		status:   ToolStatusPending,
+		input: map[string]any{
+			"command": "ls -la",
+		},
+		output:   "",
+		expanded: false,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "●", "should contain pending icon")
+	require.Contains(t, result, "Bash", "should contain tool name")
+}
+
+func TestToolMessageItemTeatest_RenderSuccess(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "test2",
+		toolName: "Read",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"filePath": "/path/to/file.go",
+		},
+		output:   "line 1\nline 2\nline 3",
+		expanded: false,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "✓", "should contain success icon")
+	require.Contains(t, result, "Read", "should contain tool name")
+}
+
+func TestToolMessageItemTeatest_RenderError(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "test3",
+		toolName: "Bash",
+		status:   ToolStatusError,
+		input: map[string]any{
+			"command": "invalid-command",
+		},
+		output:   "command not found: invalid-command",
+		expanded: false,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "×", "should contain error icon")
+	require.Contains(t, result, "Bash", "should contain tool name")
+}
+
+func TestToolMessageItemTeatest_RenderCollapsedWithTruncation(t *testing.T) {
+	t.Parallel()
+
+	output := "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15"
+	item := ToolMessageItem{
+		id:       "test4",
+		toolName: "Bash",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"command": "cat file.txt",
+		},
+		output:   output,
+		expanded: false,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "✓", "should contain success icon")
+	require.Contains(t, result, "more lines", "should show truncation hint")
+}
+
+func TestToolMessageItemTeatest_RenderExpandedNoTruncation(t *testing.T) {
+	t.Parallel()
+
+	output := "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12\nL13\nL14\nL15"
+	item := ToolMessageItem{
+		id:       "test5",
+		toolName: "Bash",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"command": "cat file.txt",
+		},
+		output:   output,
+		expanded: true,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.NotContains(t, result, "more lines", "should not show truncation when expanded")
+}
+
+func TestToolMessageItemTeatest_ToggleExpanded(t *testing.T) {
+	t.Parallel()
+
+	output := "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12"
+	item := &ToolMessageItem{
+		id:       "test",
+		toolName: "Bash",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"command": "cat file.txt",
+		},
+		output:   output,
+		expanded: false,
+		maxLines: 10,
+	}
+
+	// Initial render (collapsed)
+	result1 := item.Render(80)
+	require.Contains(t, result1, "more lines", "should show truncation when collapsed")
+
+	// Toggle to expanded
+	item.ToggleExpanded()
+	require.True(t, item.IsExpanded(), "should be expanded after toggle")
+	require.Equal(t, 0, item.cachedWidth, "cache should be invalidated")
+
+	// Render expanded
+	result2 := item.Render(80)
+	require.NotContains(t, result2, "more lines", "should not show truncation when expanded")
+	require.NotEqual(t, result1, result2, "collapsed and expanded renders should differ")
+
+	// Toggle back to collapsed
+	item.ToggleExpanded()
+	require.False(t, item.IsExpanded(), "should be collapsed after second toggle")
+
+	result3 := item.Render(80)
+	require.Contains(t, result3, "more lines", "should show truncation when collapsed again")
+}
+
+func TestToolMessageItemTeatest_IconPerStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		status     ToolStatus
+		expectIcon string
+	}{
+		{ToolStatusPending, "●"},
+		{ToolStatusRunning, "●"},
+		{ToolStatusSuccess, "✓"},
+		{ToolStatusError, "×"},
+		{ToolStatusCanceled, "×"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("status_%d", tt.status), func(t *testing.T) {
+			item := &ToolMessageItem{
+				id:       "test",
+				toolName: "TestTool",
+				status:   tt.status,
+				input:    map[string]any{"command": "test"},
+			}
+
+			result := item.Render(80)
+
+			require.Contains(t, result, tt.expectIcon, "should contain expected icon for status")
+		})
+	}
+}
+
+func TestToolMessageItemTeatest_OutputTruncationBoundary(t *testing.T) {
+	t.Parallel()
+
+	lines := make([]string, 15)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("Line %d", i+1)
+	}
+	output := strings.Join(lines, "\n")
+
+	item := &ToolMessageItem{
+		id:       "test",
+		toolName: "Bash",
+		status:   ToolStatusSuccess,
+		input:    map[string]any{"command": "cat"},
+		output:   output,
+		expanded: false,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	// Should show first 10 lines
+	for i := 1; i <= 10; i++ {
+		expected := fmt.Sprintf("Line %d", i)
+		require.Contains(t, result, expected, "should contain line %d", i)
+	}
+
+	// Should NOT show lines beyond maxLines
+	require.NotContains(t, result, "Line 11", "should not contain line 11")
+
+	// Should show truncation hint with correct count
+	require.Contains(t, result, "5 more lines", "should show correct truncation count")
+}
+
+// --- renderDiffBlock Tests ---
+
+func TestRenderDiffBlockTeatest_SingleLineChange(t *testing.T) {
+	t.Parallel()
+
+	result := renderDiffBlock("old line", "new line", "", 80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "│", "should contain divider")
+
+	lines := strings.Split(result, "\n")
+	require.Len(t, lines, 1, "should have 1 row")
+}
+
+func TestRenderDiffBlockTeatest_MultiLineOldToSingleNew(t *testing.T) {
+	t.Parallel()
+
+	result := renderDiffBlock("line1\nline2\nline3", "replacement", "", 80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	lines := strings.Split(result, "\n")
+	require.Len(t, lines, 3, "should have 3 rows (max of old/new line counts)")
+
+	for i, line := range lines {
+		require.Contains(t, line, "│", "row %d should contain divider", i)
+	}
+}
+
+func TestRenderDiffBlockTeatest_SingleOldToMultiLineNew(t *testing.T) {
+	t.Parallel()
+
+	result := renderDiffBlock("original", "new1\nnew2\nnew3\nnew4", "", 80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	lines := strings.Split(result, "\n")
+	require.Len(t, lines, 4, "should have 4 rows (max of old/new line counts)")
+}
+
+// --- renderDiagnostics Tests ---
+
+func TestRenderDiagnosticsTeatest_SingleError(t *testing.T) {
+	t.Parallel()
+
+	output := `<diagnostics file="/path/to/file.go">
+ERROR [153:21] undefined: conn
+</diagnostics>`
+
+	result := renderDiagnostics(output, 100)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "file.go", "should contain file path")
+	require.Contains(t, result, "ERROR", "should contain ERROR text")
+}
+
+func TestRenderDiagnosticsTeatest_MultipleErrors(t *testing.T) {
+	t.Parallel()
+
+	output := `<diagnostics file="/path/to/file.go">
+ERROR [153:21] undefined: conn
+ERROR [153:38] undefined: sessID
+</diagnostics>`
+
+	result := renderDiagnostics(output, 100)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "file.go", "should contain file path")
+}
+
+func TestRenderDiagnosticsTeatest_NoDiagnosticsTag(t *testing.T) {
+	t.Parallel()
+
+	output := "just some text"
+	result := renderDiagnostics(output, 100)
+
+	require.Empty(t, result, "should return empty when no diagnostics tag")
+}
+
+func TestRenderDiagnosticsTeatest_EmptyDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	output := `<diagnostics file="test.go">
+</diagnostics>`
+
+	result := renderDiagnostics(output, 100)
+
+	require.Empty(t, result, "should return empty for empty diagnostics")
+}
+
+// --- ToolMessageItem Diff and Diagnostics Integration Tests ---
+
+func TestToolMessageItemTeatest_EditDiffRendering(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "edit-1",
+		toolName: "edit",
+		kind:     "edit",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"filePath":  "/path/to/file.go",
+			"oldString": "func old() {}",
+			"newString": "func new() {\n\treturn nil\n}",
+		},
+		output:   "Edit applied successfully.",
+		maxLines: 10,
+	}
+
+	result := item.Render(100)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "│", "should contain side-by-side divider")
+	require.NotContains(t, result, "Edit applied successfully", "should suppress plain output text")
+	require.Contains(t, result, "Edit", "should show tool name in header")
+}
+
+func TestToolMessageItemTeatest_DiagnosticsRendering(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "bash-1",
+		toolName: "Bash",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"command": "go build ./...",
+		},
+		output: `<diagnostics file="/home/user/project/main.go">
+ERROR [10:5] undefined: myVar
+ERROR [15:12] cannot use string as int
+</diagnostics>`,
+		maxLines: 10,
+	}
+
+	result := item.Render(100)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "main.go", "should contain file path")
+	require.Contains(t, result, "ERROR", "should contain ERROR text")
+	require.Contains(t, result, "×", "should contain error icon")
+}
+
+func TestToolMessageItemTeatest_EditWithDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "edit-diag",
+		toolName: "edit",
+		kind:     "edit",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"filePath":  "/path/to/file.go",
+			"oldString": "old code",
+			"newString": "new code",
+		},
+		output: `Edit applied successfully.
+<diagnostics file="/path/to/file.go">
+ERROR [10:5] undefined: newVar
+</diagnostics>`,
+		maxLines: 10,
+	}
+
+	result := item.Render(120)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "│", "should contain diff divider")
+	require.Contains(t, result, "ERROR", "should contain diagnostics")
+	require.Contains(t, result, "file.go", "should contain file path from diagnostics")
+}
+
+// --- truncateLine Tests ---
+
+func TestTruncateLineTeatest_ShortLine(t *testing.T) {
+	t.Parallel()
+
+	got := truncateLine("hello", 10)
+	require.Equal(t, "hello", got, "short line should not be truncated")
+}
+
+func TestTruncateLineTeatest_ExactWidth(t *testing.T) {
+	t.Parallel()
+
+	got := truncateLine("hello", 5)
+	require.Equal(t, "hello", got, "line at exact width should not be truncated")
+}
+
+func TestTruncateLineTeatest_NeedsTruncation(t *testing.T) {
+	t.Parallel()
+
+	got := truncateLine("hello world", 8)
+	require.Equal(t, "hello w…", got, "line exceeding width should be truncated")
+}
+
+func TestTruncateLineTeatest_VeryNarrow(t *testing.T) {
+	t.Parallel()
+
+	got := truncateLine("hello", 3)
+	require.Equal(t, "hel", got, "very narrow width should truncate without ellipsis")
+}
+
+func TestTruncateLineTeatest_Empty(t *testing.T) {
+	t.Parallel()
+
+	got := truncateLine("", 10)
+	require.Equal(t, "", got, "empty line should remain empty")
+}
+
+// --- Width Caching Tests (All Message Types) ---
+
+func TestWidthCachingTeatest_AllMessageTypes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("TextMessageItem", func(t *testing.T) {
+		item := &TextMessageItem{
+			id:      "test",
+			content: "This is test content that will be rendered",
+		}
+
+		// First render at width 80
+		result1 := item.Render(80)
+		require.NotEmpty(t, result1, "first render should not be empty")
+		require.Equal(t, 80, item.cachedWidth, "cached width should be 80")
+		require.NotEmpty(t, item.cachedRender, "cached render should be populated")
+
+		// Second render at same width - should return cached
+		result2 := item.Render(80)
+		require.Equal(t, result1, result2, "cached render should match")
+
+		// Third render at different width - should re-render
+		result3 := item.Render(100)
+		require.NotEmpty(t, result3, "re-render should not be empty")
+		require.Equal(t, 100, item.cachedWidth, "cached width should update")
+	})
+
+	t.Run("ThinkingMessageItem", func(t *testing.T) {
+		item := &ThinkingMessageItem{
+			id:        "test",
+			content:   "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12",
+			collapsed: true,
+			finished:  true,
+			duration:  2 * time.Second,
+		}
+
+		result1 := item.Render(80)
+		require.NotEmpty(t, result1, "first render should not be empty")
+		require.Equal(t, 80, item.cachedWidth, "cached width should be 80")
+
+		result2 := item.Render(80)
+		require.Equal(t, result1, result2, "cached render should match")
+
+		result3 := item.Render(120)
+		require.Equal(t, 120, item.cachedWidth, "cached width should update")
+		require.NotEmpty(t, result3, "re-render should not be empty")
+	})
+
+	t.Run("ToolMessageItem", func(t *testing.T) {
+		item := &ToolMessageItem{
+			id:       "test",
+			toolName: "Bash",
+			status:   ToolStatusSuccess,
+			input:    map[string]any{"command": "ls -la"},
+			output:   "file1.txt\nfile2.txt\nfile3.txt",
+			expanded: false,
+			maxLines: 10,
+		}
+
+		result1 := item.Render(80)
+		require.NotEmpty(t, result1, "first render should not be empty")
+		require.Equal(t, 80, item.cachedWidth, "cached width should be 80")
+
+		result2 := item.Render(80)
+		require.Equal(t, result1, result2, "cached render should match")
+
+		result3 := item.Render(60)
+		require.Equal(t, 60, item.cachedWidth, "cached width should update")
+		require.NotEmpty(t, result3, "re-render should not be empty")
+	})
+
+	t.Run("InfoMessageItem", func(t *testing.T) {
+		item := &InfoMessageItem{
+			id:       "test",
+			model:    "claude-3-5-sonnet",
+			provider: "Anthropic",
+			duration: 3 * time.Second,
+		}
+
+		result1 := item.Render(80)
+		require.NotEmpty(t, result1, "first render should not be empty")
+		require.Equal(t, 80, item.cachedWidth, "cached width should be 80")
+
+		result2 := item.Render(80)
+		require.Equal(t, result1, result2, "cached render should match")
+
+		result3 := item.Render(100)
+		require.Equal(t, 100, item.cachedWidth, "cached width should update")
+		require.NotEmpty(t, result3, "re-render should not be empty")
+	})
+
+	t.Run("DividerMessageItem", func(t *testing.T) {
+		item := &DividerMessageItem{
+			id:        "test",
+			iteration: 5,
+		}
+
+		result1 := item.Render(80)
+		require.NotEmpty(t, result1, "first render should not be empty")
+		require.Equal(t, 80, item.cachedWidth, "cached width should be 80")
+
+		result2 := item.Render(80)
+		require.Equal(t, result1, result2, "cached render should match")
+
+		result3 := item.Render(120)
+		require.Equal(t, 120, item.cachedWidth, "cached width should update")
+		require.NotEmpty(t, result3, "re-render should not be empty")
+		require.NotEqual(t, result1, result3, "divider should render differently at different widths")
+	})
+}
