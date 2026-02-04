@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -670,33 +669,7 @@ func TestStatusBar_Render_SmallWidth(t *testing.T) {
 // compareStatusBarGolden compares rendered output against golden file
 func compareStatusBarGolden(t *testing.T, canvas uv.ScreenBuffer, name string) {
 	t.Helper()
-
 	goldenPath := filepath.Join("testdata", "status_"+name+".golden")
 	got := canvas.Render()
-
-	if *update {
-		// Ensure testdata directory exists
-		dir := filepath.Dir(goldenPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			t.Fatalf("Failed to create testdata directory: %v", err)
-		}
-
-		if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
-			t.Fatalf("Failed to update golden file: %v", err)
-		}
-		t.Logf("Updated golden file: %s", goldenPath)
-		return
-	}
-
-	want, err := os.ReadFile(goldenPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			t.Fatalf("Golden file %s does not exist. Run with -update flag to create it.", goldenPath)
-		}
-		t.Fatalf("Failed to read golden file: %v", err)
-	}
-
-	if got != string(want) {
-		t.Errorf("Output does not match golden file %s\n\nGot:\n%s\n\nWant:\n%s", name, got, string(want))
-	}
+	testfixtures.CompareGolden(t, goldenPath, got)
 }

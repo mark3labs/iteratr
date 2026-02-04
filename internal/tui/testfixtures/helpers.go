@@ -1,9 +1,21 @@
 package testfixtures
 
 import (
+	"flag"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 )
+
+// Initialize test environment
+func init() {
+	// Set Ascii profile to disable color output for consistent golden files across CI/platforms
+	lipgloss.Writer.Profile = colorprofile.Ascii
+}
 
 // Canonical terminal size for all tests
 const (
@@ -16,6 +28,46 @@ const (
 	DefaultWaitDuration  = 5 * time.Second
 	DefaultCheckInterval = 100 * time.Millisecond
 )
+
+// Flag for updating golden files (shared across all tests)
+var UpdateGolden = flag.Bool("update", false, "update golden files")
+
+// CompareGolden compares actual output with golden file.
+// Replaces duplicate compareGolden functions across test files.
+// Use -update flag to regenerate golden files.
+func CompareGolden(t *testing.T, goldenPath, actual string) {
+	t.Helper()
+
+	// Update golden file if -update flag is set
+	if *UpdateGolden {
+		// Ensure testdata directory exists
+		dir := filepath.Dir(goldenPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("failed to create testdata directory: %v", err)
+		}
+
+		if err := os.WriteFile(goldenPath, []byte(actual), 0644); err != nil {
+			t.Fatalf("failed to update golden file %s: %v", goldenPath, err)
+		}
+		t.Logf("Updated golden file: %s", goldenPath)
+		return
+	}
+
+	// Read golden file
+	expected, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Fatalf("golden file %s does not exist. Run with -update to create it.", goldenPath)
+		}
+		t.Fatalf("failed to read golden file %s: %v", goldenPath, err)
+	}
+
+	// Compare
+	if actual != string(expected) {
+		t.Errorf("output does not match golden file %s\n\nExpected:\n%s\n\nActual:\n%s",
+			goldenPath, string(expected), actual)
+	}
+}
 
 // RetryTest retries a test function up to maxAttempts times if it fails.
 // Useful for handling flaky tests due to timing issues.

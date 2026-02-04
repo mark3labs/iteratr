@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -671,35 +670,7 @@ func TestSidebar_NoteList_ScrollNotesMethod(t *testing.T) {
 // compareSidebarGolden compares rendered output with golden file
 func compareSidebarGolden(t *testing.T, goldenPath, actual string) {
 	t.Helper()
-
-	// Update golden file if -update flag is set
-	if *update {
-		// Ensure testdata directory exists
-		dir := filepath.Dir(goldenPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			t.Fatalf("failed to create testdata directory: %v", err)
-		}
-
-		if err := os.WriteFile(goldenPath, []byte(actual), 0644); err != nil {
-			t.Fatalf("failed to update golden file %s: %v", goldenPath, err)
-		}
-		t.Logf("Updated golden file: %s", goldenPath)
-		return
-	}
-
-	// Read golden file
-	expected, err := os.ReadFile(goldenPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			t.Fatalf("golden file %s does not exist. Run with -update to create it.", goldenPath)
-		}
-		t.Fatalf("failed to read golden file %s: %v", goldenPath, err)
-	}
-
-	// Compare
-	if string(expected) != actual {
-		t.Errorf("output does not match golden file %s\n\nExpected:\n%s\n\nActual:\n%s", goldenPath, string(expected), actual)
-	}
+	testfixtures.CompareGolden(t, goldenPath, actual)
 }
 
 // TestSidebar_Render_WithTasks tests rendering sidebar with tasks
