@@ -349,8 +349,8 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Execute iteratr build command in a new process
 		// First quit the TUI to restore terminal, then exec the build command
 		return m, tea.Sequence(
-			tea.Quit,
 			m.execBuild(msg.SpecPath),
+			tea.Quit,
 		)
 
 	case wizard.TabExitForwardMsg:
