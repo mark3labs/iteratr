@@ -81,11 +81,12 @@ func TestFinishSpecHandlerSuccess(t *testing.T) {
 	}
 
 	// Start a goroutine to handle the channel request
+	var contentErr error
 	go func() {
 		specReq := <-server.SpecContentChan()
 		// Verify content was received
 		if specReq.Content != "# Test Spec\n\nThis is a test spec." {
-			t.Errorf("Expected content to match, got: %s", specReq.Content)
+			contentErr = fmt.Errorf("Expected content to match, got: %s", specReq.Content)
 		}
 		// Simulate successful save
 		specReq.ResultCh <- nil
@@ -97,6 +98,11 @@ func TestFinishSpecHandlerSuccess(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("handleFinishSpec returned error: %v", err)
+	}
+
+	// Check for errors from goroutine
+	if contentErr != nil {
+		t.Error(contentErr)
 	}
 
 	// Verify result
@@ -306,24 +312,25 @@ func TestAskQuestionsHandlerSuccess(t *testing.T) {
 	}
 
 	// Start a goroutine to handle the channel request
+	var validationErrs []error
 	go func() {
 		questionReq := <-server.QuestionChan()
 		// Verify questions were received correctly
 		if len(questionReq.Questions) != 1 {
-			t.Errorf("Expected 1 question, got %d", len(questionReq.Questions))
+			validationErrs = append(validationErrs, fmt.Errorf("Expected 1 question, got %d", len(questionReq.Questions)))
 		}
 		q := questionReq.Questions[0]
 		if q.Question != "What type of feature is this?" {
-			t.Errorf("Unexpected question text: %s", q.Question)
+			validationErrs = append(validationErrs, fmt.Errorf("Unexpected question text: %s", q.Question))
 		}
 		if q.Header != "Feature Type" {
-			t.Errorf("Unexpected header: %s", q.Header)
+			validationErrs = append(validationErrs, fmt.Errorf("Unexpected header: %s", q.Header))
 		}
 		if len(q.Options) != 2 {
-			t.Errorf("Expected 2 options, got %d", len(q.Options))
+			validationErrs = append(validationErrs, fmt.Errorf("Expected 2 options, got %d", len(q.Options)))
 		}
 		if q.Multiple {
-			t.Error("Expected single-select question")
+			validationErrs = append(validationErrs, fmt.Errorf("Expected single-select question"))
 		}
 		// Send answer back
 		questionReq.ResultCh <- []interface{}{"New Feature"}
@@ -335,6 +342,11 @@ func TestAskQuestionsHandlerSuccess(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("handleAskQuestions returned error: %v", err)
+	}
+
+	// Check for validation errors from goroutine
+	for _, valErr := range validationErrs {
+		t.Error(valErr)
 	}
 
 	// Verify result
@@ -384,11 +396,12 @@ func TestAskQuestionsHandlerMultiSelect(t *testing.T) {
 	}
 
 	// Start a goroutine to handle the channel request
+	var multiErr error
 	go func() {
 		questionReq := <-server.QuestionChan()
 		// Verify it's multi-select
 		if !questionReq.Questions[0].Multiple {
-			t.Error("Expected multi-select question")
+			multiErr = fmt.Errorf("Expected multi-select question")
 		}
 		// Send multiple answers back
 		questionReq.ResultCh <- []interface{}{[]string{"Frontend", "Backend"}}
@@ -400,6 +413,11 @@ func TestAskQuestionsHandlerMultiSelect(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("handleAskQuestions returned error: %v", err)
+	}
+
+	// Check for errors from goroutine
+	if multiErr != nil {
+		t.Error(multiErr)
 	}
 
 	// Verify result
@@ -592,11 +610,12 @@ func TestAskQuestionsHandlerMultipleQuestions(t *testing.T) {
 	}
 
 	// Start a goroutine to handle the channel request
+	var countErr error
 	go func() {
 		questionReq := <-server.QuestionChan()
 		// Verify both questions were received
 		if len(questionReq.Questions) != 2 {
-			t.Errorf("Expected 2 questions, got %d", len(questionReq.Questions))
+			countErr = fmt.Errorf("Expected 2 questions, got %d", len(questionReq.Questions))
 		}
 		// Send answers for both questions
 		questionReq.ResultCh <- []interface{}{"A", "B"}
@@ -608,6 +627,11 @@ func TestAskQuestionsHandlerMultipleQuestions(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("handleAskQuestions returned error: %v", err)
+	}
+
+	// Check for errors from goroutine
+	if countErr != nil {
+		t.Error(countErr)
 	}
 
 	// Verify result
