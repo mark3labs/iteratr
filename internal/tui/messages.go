@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -859,6 +860,7 @@ func formatToolParams(input map[string]any, maxWidth int) string {
 		}
 		remaining = append(remaining, fmt.Sprintf("%s=%v", key, val))
 	}
+	sort.Strings(remaining) // Sort for deterministic output in tests
 
 	// Add remaining params in parentheses if any
 	if len(remaining) > 0 {

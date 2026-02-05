@@ -145,7 +145,7 @@ func init() {
 ### Golden File Git Attributes
 
 Add to `.gitattributes`:
-```
+```text
 *.golden -text
 ```
 

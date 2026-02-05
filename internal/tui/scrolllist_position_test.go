@@ -331,19 +331,19 @@ func TestScrollList_KeyboardScroll_PositionUpdates(t *testing.T) {
 	assert.Equal(t, 0, sl.currentOffsetInLines(), "k key should scroll up 1 line")
 
 	// Press pgdown (scroll down viewport height)
-	sl.Update(tea.KeyPressMsg{Text: "pgdown"})
+	sl.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	assert.Equal(t, 10, sl.currentOffsetInLines(), "pgdown should scroll viewport height")
 
 	// Press pgup (scroll up viewport height)
-	sl.Update(tea.KeyPressMsg{Text: "pgup"})
+	sl.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	assert.Equal(t, 0, sl.currentOffsetInLines(), "pgup should scroll up viewport height")
 
 	// Press end (go to bottom)
-	sl.Update(tea.KeyPressMsg{Text: "end"})
+	sl.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
 	assert.True(t, sl.AtBottom(), "end key should go to bottom")
 
 	// Press home (go to top)
-	sl.Update(tea.KeyPressMsg{Text: "home"})
+	sl.Update(tea.KeyPressMsg{Code: tea.KeyHome})
 	assert.Equal(t, 0, sl.currentOffsetInLines(), "home key should go to top")
 }
 

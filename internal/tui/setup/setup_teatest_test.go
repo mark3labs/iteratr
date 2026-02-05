@@ -541,7 +541,7 @@ func TestSetupFlow_WriteConfig(t *testing.T) {
 
 // TestSetupFlow_WriteConfigProject verifies project config writing.
 func TestSetupFlow_WriteConfigProject(t *testing.T) {
-	t.Parallel()
+	// Not parallel-safe: os.Chdir mutates the process-wide working directory.
 
 	// Create temp directory for project config
 	tmpDir := t.TempDir()

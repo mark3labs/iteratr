@@ -115,7 +115,7 @@ func TestTextMessageItemTeatest_RenderWidthCapping(t *testing.T) {
 		content: "Content",
 	}
 
-	// Wide terminal should be capped at 120
+	// Wide terminal should render with capped width, while cachedWidth tracks the requested width
 	result := item.Render(200)
 
 	require.NotEmpty(t, result, "render should not be empty")
