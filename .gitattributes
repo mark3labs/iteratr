@@ -1,0 +1,2 @@
+# Golden test files should be treated as binary to prevent line ending conversions
+*.golden -text

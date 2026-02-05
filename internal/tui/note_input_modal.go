@@ -219,7 +219,7 @@ func (m *NoteInputModal) Update(msg tea.Msg) tea.Cmd {
 				}
 				return nil
 			}
-		case "enter", " ":
+		case "enter", "space":
 			// Enter or Space when button is focused submits the note
 			if m.focus == focusSubmitButton {
 				content := strings.TrimSpace(m.textarea.Value())

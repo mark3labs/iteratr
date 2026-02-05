@@ -1,0 +1,40 @@
+Catppuccin Mocha Theme Color Palette
+=====================================
+
+Semantic Colors:
+  Primary (Mauve):    #cba6f7
+  Secondary (Blue):   #89b4fa
+  Tertiary (Lavender):#b4befe
+
+Background Hierarchy (dark → light):
+  BgCrust:    #11111b (outermost)
+  BgBase:     #1e1e2e (main background)
+  BgMantle:   #181825 (header/footer)
+  BgGutter:   #282839 (line numbers)
+  BgSurface0: #313244 (panel overlays)
+  BgSurface1: #45475a (raised panels)
+  BgSurface2: #585b70 (highest surface)
+  BgOverlay:  #6c7086 (subtle overlays)
+
+Foreground Hierarchy (dim → bright):
+  FgMuted:  #a6adc8 (very muted)
+  FgSubtle: #bac2de (muted)
+  FgBase:   #cdd6f4 (main text)
+  FgBright: #f5e0dc (brightest)
+
+Status Colors:
+  Success (Green): #a6e3a1
+  Warning (Yellow):#f9e2af
+  Error (Red):     #f38ba8
+  Info (Sky):      #89dceb
+
+Diff Colors:
+  DiffInsertBg:  #303a30 (insertions)
+  DiffDeleteBg:  #3a3030 (deletions)
+  DiffEqualBg:   #1e1e2e (context)
+  DiffMissingBg: #181825 (empty)
+
+Border Colors:
+  BorderMuted:   #313244 (inactive)
+  BorderDefault: #585b70 (standard)
+  BorderFocused: #cba6f7 (focused)

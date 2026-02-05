@@ -33,3 +33,4 @@
 | [sidebar-toggle](./sidebar-toggle.md) | Ctrl+x b toggles sidebar visibility, persists preference, responsive behavior | 2026-02-02 |
 | [spec-command](./spec-command.md) | `iteratr spec` wizard with AI-assisted interview via opencode acp + custom MCP | 2026-02-02 |
 | [coderabbit-pr-fixes](./coderabbit-pr-fixes.md) | Fetch unresolved coderabbitai[bot] PR comments, create tasks, fix issues | 2026-02-04 |
+| [tui-teatest-suite](./tui-teatest-suite.md) | Comprehensive teatest v2 suite for all TUI components | 2026-02-04 |

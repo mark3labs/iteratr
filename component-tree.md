@@ -337,21 +337,21 @@ ESC → subagentModal.Close() → subagentModal = nil
 
 ```
 App.handleKeyPress(KeyPressMsg)
-  Priority 0: Dialog visible → Dialog.Update()
-  Priority 0.5: Global keys (ctrl+x prefix, ctrl+c quit)
-  Priority 1: Prefix mode (ctrl+x followed by l/s/n/t/p)
+  Priority 0: Global keys (ctrl+x prefix, ctrl+c quit) - work everywhere, even with modals
+  Priority 1: Dialog visible → Dialog.Update() (enter/space/esc closes)
+  Priority 2: Prefix mode (ctrl+x followed by l/b/n/t/p)
     → ctrl+x l: toggle logs
-    → ctrl+x s: toggle sidebar
+    → ctrl+x b: toggle sidebar
     → ctrl+x n: create note (opens NoteInputModal)
     → ctrl+x t: create task (opens TaskInputModal)
     → ctrl+x p: toggle pause/resume
-  Priority 2: TaskModal visible → ESC closes
-  Priority 3: NoteModal visible → ESC closes
-  Priority 4: NoteInputModal visible → forward to modal Update()
-  Priority 5: TaskInputModal visible → forward to modal Update()
-  Priority 6: SubagentModal visible → ESC closes, else forward scroll keys
-  Priority 7: LogViewer visible → ESC closes, else logs.Update()
-  Priority 8: dashboard.Update()
+  Priority 3: TaskModal visible → ESC closes
+  Priority 4: NoteModal visible → ESC closes
+  Priority 5: NoteInputModal visible → forward to modal Update()
+  Priority 6: TaskInputModal visible → forward to modal Update()
+  Priority 7: SubagentModal visible → ESC closes, else forward scroll keys
+  Priority 8: LogViewer visible → ESC closes, else logs.Update()
+  Priority 9: dashboard.Update()
     → 'i' focus input
     → Tab cycle focus
     → Forward to agent (FocusAgent) or sidebar (FocusTasks/FocusNotes)

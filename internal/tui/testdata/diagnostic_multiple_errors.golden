@@ -1,0 +1,8 @@
+  [38;2;137;180;250;1m/home/user/project/internal/server/server.go[m                                                                          
+    [38;2;243;139;168;1m× ERROR[m [38;2;166;173;200m[153:21][m [38;2;205;214;244mundefined: conn[m                                                                                    
+    [38;2;243;139;168;1m× ERROR[m [38;2;166;173;200m[153:38][m [38;2;205;214;244mundefined: sessID[m                                                                                  
+    [38;2;243;139;168;1m× ERROR[m [38;2;166;173;200m[175:15][m [38;2;205;214;244mcannot use result (variable of type *Result) as string value in return statement[m                   
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        
+                                                                                                                        

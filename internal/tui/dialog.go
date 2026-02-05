@@ -60,7 +60,7 @@ func (d *Dialog) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "enter", " ", "escape":
+		case "enter", "space", "esc":
 			d.Hide()
 			if d.onClose != nil {
 				return d.onClose()
