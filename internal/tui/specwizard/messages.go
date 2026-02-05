@@ -41,3 +41,7 @@ type ExecBuildMsg struct {
 // ShowCancelConfirmMsg is sent when ESC is pressed on the first question.
 // It triggers the agent phase to show the cancel confirmation modal.
 type ShowCancelConfirmMsg struct{}
+
+// AgentPhaseReadyMsg is sent when the agent phase is set up and ready to start.
+// It triggers initialization of the AgentPhase component's channel listeners.
+type AgentPhaseReadyMsg struct{}

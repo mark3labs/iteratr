@@ -425,11 +425,23 @@ func (q *QuestionView) updateFocus() {
 	case 1:
 		if q.showCustom {
 			q.customInput.Focus()
+		} else {
+			// When custom is hidden, index 1 is a button position
+			// Focus the appropriate button based on whether we have back button
+			if q.buttonBar != nil {
+				if q.currentIndex > 0 {
+					// Has back button at index 1
+					q.buttonBar.FocusFirst()
+				} else {
+					// No back button, next is at index 1
+					q.buttonBar.FocusLast()
+				}
+			}
 		}
 	default:
-		// Button bar is focused
+		// Button bar is focused (indices 2+)
 		if q.buttonBar != nil {
-			if q.focusIndex == q.backButtonFocusIndex() {
+			if q.focusIndex == q.backButtonFocusIndex() && q.currentIndex > 0 {
 				q.buttonBar.FocusFirst() // Focus back button
 			} else if q.focusIndex == q.nextButtonFocusIndex() {
 				q.buttonBar.FocusLast() // Focus next/submit button
@@ -475,12 +487,18 @@ func (q *QuestionView) Update(msg tea.Msg) tea.Cmd {
 
 		case "tab":
 			q.focusIndex++
-			// Skip custom input if not visible
+			// Skip custom input slot if custom is not visible
+			// Custom input is only at index 1 when showCustom is true
+			// When showCustom is false, index 1 goes directly to buttons
 			if q.focusIndex == 1 && !q.showCustom {
-				q.focusIndex++
+				// Don't skip - index 1 is a valid button position when custom is hidden
+				// The skip was incorrectly assuming index 1 is always reserved for custom
 			}
-			// Skip back button if on first question
-			if q.focusIndex == q.backButtonFocusIndex() && q.currentIndex == 0 {
+			// Skip back button position if on first question (no back button exists)
+			// Back button is at backButtonFocusIndex() only when currentIndex > 0
+			if q.focusIndex == q.backButtonFocusIndex() && q.currentIndex == 0 && q.showCustom {
+				// Only skip if custom IS visible, because when custom is hidden,
+				// backButtonFocusIndex() = 1 which is the next button position for Q1
 				q.focusIndex++
 			}
 			// Wrap around
@@ -492,18 +510,19 @@ func (q *QuestionView) Update(msg tea.Msg) tea.Cmd {
 
 		case "shift+tab":
 			q.focusIndex--
-			// Skip back button if on first question
-			if q.focusIndex == q.backButtonFocusIndex() && q.currentIndex == 0 {
-				q.focusIndex--
-			}
-			// Skip custom input if not visible
-			if q.focusIndex == 1 && !q.showCustom {
-				q.focusIndex--
-			}
-			// Wrap around
+			// Wrap around first (so we don't get negative indices)
 			if q.focusIndex < 0 {
 				q.focusIndex = q.maxFocusIndex()
 			}
+			// Skip back button position if on first question AND custom is visible
+			// (when custom hidden, backButtonFocusIndex is where next button actually is)
+			if q.focusIndex == q.backButtonFocusIndex() && q.currentIndex == 0 && q.showCustom {
+				q.focusIndex--
+				if q.focusIndex < 0 {
+					q.focusIndex = q.maxFocusIndex()
+				}
+			}
+			// Don't skip index 1 when custom is hidden - it's a valid button position
 			q.updateFocus()
 			return nil
 		}

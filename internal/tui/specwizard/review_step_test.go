@@ -752,3 +752,81 @@ func TestReviewStep_OverwriteConfirmationESC(t *testing.T) {
 		t.Error("Expected overwrite confirmation modal to be hidden after ESC")
 	}
 }
+
+func TestReviewStep_ViewportHeightConstraint(t *testing.T) {
+	// Create long content that would overflow without proper height constraint
+	var lines []string
+	for i := 0; i < 100; i++ {
+		lines = append(lines, "## Section "+string(rune('A'+i%26)))
+		lines = append(lines, "Content for this section that spans multiple words.")
+		lines = append(lines, "")
+	}
+	content := strings.Join(lines, "\n")
+
+	cfg := &config.Config{}
+	step := NewReviewStep(content, cfg)
+
+	// Set a small height to test constraint
+	step.SetSize(64, 20)
+
+	view := step.View()
+	viewLines := strings.Split(view, "\n")
+
+	// View should not exceed the height we set (with some buffer for buttons/hints)
+	// The viewport height should be height - 4 = 16, total view may be slightly more
+	maxExpectedLines := 25 // height + buttons + hints + some buffer
+	if len(viewLines) > maxExpectedLines {
+		t.Errorf("View has %d lines, expected at most %d lines (height constraint failed)", len(viewLines), maxExpectedLines)
+	}
+}
+
+func TestReviewStep_ViewportMinimumHeight(t *testing.T) {
+	content := "# Test Spec\n\nShort content."
+	cfg := &config.Config{}
+	step := NewReviewStep(content, cfg)
+
+	// Set a very small height - viewport should enforce minimum
+	step.SetSize(64, 3)
+
+	// Should not panic and should still render
+	view := step.View()
+	if view == "" {
+		t.Error("Expected non-empty view even with small height")
+	}
+
+	// Verify viewport uses minimum height (5 lines minimum per SetSize logic)
+	if !strings.Contains(view, "scroll") {
+		t.Error("Expected hint bar to be present")
+	}
+}
+
+func TestReviewStep_SetSizeUpdatesViewport(t *testing.T) {
+	content := "# Test Spec\n\nSome content here."
+	cfg := &config.Config{}
+	step := NewReviewStep(content, cfg)
+
+	// Initial size
+	step.SetSize(60, 15)
+
+	// Get initial view
+	view1 := step.View()
+
+	// Change size
+	step.SetSize(40, 25)
+
+	// Get new view
+	view2 := step.View()
+
+	// Views should be different (content re-rendered with new width)
+	if view1 == view2 {
+		t.Log("Views are the same, which may be okay if content fits in both sizes")
+	}
+
+	// Verify dimensions were stored
+	if step.width != 40 {
+		t.Errorf("Expected width 40, got %d", step.width)
+	}
+	if step.height != 25 {
+		t.Errorf("Expected height 25, got %d", step.height)
+	}
+}

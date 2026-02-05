@@ -326,21 +326,10 @@ func (a *AgentPhase) View() string {
 
 	var baseView string
 	if a.waitingForAgent {
-		// Show spinner
-		spinnerView := lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			a.spinner.View(),
-			" "+a.statusText,
-		)
-
-		centeredStyle := lipgloss.NewStyle().
-			Width(a.width).
-			Height(a.height).
-			AlignHorizontal(lipgloss.Center).
-			AlignVertical(lipgloss.Center).
+		// Show spinner - simple inline view, wizard modal handles centering
+		spinnerStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(currentTheme.FgMuted))
-
-		baseView = centeredStyle.Render(spinnerView)
+		baseView = spinnerStyle.Render(a.spinner.View() + " " + a.statusText)
 	} else if a.questionView != nil {
 		// Show question view
 		baseView = a.questionView.View()

@@ -30,6 +30,14 @@ const (
 	StepCompletion  = 5 // Success screen with Build/Exit
 )
 
+// Modal layout constants
+const (
+	modalWidth        = 70                                                       // Total modal width including border
+	modalPadding      = 2                                                        // Horizontal padding on each side
+	modalBorderWidth  = 1                                                        // Border width on each side
+	modalContentWidth = modalWidth - (modalPadding * 2) - (modalBorderWidth * 2) // 64
+)
+
 // ProgramSender is an interface for sending messages to the Bubbletea program.
 // This allows for easier testing by mocking the Send method.
 type ProgramSender interface {
@@ -163,14 +171,21 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cancelled = true
 				return m, tea.Quit
 			}
-			// During agent step, only handle ESC at wizard level if agent isn't running
-			// If agent is running (agentStep exists and waitingForAgent or has questions),
-			// the agent step will handle ESC by showing confirmation modal
-			if m.step == StepAgent && m.agentStep != nil && (m.agentStep.waitingForAgent || m.agentStep.questionView != nil) {
-				// Pass through to agent step - it will show the cancel modal
-				break
+			// If showing agent error screen, go back to model selection
+			if m.agentError != nil {
+				return m.goBack()
 			}
-			// On other steps, go back
+			// Self-navigating steps handle their own ESC key (if component exists)
+			// - StepAgent: shows cancel confirmation modal
+			// - StepReview: shows restart confirmation modal
+			// - StepCompletion: no ESC handling, fall through to goBack
+			if m.step == StepAgent && m.agentStep != nil {
+				break // Pass through to agent step handler
+			}
+			if m.step == StepReview && m.reviewStep != nil {
+				break // Pass through to review step handler
+			}
+			// On other steps (or if component is nil), go back
 			return m.goBack()
 		case "tab":
 			// Tab moves focus to buttons
@@ -243,6 +258,13 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Error("Agent error: %v", msg.Err)
 		// Show error to user with helpful message
 		m.agentError = &msg.Err
+		return m, nil
+
+	case AgentPhaseReadyMsg:
+		// Agent phase is ready, initialize its channel listeners
+		if m.agentStep != nil {
+			return m, m.agentStep.Init()
+		}
 		return m, nil
 
 	case RestartWizardMsg:
@@ -471,32 +493,55 @@ func (m *WizardModel) updateCurrentStep(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// getModalContentSize returns the internal content dimensions for the modal.
+func (m *WizardModel) getModalContentSize() (width, height int) {
+	// Width: modal width minus padding and border
+	width = modalContentWidth
+
+	// Height: responsive to terminal with bounds, minus padding/border/title/hint
+	height = m.height - 4 // Terminal margin
+	if height < 20 {
+		height = 20
+	}
+	if height > 40 {
+		height = 40
+	}
+	// Subtract modal chrome: padding (2*2) + border (2) + title (~2) + hint (~2)
+	height = height - 10
+	if height < 10 {
+		height = 10
+	}
+	return width, height
+}
+
 // updateCurrentStepSize updates the size of the current step.
 func (m *WizardModel) updateCurrentStepSize() {
+	contentWidth, contentHeight := m.getModalContentSize()
+
 	switch m.step {
 	case StepTitle:
 		if m.titleStep != nil {
-			m.titleStep.SetSize(m.width, m.height)
+			m.titleStep.SetSize(contentWidth, contentHeight)
 		}
 	case StepDescription:
 		if m.descriptionStep != nil {
-			m.descriptionStep.SetSize(m.width, m.height)
+			m.descriptionStep.SetSize(contentWidth, contentHeight)
 		}
 	case StepModel:
 		if m.modelStep != nil {
-			m.modelStep.SetSize(m.width, m.height)
+			m.modelStep.SetSize(contentWidth, contentHeight)
 		}
 	case StepAgent:
 		if m.agentStep != nil {
-			m.agentStep.SetSize(m.width, m.height)
+			m.agentStep.SetSize(contentWidth, contentHeight)
 		}
 	case StepReview:
 		if m.reviewStep != nil {
-			m.reviewStep.SetSize(m.width, m.height)
+			m.reviewStep.SetSize(contentWidth, contentHeight)
 		}
 	case StepCompletion:
 		if m.completionStep != nil {
-			m.completionStep.SetSize(m.width, m.height)
+			m.completionStep.SetSize(contentWidth, contentHeight)
 		}
 	}
 }
@@ -576,11 +621,27 @@ func (m *WizardModel) renderCurrentStep() string {
 		Render("tab to navigate • esc to cancel")
 
 	// Combine with modal styling
+	// Only set fixed height for steps that need scrolling (review step)
 	modalStyle := lipgloss.NewStyle().
-		Width(70).
+		Width(modalWidth).
 		Padding(2).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(currentTheme.BorderDefault))
+
+	// For review step, constrain height so content scrolls
+	if m.step == StepReview {
+		modalHeight := m.height - 4 // Leave some margin
+		if modalHeight < 20 {
+			modalHeight = 20
+		}
+		if modalHeight > 40 {
+			modalHeight = 40
+		}
+		modalStyle = modalStyle.Height(modalHeight)
+	}
+
+	// Steps that handle their own navigation don't need wizard's button bar or hint
+	selfNavigatingStep := m.step == StepAgent || m.step == StepReview || m.step == StepCompletion
 
 	var content string
 	if buttonBarContent != "" {
@@ -592,6 +653,13 @@ func (m *WizardModel) renderCurrentStep() string {
 			buttonBarContent,
 			"",
 			hint,
+		)
+	} else if selfNavigatingStep {
+		// These steps render their own buttons and hints
+		content = lipgloss.JoinVertical(
+			lipgloss.Left,
+			title,
+			stepContent,
 		)
 	} else {
 		content = lipgloss.JoinVertical(
@@ -696,10 +764,13 @@ Please check the logs for more details.`
 	return modalStyle.Render(content)
 }
 
-// hasButtons returns true if the current step has navigation buttons.
+// hasButtons returns true if the current step needs wizard-level navigation buttons.
 func (m *WizardModel) hasButtons() bool {
-	// Most steps have buttons, except agent phase (has custom navigation)
-	return m.step != StepAgent && m.step != StepCompletion
+	// These steps handle their own buttons/navigation:
+	// - StepAgent: has custom question navigation
+	// - StepReview: has its own Restart/Save buttons and hints
+	// - StepCompletion: has its own Build/Exit buttons
+	return m.step != StepAgent && m.step != StepReview && m.step != StepCompletion
 }
 
 // ensureButtonBar creates the button bar if needed.
@@ -896,7 +967,8 @@ func (m *WizardModel) startAgentPhase() tea.Msg {
 		}
 	}()
 
-	return nil
+	// Return ready message to trigger AgentPhase.Init()
+	return AgentPhaseReadyMsg{}
 }
 
 // execBuild returns a tea.Cmd that executes iteratr build --spec <path> after the TUI quits.
@@ -959,11 +1031,18 @@ What's not included in v1`
 Feature: %s
 Description: %s
 
-Follow the user instructions and interview me in detail using the ask-questions 
-tool about literally anything: technical implementation, UI & UX, concerns, 
-tradeoffs, edge cases, dependencies, testing, etc. Be very in-depth and continue 
-interviewing me continually until you have enough information. Then write the 
-complete spec using the finish-spec tool.
+Interview me using the ask-questions tool to gather requirements. Ask about:
+- Technical implementation details
+- UI/UX preferences  
+- Edge cases and error handling
+- Dependencies and constraints
+- Testing requirements
+
+IMPORTANT:
+- Batch 3-5 related questions per call (don't ask one at a time)
+- Never repeat questions you've already asked
+- After 2-3 rounds of questions, you should have enough information
+- When done interviewing, use the finish-spec tool
 
 The spec MUST follow this format:
 

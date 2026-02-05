@@ -22,8 +22,9 @@ type TitleStep struct {
 // NewTitleStep creates a new title input step.
 func NewTitleStep() *TitleStep {
 	ti := textinput.New()
-	ti.Placeholder = "e.g., 'User Authentication' or 'API Rate Limiting'"
+	ti.Placeholder = "e.g., User Authentication"
 	ti.CharLimit = 100 // Enforce max length
+	ti.SetWidth(54)    // Width for placeholder visibility (box is 60 - padding)
 	ti.Focus()
 
 	return &TitleStep{

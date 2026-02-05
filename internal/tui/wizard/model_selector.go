@@ -216,7 +216,12 @@ func (m *ModelSelectorStep) SetSize(width, height int) {
 	m.height = height
 	m.searchInput.SetWidth(width - 10)
 	m.scrollList.SetWidth(width)
-	m.scrollList.SetHeight(height)
+	// Reserve space for search input (2 lines) + hint bar (2 lines)
+	listHeight := height - 4
+	if listHeight < 5 {
+		listHeight = 5
+	}
+	m.scrollList.SetHeight(listHeight)
 }
 
 // Update handles messages for the model selector step.

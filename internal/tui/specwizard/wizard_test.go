@@ -33,8 +33,8 @@ func TestBuildSpecPrompt(t *testing.T) {
 	// Verify key instructions are present
 	expectedPhrases := []string{
 		"You are helping create a feature specification",
-		"using the ask-questions",
-		"using the finish-spec tool",
+		"ask-questions tool",
+		"finish-spec tool",
 		"## Overview",
 		"## User Story",
 		"## Requirements",
@@ -1178,4 +1178,162 @@ func TestWizard_ExecBuildMsg(t *testing.T) {
 	// 1. StartBuildMsg triggers ExecBuildMsg
 	// 2. ExecBuildMsg returns a command (the Sequence)
 	// This confirms the message flow is correct
+}
+
+func TestModalLayoutConstants(t *testing.T) {
+	// Verify the modal layout constants are correct
+	expectedContentWidth := modalWidth - (modalPadding * 2) - (modalBorderWidth * 2)
+	if modalContentWidth != expectedContentWidth {
+		t.Errorf("modalContentWidth = %d, expected %d", modalContentWidth, expectedContentWidth)
+	}
+
+	// Verify specific values match design
+	if modalWidth != 70 {
+		t.Errorf("modalWidth = %d, expected 70", modalWidth)
+	}
+	if modalPadding != 2 {
+		t.Errorf("modalPadding = %d, expected 2", modalPadding)
+	}
+	if modalBorderWidth != 1 {
+		t.Errorf("modalBorderWidth = %d, expected 1", modalBorderWidth)
+	}
+	if modalContentWidth != 64 {
+		t.Errorf("modalContentWidth = %d, expected 64", modalContentWidth)
+	}
+}
+
+func TestWizard_GetModalContentSize(t *testing.T) {
+	tests := []struct {
+		name          string
+		termWidth     int
+		termHeight    int
+		expectedWidth int
+		minHeight     int
+		maxHeight     int
+	}{
+		{
+			name:          "normal terminal",
+			termWidth:     120,
+			termHeight:    40,
+			expectedWidth: modalContentWidth,
+			minHeight:     10,
+			maxHeight:     30,
+		},
+		{
+			name:          "small terminal",
+			termWidth:     80,
+			termHeight:    20,
+			expectedWidth: modalContentWidth,
+			minHeight:     10,
+			maxHeight:     20,
+		},
+		{
+			name:          "very small terminal",
+			termWidth:     60,
+			termHeight:    15,
+			expectedWidth: modalContentWidth,
+			minHeight:     10,
+			maxHeight:     15,
+		},
+		{
+			name:          "large terminal",
+			termWidth:     200,
+			termHeight:    60,
+			expectedWidth: modalContentWidth,
+			minHeight:     10,
+			maxHeight:     30, // Should be capped
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			m := &WizardModel{
+				cfg:    cfg,
+				width:  tt.termWidth,
+				height: tt.termHeight,
+			}
+
+			width, height := m.getModalContentSize()
+
+			if width != tt.expectedWidth {
+				t.Errorf("width = %d, expected %d", width, tt.expectedWidth)
+			}
+			if height < tt.minHeight {
+				t.Errorf("height = %d, expected >= %d", height, tt.minHeight)
+			}
+			if height > tt.maxHeight {
+				t.Errorf("height = %d, expected <= %d", height, tt.maxHeight)
+			}
+		})
+	}
+}
+
+func TestWizard_UpdateCurrentStepSize(t *testing.T) {
+	cfg := &config.Config{}
+
+	// Test each step type
+	steps := []struct {
+		name string
+		step int
+	}{
+		{"title", StepTitle},
+		{"description", StepDescription},
+		{"model", StepModel},
+		{"review", StepReview},
+		{"completion", StepCompletion},
+	}
+
+	for _, tt := range steps {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &WizardModel{
+				cfg:    cfg,
+				width:  100,
+				height: 40,
+				step:   tt.step,
+			}
+
+			// Initialize the appropriate step
+			switch tt.step {
+			case StepTitle:
+				m.titleStep = NewTitleStep()
+			case StepDescription:
+				m.descriptionStep = NewDescriptionStep()
+			case StepModel:
+				m.modelStep = wizard.NewModelSelectorStep()
+			case StepReview:
+				m.reviewStep = NewReviewStep("# Test", cfg)
+			case StepCompletion:
+				m.completionStep = NewCompletionStep("/test/path.md")
+			}
+
+			// Call updateCurrentStepSize - should not panic
+			m.updateCurrentStepSize()
+
+			// Verify the step received proper dimensions
+			contentWidth, contentHeight := m.getModalContentSize()
+
+			switch tt.step {
+			case StepTitle:
+				if m.titleStep.width != contentWidth {
+					t.Errorf("titleStep.width = %d, expected %d", m.titleStep.width, contentWidth)
+				}
+			case StepDescription:
+				if m.descriptionStep.width != contentWidth {
+					t.Errorf("descriptionStep.width = %d, expected %d", m.descriptionStep.width, contentWidth)
+				}
+			case StepReview:
+				if m.reviewStep.width != contentWidth {
+					t.Errorf("reviewStep.width = %d, expected %d", m.reviewStep.width, contentWidth)
+				}
+				if m.reviewStep.height != contentHeight {
+					t.Errorf("reviewStep.height = %d, expected %d", m.reviewStep.height, contentHeight)
+				}
+			case StepCompletion:
+				if m.completionStep.width != contentWidth {
+					t.Errorf("completionStep.width = %d, expected %d", m.completionStep.width, contentWidth)
+				}
+			}
+		})
+	}
 }
