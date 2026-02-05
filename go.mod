@@ -13,6 +13,7 @@ require (
 	github.com/charmbracelet/fang v0.4.4
 	github.com/charmbracelet/ultraviolet v0.0.0-20251116181749-377898bcce38
 	github.com/charmbracelet/x/editor v0.2.0
+	github.com/gosimple/slug v1.15.0
 	github.com/mark3labs/mcp-go v0.43.2
 	github.com/nats-io/nats-server/v2 v2.10.27
 	github.com/nats-io/nats.go v1.39.1
@@ -35,18 +36,13 @@ require (
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.9.0 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
-<<<<<<< spec-command
-	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
-=======
 	github.com/clipperhouse/uax29/v2 v2.5.0 // indirect
->>>>>>> master
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
-	github.com/gosimple/slug v1.15.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
