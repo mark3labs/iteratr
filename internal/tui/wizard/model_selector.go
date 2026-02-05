@@ -174,7 +174,9 @@ func (m *ModelSelectorStep) selectDefaultModel() {
 			}
 		}
 	}
-	// No config model or not found in list, keep current selection (index 0)
+	// No config model or not found in list, reset to first item
+	m.selectedIdx = 0
+	m.scrollList.SetSelected(0)
 }
 
 // filterModels filters allModels by search query using case-insensitive substring match.
