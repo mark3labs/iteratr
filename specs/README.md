@@ -3,6 +3,7 @@
 <!-- SPECS -->
 | Name | Description | Date |
 |------|-------------|------|
+| [paste from clipboard](paste-from-clipboard.md) | I want to be able to paste text from the os system clipboard into ANY input/textarea in any compo... | 2026-02-06 |
 | [iteratr](./iteratr.md) | AI coding agent orchestrator with embedded NATS and TUI | 2026-02-02 |
 | [managed-process-migration](./managed-process-migration.md) | Replace ACP with managed process for model selection | 2026-02-02 |
 | [tui-beautification](./tui-beautification.md) | Modernize TUI with Crush patterns, Ultraviolet layouts, component interfaces | 2026-02-02 |

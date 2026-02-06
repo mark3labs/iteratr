@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -183,6 +184,15 @@ func (m *TaskInputModal) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 
+	// Handle paste messages when textarea is focused
+	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+		if m.focus == focusTextarea {
+			return m.handlePaste(pasteMsg)
+		}
+		// Paste when textarea not focused is a no-op
+		return nil
+	}
+
 	// Handle key presses
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
@@ -256,6 +266,46 @@ func (m *TaskInputModal) submit(content string) tea.Cmd {
 			Iteration: 0, // Will be filled in by App
 		}
 	}
+}
+
+// handlePaste processes a paste message for the textarea with char limit enforcement.
+// If the paste would exceed the 500 char limit, it truncates the content and shows a toast.
+func (m *TaskInputModal) handlePaste(msg tea.PasteMsg) tea.Cmd {
+	currentValue := m.textarea.Value()
+	currentLen := len([]rune(currentValue))
+	pasteContent := msg.Content
+	pasteLen := len([]rune(pasteContent))
+	charLimit := m.textarea.CharLimit
+
+	// Calculate how much we can fit
+	remainingSpace := charLimit - currentLen
+	if remainingSpace <= 0 {
+		// No space left - show toast and don't paste
+		return func() tea.Msg {
+			return ShowToastMsg{Text: fmt.Sprintf("%d chars truncated", pasteLen)}
+		}
+	}
+
+	if pasteLen > remainingSpace {
+		// Truncate the paste content
+		truncatedRunes := []rune(pasteContent)[:remainingSpace]
+		truncatedContent := string(truncatedRunes)
+		truncatedCount := pasteLen - remainingSpace
+
+		// Forward truncated paste to textarea
+		var cmd tea.Cmd
+		m.textarea, cmd = m.textarea.Update(tea.PasteMsg{Content: truncatedContent})
+
+		// Return batch command with textarea update + toast
+		return tea.Batch(cmd, func() tea.Msg {
+			return ShowToastMsg{Text: fmt.Sprintf("%d chars truncated", truncatedCount)}
+		})
+	}
+
+	// No truncation needed - forward original paste to textarea
+	var cmd tea.Cmd
+	m.textarea, cmd = m.textarea.Update(tea.PasteMsg{Content: pasteContent})
+	return cmd
 }
 
 // renderPriorityBadges renders the row of priority badges with the active priority highlighted.

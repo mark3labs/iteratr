@@ -47,6 +47,7 @@ type App struct {
 	noteInputModal *NoteInputModal
 	taskInputModal *TaskInputModal
 	subagentModal  *SubagentModal
+	toast          *Toast
 
 	// Layout management
 	layout      Layout
@@ -108,6 +109,7 @@ func NewApp(ctx context.Context, store *session.Store, sessionName, workDir, dat
 		noteModal:         NewNoteModal(),
 		noteInputModal:    NewNoteInputModal(),
 		taskInputModal:    NewTaskInputModal(),
+		toast:             NewToast(),
 		eventChan:         make(chan session.Event, 1000), // Buffered channel for events (needs capacity for large task batches)
 		layoutDirty:       true,                           // Calculate layout on first render
 	}
@@ -132,6 +134,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return a.handleKeyPress(msg)
+
+	case tea.PasteMsg:
+		return a.handlePaste(msg)
 
 	case tea.MouseClickMsg:
 		return a.handleMouse(msg)
@@ -385,6 +390,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.subagentModal != nil {
 			a.subagentModal.err = msg.Err
 		}
+
+	case ShowToastMsg:
+		return a, a.toast.Show(msg.Text)
 	}
 
 	// Update status bar (for spinner animation) - always visible
@@ -403,7 +411,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logsCmd = a.logs.Update(msg)
 	}
 
-	return a, tea.Batch(statusCmd, sidebarCmd, dashCmd, logsCmd)
+	// Update toast (for auto-dismiss timing)
+	toastCmd := a.toast.Update(msg)
+
+	return a, tea.Batch(statusCmd, sidebarCmd, dashCmd, logsCmd, toastCmd)
 }
 
 // handleKeyPress processes keyboard input using hierarchical priority routing.
@@ -528,6 +539,50 @@ func (a *App) handleKeyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// 5. Delegate to dashboard for focused component handling
 	return a, a.dashboard.Update(msg)
+}
+
+// handlePaste processes paste messages using hierarchical priority routing.
+// Mirrors the priority from handleKeyPress: noteInputModal → taskInputModal →
+// subagentModal → dashboard.
+func (a *App) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
+	// Sanitize pasted content
+	content := SanitizePaste(msg.Content)
+
+	// 1. Dialog has no text input — consume paste
+	if a.dialog.IsVisible() {
+		return a, nil
+	}
+
+	// 2. Read-only modals have no text input — consume paste
+	if a.taskModal != nil && a.taskModal.IsVisible() {
+		return a, nil
+	}
+	if a.noteModal != nil && a.noteModal.IsVisible() {
+		return a, nil
+	}
+
+	// 3. Note input modal gets priority when visible
+	if a.noteInputModal != nil && a.noteInputModal.IsVisible() {
+		return a, a.noteInputModal.Update(tea.PasteMsg{Content: content})
+	}
+
+	// 4. Task input modal gets priority when visible
+	if a.taskInputModal != nil && a.taskInputModal.IsVisible() {
+		return a, a.taskInputModal.Update(tea.PasteMsg{Content: content})
+	}
+
+	// 5. Subagent modal gets priority when visible
+	if a.subagentModal != nil {
+		return a, a.subagentModal.Update(tea.PasteMsg{Content: content})
+	}
+
+	// 6. Logs has no text input, so paste is no-op when logs are visible
+	if a.logsVisible {
+		return a, nil
+	}
+
+	// 7. Delegate to dashboard for focused component handling
+	return a, a.dashboard.Update(tea.PasteMsg{Content: content})
 }
 
 // handleMouse processes mouse click events using coordinate-based hit detection.
@@ -882,6 +937,30 @@ func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	}
 	if a.dialog.IsVisible() {
 		a.dialog.Draw(scr, area)
+	}
+
+	// Draw toast last so it appears on top of everything
+	if a.toast.IsVisible() {
+		toastContent := a.toast.View(area.Dx(), area.Dy())
+		if toastContent != "" {
+			// Calculate position at bottom-right with 1 cell padding from edges
+			// Position above the status bar (area.Max.Y - 1 - contentHeight)
+			contentWidth := lipglossv2.Width(toastContent)
+			contentHeight := lipglossv2.Height(toastContent)
+			toastX := area.Max.X - contentWidth - 1
+			toastY := area.Max.Y - 1 - contentHeight
+			if toastX < area.Min.X {
+				toastX = area.Min.X
+			}
+			if toastY < area.Min.Y {
+				toastY = area.Min.Y
+			}
+			toastArea := uv.Rectangle{
+				Min: uv.Position{X: toastX, Y: toastY},
+				Max: uv.Position{X: toastX + contentWidth, Y: toastY + contentHeight},
+			}
+			uv.NewStyledString(toastContent).Draw(scr, toastArea)
+		}
 	}
 
 	return cursor

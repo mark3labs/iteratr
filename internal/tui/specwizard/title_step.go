@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/mark3labs/iteratr/internal/tui"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
 	"github.com/mark3labs/iteratr/internal/tui/wizard"
 )
@@ -17,6 +18,17 @@ type TitleStep struct {
 	width  int
 	height int
 	err    string // Validation error message
+}
+
+// collapseNewlines replaces all newline sequences with a single space,
+// then collapses consecutive whitespace into single space.
+// Used for single-line text inputs to collapse multi-line paste content.
+func collapseNewlines(content string) string {
+	// Replace all newline sequences (\n, \r\n, \r) with a single space
+	content = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(content)
+
+	// Collapse consecutive spaces into single space
+	return strings.Join(strings.Fields(content), " ")
 }
 
 // NewTitleStep creates a new title input step.
@@ -88,6 +100,25 @@ func (t *TitleStep) Update(msg tea.Msg) tea.Cmd {
 				t.err = ""
 			}
 		}
+
+	case tea.PasteMsg:
+		// Intercept paste messages for single-line input - sanitize and collapse newlines
+		sanitized := tui.SanitizePaste(msg.Content)
+		collapsed := collapseNewlines(sanitized)
+
+		// Create modified paste message with collapsed content
+		modifiedMsg := tea.PasteMsg{Content: collapsed}
+
+		// Forward to input
+		var cmd tea.Cmd
+		t.input, cmd = t.input.Update(modifiedMsg)
+
+		// Clear error on paste
+		if t.err != "" {
+			t.err = ""
+		}
+
+		return cmd
 	}
 
 	var cmd tea.Cmd

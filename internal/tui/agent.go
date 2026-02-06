@@ -73,6 +73,14 @@ func (a *AgentOutput) Update(msg tea.Msg) tea.Cmd {
 
 	// If input is focused, forward messages to the input field
 	if a.input.Focused() {
+		// Intercept PasteMsg to sanitize and collapse newlines for single-line input
+		if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+			sanitized := SanitizePaste(pasteMsg.Content)
+			// Collapse all newlines to single space for single-line textinput
+			sanitized = collapseNewlines(sanitized)
+			// Create new PasteMsg with sanitized content
+			msg = tea.PasteMsg{Content: sanitized}
+		}
 		var cmd tea.Cmd
 		a.input, cmd = a.input.Update(msg)
 		return cmd

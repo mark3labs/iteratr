@@ -55,6 +55,13 @@ func (d *Dashboard) Update(msg tea.Msg) tea.Cmd {
 			return d.agentOutput.Update(msg)
 		}
 		return nil
+	case tea.PasteMsg:
+		// Forward paste messages to AgentOutput when input is focused
+		if d.focusPane == FocusInput && d.agentOutput != nil {
+			return d.agentOutput.Update(msg)
+		}
+		return nil
+
 	case tea.KeyPressMsg:
 		// Global 'i' key: focus input from any state
 		if msg.String() == "i" && d.focusPane != FocusInput {

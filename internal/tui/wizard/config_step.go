@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/mark3labs/iteratr/internal/session"
+	"github.com/mark3labs/iteratr/internal/tui"
 )
 
 // ConfigStep manages the session configuration UI step.
@@ -137,6 +138,27 @@ func (c *ConfigStep) SetSize(width, height int) {
 // Update handles messages for the config step.
 func (c *ConfigStep) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
+
+	// Handle paste messages - intercept and collapse newlines for single-line inputs
+	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+		// Sanitize and collapse newlines
+		sanitized := tui.SanitizePaste(pasteMsg.Content)
+		collapsed := collapseNewlines(sanitized)
+
+		// Create modified paste message with collapsed content
+		modifiedMsg := tea.PasteMsg{Content: collapsed}
+
+		// Forward to focused input
+		var cmd tea.Cmd
+		if c.focusIndex == 0 {
+			c.sessionInput, cmd = c.sessionInput.Update(modifiedMsg)
+			cmds = append(cmds, cmd)
+		} else {
+			c.iterationsInput, cmd = c.iterationsInput.Update(modifiedMsg)
+			cmds = append(cmds, cmd)
+		}
+		return tea.Batch(cmds...)
+	}
 
 	// Handle keyboard input
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {

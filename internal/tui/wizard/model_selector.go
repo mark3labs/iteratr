@@ -12,6 +12,17 @@ import (
 	"github.com/mark3labs/iteratr/internal/tui"
 )
 
+// collapseNewlines replaces all newline sequences with a single space,
+// then collapses consecutive whitespace into single space.
+// Used for single-line text inputs to collapse multi-line paste content.
+func collapseNewlines(content string) string {
+	// Replace all newline sequences (\n, \r\n, \r) with a single space
+	content = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(content)
+
+	// Collapse consecutive spaces into single space
+	return strings.Join(strings.Fields(content), " ")
+}
+
 // ModelInfo represents a model that can be selected.
 type ModelInfo struct {
 	id   string // Model ID (e.g. "anthropic/claude-sonnet-4-5")
@@ -261,6 +272,28 @@ func (m *ModelSelectorStep) Update(msg tea.Msg) tea.Cmd {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return cmd
+	}
+
+	// Handle paste messages - intercept and collapse newlines for single-line input
+	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+		if !m.loading && m.error == "" {
+			// Sanitize and collapse newlines
+			sanitized := tui.SanitizePaste(pasteMsg.Content)
+			collapsed := collapseNewlines(sanitized)
+
+			// Create modified paste message with collapsed content
+			modifiedMsg := tea.PasteMsg{Content: collapsed}
+
+			// Forward to search input
+			var cmd tea.Cmd
+			m.searchInput, cmd = m.searchInput.Update(modifiedMsg)
+
+			// Re-filter models with new search value
+			m.filterModels()
+
+			return cmd
+		}
+		return nil
 	}
 
 	// Handle retry on error

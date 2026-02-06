@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/mark3labs/iteratr/internal/tui"
 	"github.com/mark3labs/iteratr/internal/tui/theme"
 	"github.com/mark3labs/iteratr/internal/tui/wizard"
 )
@@ -61,6 +62,10 @@ func (d *DescriptionStep) Update(msg tea.Msg) tea.Cmd {
 		d.height = msg.Height
 		return nil
 
+	case tea.PasteMsg:
+		// Handle paste with truncation for 5000 char limit
+		return d.handlePaste(msg)
+
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+d":
@@ -95,6 +100,48 @@ func (d *DescriptionStep) Update(msg tea.Msg) tea.Cmd {
 
 	var cmd tea.Cmd
 	d.textarea, cmd = d.textarea.Update(msg)
+	return cmd
+}
+
+// handlePaste processes a paste message for the textarea with char limit enforcement.
+// If the paste would exceed the 5000 char limit, it truncates the content and shows a toast.
+func (d *DescriptionStep) handlePaste(msg tea.PasteMsg) tea.Cmd {
+	// Sanitize the paste content first
+	sanitizedContent := tui.SanitizePaste(msg.Content)
+
+	currentValue := d.textarea.Value()
+	currentLen := len([]rune(currentValue))
+	pasteLen := len([]rune(sanitizedContent))
+	charLimit := d.textarea.CharLimit
+
+	// Calculate how much we can fit
+	remainingSpace := charLimit - currentLen
+	if remainingSpace <= 0 {
+		// No space left - show toast and don't paste
+		return func() tea.Msg {
+			return tui.ShowToastMsg{Text: fmt.Sprintf("%d chars truncated", pasteLen)}
+		}
+	}
+
+	if pasteLen > remainingSpace {
+		// Truncate the paste content
+		truncatedRunes := []rune(sanitizedContent)[:remainingSpace]
+		truncatedContent := string(truncatedRunes)
+		truncatedCount := pasteLen - remainingSpace
+
+		// Forward truncated paste to textarea
+		var cmd tea.Cmd
+		d.textarea, cmd = d.textarea.Update(tea.PasteMsg{Content: truncatedContent})
+
+		// Return batch command with textarea update + toast
+		return tea.Batch(cmd, func() tea.Msg {
+			return tui.ShowToastMsg{Text: fmt.Sprintf("%d chars truncated", truncatedCount)}
+		})
+	}
+
+	// No truncation needed - forward sanitized paste to textarea
+	var cmd tea.Cmd
+	d.textarea, cmd = d.textarea.Update(tea.PasteMsg{Content: sanitizedContent})
 	return cmd
 }
 
