@@ -1457,32 +1457,6 @@ func truncateLine(line string, maxWidth int) string {
 	return line[:maxWidth]
 }
 
-// rightAlign right-aligns a styled block of text to the given width.
-// The block may contain ANSI escape codes, so we use lipgloss.Width for accurate measurement.
-func rightAlign(content string, width int) string {
-	lines := strings.Split(content, "\n")
-	var result strings.Builder
-
-	for i, line := range lines {
-		if i > 0 {
-			result.WriteString("\n")
-		}
-
-		// Get the actual visual width (accounts for ANSI codes)
-		lineWidth := lipgloss.Width(line)
-
-		// Add padding to right-align
-		if lineWidth < width {
-			padding := strings.Repeat(" ", width-lineWidth)
-			result.WriteString(padding)
-		}
-
-		result.WriteString(line)
-	}
-
-	return result.String()
-}
-
 // syntaxHighlight applies syntax highlighting to source code and returns
 // a string with ANSI color codes for terminal display.
 //
