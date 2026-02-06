@@ -408,6 +408,15 @@ type ModelSelectedMsg struct {
 	ModelID string
 }
 
+// Cursor returns the cursor from the search input.
+// The search input is the first line rendered in View, so no Y offset needed.
+func (m *ModelSelectorStep) Cursor() *tea.Cursor {
+	if m.loading || m.error != "" {
+		return nil
+	}
+	return m.searchInput.Cursor()
+}
+
 // PreferredHeight returns the preferred height for this step's content.
 // This allows the modal to size dynamically based on content.
 func (m *ModelSelectorStep) PreferredHeight() int {

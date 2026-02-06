@@ -620,7 +620,61 @@ func (m *WizardModel) View() tea.View {
 	})
 
 	view.Content = lipgloss.NewLayer(canvas.Render())
+
+	// Set cursor position from the focused input component.
+	// The textinput.Cursor() returns coordinates relative to the input itself.
+	// We must offset by the modal's screen position and internal styling.
+	view.Cursor = m.getCursor()
+
 	return view
+}
+
+// getCursor returns the adjusted cursor position for the currently focused input.
+func (m *WizardModel) getCursor() *tea.Cursor {
+	if m.buttonFocused {
+		return nil
+	}
+
+	// Get raw cursor from the current step
+	var cur *tea.Cursor
+	switch m.step {
+	case 2:
+		if m.modelSelectorStep != nil {
+			cur = m.modelSelectorStep.Cursor()
+		}
+	case 4:
+		if m.configStep != nil {
+			cur = m.configStep.Cursor()
+		}
+	}
+
+	if cur == nil {
+		return nil
+	}
+
+	// Calculate modal position and styling offsets
+	modalWidth, modalHeight, _, _ := m.calculateModalDimensions()
+	modalStyle := theme.Current().S().ModalContainer
+
+	// Modal is centered on screen
+	modalX := (m.width - modalWidth) / 2
+	modalY := (m.height - modalHeight) / 2
+
+	// Offset for modal border and padding
+	borderLeft := modalStyle.GetBorderLeftSize()
+	paddingLeft := modalStyle.GetPaddingLeft()
+	borderTop := modalStyle.GetBorderTopSize()
+	paddingTop := modalStyle.GetPaddingTop()
+
+	// Lines inside modal before step content:
+	// - title line: 1
+	// - blank line after title: 1
+	const linesBeforeContent = 2
+
+	cur.X += modalX + borderLeft + paddingLeft
+	cur.Y += modalY + borderTop + paddingTop + linesBeforeContent
+
+	return cur
 }
 
 // renderModal wraps the step content in a modal container with title, buttons, and step indicator.

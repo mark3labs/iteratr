@@ -266,7 +266,13 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 		// Return cursor position if input is focused
 		if a.input.Focused() {
-			return a.input.Cursor()
+			cur := a.input.Cursor()
+			if cur != nil {
+				// Offset cursor by the input's screen position
+				cur.X += inputContentArea.Min.X
+				cur.Y += inputContentArea.Min.Y
+			}
+			return cur
 		}
 	}
 
