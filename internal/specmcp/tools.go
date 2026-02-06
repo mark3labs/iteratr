@@ -189,9 +189,16 @@ func (s *Server) handleAskQuestions(ctx context.Context, request mcp.CallToolReq
 
 	// Send questions to UI and block for answers
 	resultCh := make(chan []interface{}, 1)
-	s.questionCh <- QuestionRequest{
+
+	// Send request to UI via channel with context awareness
+	select {
+	case s.questionCh <- QuestionRequest{
 		Questions: questions,
 		ResultCh:  resultCh,
+	}:
+		// Request sent, now block waiting for UI response
+	case <-ctx.Done():
+		return mcp.NewToolResultError("cancelled"), nil
 	}
 
 	// Block until answers received from UI or context cancelled

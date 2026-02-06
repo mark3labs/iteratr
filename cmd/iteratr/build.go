@@ -185,7 +185,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		}
 		defer cleanup()
 
-		result, err := wizard.RunWizard(wizardStore, buildFlags.template)
+		result, err := wizard.RunWizard(cmd.Context(), wizardStore, buildFlags.template)
 		if err != nil {
 			return fmt.Errorf("wizard failed: %w", err)
 		}

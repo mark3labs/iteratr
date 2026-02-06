@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 type Server struct {
 	mcpServer  *server.MCPServer
 	httpServer *server.StreamableHTTPServer
+	stdServer  *http.Server // Standard HTTP server that uses the listener
 	port       int
 	mu         sync.Mutex
 
@@ -77,7 +79,7 @@ func (s *Server) Start(ctx context.Context) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.httpServer != nil {
+	if s.stdServer != nil {
 		return 0, fmt.Errorf("server already started")
 	}
 
@@ -93,7 +95,7 @@ func (s *Server) Start(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("failed to register tools: %w", err)
 	}
 
-	// Find a random available port
+	// Find a random available port by creating a listener
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, fmt.Errorf("failed to find available port: %w", err)
@@ -101,25 +103,28 @@ func (s *Server) Start(ctx context.Context) (int, error) {
 
 	// Get the port that was assigned
 	s.port = listener.Addr().(*net.TCPAddr).Port
-	// NOTE: There's a small race window between closing this listener and
-	// httpServer.Start() binding to the same port. This is acceptable for
-	// local development but could cause intermittent failures under load.
-	_ = listener.Close()
 
-	// Create HTTP server with stateless mode
-	s.httpServer = server.NewStreamableHTTPServer(
+	// Create HTTP server with stateless mode and pass listener directly to avoid TOCTOU race
+	mux := http.NewServeMux()
+	mcpHandler := server.NewStreamableHTTPServer(
 		s.mcpServer,
 		server.WithStateLess(true),
 	)
+	mux.Handle("/mcp", mcpHandler)
+
+	s.stdServer = &http.Server{
+		Handler: mux,
+	}
+	s.httpServer = mcpHandler
 
 	logger.Debug("Starting spec MCP server on port %d", s.port)
 
-	// Start server in background
-	addr := fmt.Sprintf("127.0.0.1:%d", s.port)
-	httpServer := s.httpServer
+	// Start server in background using the pre-opened listener
+	// Capture stdServer reference for goroutine to avoid race with Stop()
+	stdServer := s.stdServer
 	errCh := make(chan error, 1)
 	go func() {
-		if err := httpServer.Start(addr); err != nil {
+		if err := stdServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			logger.Error("Spec MCP server error: %v", err)
 			errCh <- err
 			return
@@ -132,6 +137,7 @@ func (s *Server) Start(ctx context.Context) (int, error) {
 	case err := <-errCh:
 		if err != nil {
 			s.httpServer = nil
+			s.stdServer = nil
 			s.mcpServer = nil
 			s.port = 0
 			return 0, fmt.Errorf("failed to start HTTP server: %w", err)
@@ -149,17 +155,18 @@ func (s *Server) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.httpServer == nil {
+	if s.stdServer == nil {
 		return nil // Already stopped
 	}
 
 	logger.Debug("Stopping spec MCP server")
-	if err := s.httpServer.Shutdown(context.Background()); err != nil {
+	if err := s.stdServer.Shutdown(context.Background()); err != nil {
 		logger.Warn("Error stopping spec MCP server: %v", err)
 		return fmt.Errorf("failed to stop server: %w", err)
 	}
 
 	s.httpServer = nil
+	s.stdServer = nil
 	s.mcpServer = nil
 	logger.Debug("Spec MCP server stopped")
 	return nil

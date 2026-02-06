@@ -160,6 +160,7 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		a.currentIndex = 0
 		a.waitingForAgent = false
 		a.questionView = NewQuestionView(a.questions, a.answers, a.currentIndex)
+		a.questionView.SetSize(a.width, a.height)
 		return a, nil
 
 	case NextQuestionMsg:
@@ -178,6 +179,7 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		if a.currentIndex < len(a.questions)-1 {
 			a.currentIndex++
 			a.questionView = NewQuestionView(a.questions, a.answers, a.currentIndex)
+			a.questionView.SetSize(a.width, a.height)
 		}
 
 		return a, nil
@@ -191,6 +193,7 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		if a.currentIndex > 0 {
 			a.currentIndex--
 			a.questionView = NewQuestionView(a.questions, a.answers, a.currentIndex)
+			a.questionView.SetSize(a.width, a.height)
 		}
 
 		return a, nil

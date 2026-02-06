@@ -143,6 +143,9 @@ func TestServerStop(t *testing.T) {
 	if server.httpServer != nil {
 		t.Error("httpServer should be nil after Stop()")
 	}
+	if server.stdServer != nil {
+		t.Error("stdServer should be nil after Stop()")
+	}
 	if server.mcpServer != nil {
 		t.Error("mcpServer should be nil after Stop()")
 	}
@@ -315,28 +318,29 @@ func TestAskQuestionsHandlerSuccess(t *testing.T) {
 	}
 
 	// Start a goroutine to handle the channel request
-	var validationErrs []error
+	validationErrCh := make(chan error, 5) // Buffer for all possible validation errors
 	go func() {
 		questionReq := <-server.QuestionChan()
 		// Verify questions were received correctly
 		if len(questionReq.Questions) != 1 {
-			validationErrs = append(validationErrs, fmt.Errorf("Expected 1 question, got %d", len(questionReq.Questions)))
+			validationErrCh <- fmt.Errorf("Expected 1 question, got %d", len(questionReq.Questions))
 		}
 		q := questionReq.Questions[0]
 		if q.Question != "What type of feature is this?" {
-			validationErrs = append(validationErrs, fmt.Errorf("Unexpected question text: %s", q.Question))
+			validationErrCh <- fmt.Errorf("Unexpected question text: %s", q.Question)
 		}
 		if q.Header != "Feature Type" {
-			validationErrs = append(validationErrs, fmt.Errorf("Unexpected header: %s", q.Header))
+			validationErrCh <- fmt.Errorf("Unexpected header: %s", q.Header)
 		}
 		if len(q.Options) != 2 {
-			validationErrs = append(validationErrs, fmt.Errorf("Expected 2 options, got %d", len(q.Options)))
+			validationErrCh <- fmt.Errorf("Expected 2 options, got %d", len(q.Options))
 		}
 		if q.Multiple {
-			validationErrs = append(validationErrs, fmt.Errorf("Expected single-select question"))
+			validationErrCh <- fmt.Errorf("Expected single-select question")
 		}
 		// Send answer back
 		questionReq.ResultCh <- []interface{}{"New Feature"}
+		close(validationErrCh)
 	}()
 
 	// Call handler
@@ -348,7 +352,7 @@ func TestAskQuestionsHandlerSuccess(t *testing.T) {
 	}
 
 	// Check for validation errors from goroutine
-	for _, valErr := range validationErrs {
+	for valErr := range validationErrCh {
 		t.Error(valErr)
 	}
 

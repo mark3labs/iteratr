@@ -515,6 +515,210 @@ func TestSaveSpecMsg(t *testing.T) {
 	// Note: Actual save functionality will be tested in TAS-47
 }
 
+func TestSaveErrorMsg(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard at review step
+	m := &WizardModel{
+		step:      StepReview,
+		cancelled: false,
+		cfg:       cfg,
+		width:     80,
+		height:    24,
+		result: WizardResult{
+			Title:       "Test Spec",
+			Description: "Test description",
+			SpecContent: "# Test Spec",
+		},
+	}
+	m.reviewStep = NewReviewStep(m.result.SpecContent, cfg)
+
+	// Send SaveErrorMsg
+	testErr := fmt.Errorf("permission denied")
+	updatedModel, cmd := m.Update(SaveErrorMsg{Err: testErr})
+	if cmd != nil {
+		t.Errorf("Expected no command from SaveErrorMsg, got %T", cmd)
+	}
+
+	wizModel := updatedModel.(*WizardModel)
+
+	// Should show error modal
+	if !wizModel.showSaveError {
+		t.Error("Expected showSaveError to be true")
+	}
+	if wizModel.saveError != "permission denied" {
+		t.Errorf("Expected saveError to be 'permission denied', got '%s'", wizModel.saveError)
+	}
+
+	// View should render error modal
+	view := wizModel.renderCurrentStep()
+	if !strings.Contains(view, "Save Failed") {
+		t.Error("Expected view to contain 'Save Failed'")
+	}
+	if !strings.Contains(view, "permission denied") {
+		t.Error("Expected view to contain error message")
+	}
+	if !strings.Contains(view, "Press Y to retry") {
+		t.Error("Expected view to contain retry instruction")
+	}
+}
+
+func TestSaveErrorModal_Retry(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard with save error
+	m := &WizardModel{
+		step:          StepReview,
+		cfg:           cfg,
+		showSaveError: true,
+		saveError:     "test error",
+		result: WizardResult{
+			Title:       "Test Spec",
+			Description: "Test description",
+			SpecContent: "# Test Spec",
+		},
+	}
+
+	// Press Y to retry
+	updatedModel, cmd := m.Update(tea.KeyPressMsg{Text: "y"})
+	if cmd == nil {
+		t.Fatal("Expected command from Y keypress")
+	}
+
+	// Execute command to get RetrySaveMsg
+	msg := cmd()
+	if _, ok := msg.(RetrySaveMsg); !ok {
+		t.Errorf("Expected RetrySaveMsg from Y keypress, got %T", msg)
+	}
+
+	// Handle RetrySaveMsg
+	wizModel := updatedModel.(*WizardModel)
+	updatedModel2, cmd2 := wizModel.Update(msg)
+	if cmd2 == nil {
+		t.Fatal("Expected command from RetrySaveMsg")
+	}
+
+	wizModel2 := updatedModel2.(*WizardModel)
+
+	// Should hide error modal
+	if wizModel2.showSaveError {
+		t.Error("Expected showSaveError to be false after retry")
+	}
+	if wizModel2.saveError != "" {
+		t.Error("Expected saveError to be cleared after retry")
+	}
+
+	// Should emit SaveSpecMsg to retry
+	msg2 := cmd2()
+	if _, ok := msg2.(SaveSpecMsg); !ok {
+		t.Errorf("Expected SaveSpecMsg from retry, got %T", msg2)
+	}
+}
+
+func TestSaveErrorModal_Cancel(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard with save error
+	m := &WizardModel{
+		step:          StepReview,
+		cfg:           cfg,
+		showSaveError: true,
+		saveError:     "test error",
+		result: WizardResult{
+			Title:       "Test Spec",
+			Description: "Test description",
+			SpecContent: "# Test Spec",
+		},
+	}
+
+	// Press N to cancel
+	updatedModel, cmd := m.Update(tea.KeyPressMsg{Text: "n"})
+	if cmd != nil {
+		t.Errorf("Expected no command from N keypress, got %T", cmd)
+	}
+
+	wizModel := updatedModel.(*WizardModel)
+
+	// Should hide error modal
+	if wizModel.showSaveError {
+		t.Error("Expected showSaveError to be false after cancel")
+	}
+	if wizModel.saveError != "" {
+		t.Error("Expected saveError to be cleared after cancel")
+	}
+
+	// Should stay on review step
+	if wizModel.step != StepReview {
+		t.Errorf("Expected to stay on StepReview, got %v", wizModel.step)
+	}
+}
+
+func TestSaveErrorModal_ESC(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard with save error
+	m := &WizardModel{
+		step:          StepReview,
+		cfg:           cfg,
+		showSaveError: true,
+		saveError:     "test error",
+	}
+
+	// Press ESC to cancel
+	updatedModel, cmd := m.Update(tea.KeyPressMsg{Text: "esc"})
+	if cmd != nil {
+		t.Errorf("Expected no command from ESC keypress, got %T", cmd)
+	}
+
+	wizModel := updatedModel.(*WizardModel)
+
+	// Should hide error modal
+	if wizModel.showSaveError {
+		t.Error("Expected showSaveError to be false after ESC")
+	}
+	if wizModel.saveError != "" {
+		t.Error("Expected saveError to be cleared after ESC")
+	}
+}
+
+func TestSaveErrorModal_IgnoresOtherKeys(t *testing.T) {
+	cfg := &config.Config{
+		SpecDir: "./specs",
+	}
+
+	// Create wizard with save error
+	m := &WizardModel{
+		step:          StepReview,
+		cfg:           cfg,
+		showSaveError: true,
+		saveError:     "test error",
+	}
+
+	// Press random key
+	updatedModel, cmd := m.Update(tea.KeyPressMsg{Text: "x"})
+	if cmd != nil {
+		t.Errorf("Expected no command from random keypress, got %T", cmd)
+	}
+
+	wizModel := updatedModel.(*WizardModel)
+
+	// Should keep error modal visible
+	if !wizModel.showSaveError {
+		t.Error("Expected showSaveError to remain true")
+	}
+	if wizModel.saveError != "test error" {
+		t.Error("Expected saveError to remain unchanged")
+	}
+}
+
 func TestModelSelectorIntegration(t *testing.T) {
 	cfg := &config.Config{
 		Model:   "claude-3-5-sonnet-20241022",

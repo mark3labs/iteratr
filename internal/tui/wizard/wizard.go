@@ -1,6 +1,7 @@
 package wizard
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -56,7 +57,7 @@ type WizardModel struct {
 // It creates a standalone BubbleTea program, runs it, and returns the result.
 // templatePath is the custom template path from config (empty string means use default).
 // Returns nil result and error if user cancels or an error occurs.
-func RunWizard(sessionStore *session.Store, templatePath string) (*WizardResult, error) {
+func RunWizard(ctx context.Context, sessionStore *session.Store, templatePath string) (*WizardResult, error) {
 	// Create initial model
 	m := &WizardModel{
 		step:         0,
@@ -65,8 +66,8 @@ func RunWizard(sessionStore *session.Store, templatePath string) (*WizardResult,
 		templatePath: templatePath,
 	}
 
-	// Create BubbleTea program
-	p := tea.NewProgram(m)
+	// Create BubbleTea program with context for graceful cancellation
+	p := tea.NewProgram(m, tea.WithContext(ctx))
 
 	// Run the program
 	finalModel, err := p.Run()

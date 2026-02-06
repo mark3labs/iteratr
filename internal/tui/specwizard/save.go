@@ -53,22 +53,32 @@ func saveSpec(specDir, title, description, content string) (string, error) {
 // If the <!-- SPECS --> marker exists, it inserts the new row after the marker.
 // If the marker doesn't exist, it appends the marker and table to the end.
 func updateREADME(readmePath, filename, title, description string) error {
-	// Prepare description (first line, max 100 chars)
+	// Prepare description (first line, max 100 runes)
 	desc := firstLine(description)
-	descRunes := []rune(desc)
-	if len(descRunes) > 100 {
-		desc = string(descRunes[:97]) + "..."
-	}
 	if desc == "" {
 		desc = "No description provided"
 	}
 
+	// Truncate description to 100 runes (rune-safe)
+	descRunes := []rune(desc)
+	if len(descRunes) > 100 {
+		desc = string(descRunes[:97]) + "..."
+	}
+
+	// Truncate title to 100 runes (rune-safe)
+	titleRunes := []rune(title)
+	if len(titleRunes) > 100 {
+		title = string(titleRunes[:97]) + "..."
+	}
+
+	// Escape pipes in title and description for markdown table cells
+	escapedTitle := strings.ReplaceAll(title, "|", "\\|")
+	escapedDesc := strings.ReplaceAll(desc, "|", "\\|")
+
 	// Format date as YYYY-MM-DD
 	date := time.Now().Format("2006-01-02")
 
-	// Create new table row - escape pipes in title and description for markdown
-	escapedTitle := strings.ReplaceAll(title, "|", "\\|")
-	escapedDesc := strings.ReplaceAll(desc, "|", "\\|")
+	// Create new table row
 	newRow := fmt.Sprintf("| [%s](%s) | %s | %s |", escapedTitle, filename, escapedDesc, date)
 
 	// Read existing README or create new one

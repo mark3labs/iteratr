@@ -45,3 +45,12 @@ type ShowCancelConfirmMsg struct{}
 // AgentPhaseReadyMsg is sent when the agent phase is set up and ready to start.
 // It triggers initialization of the AgentPhase component's channel listeners.
 type AgentPhaseReadyMsg struct{}
+
+// SaveErrorMsg is sent when spec save fails.
+// It displays an error modal with retry/cancel options.
+type SaveErrorMsg struct {
+	Err error
+}
+
+// RetrySaveMsg is sent when user chooses to retry after a save error.
+type RetrySaveMsg struct{}

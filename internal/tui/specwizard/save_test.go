@@ -491,3 +491,102 @@ func TestSaveSpec_SpecialCharactersInTitle(t *testing.T) {
 		t.Error("Spec file was not created")
 	}
 }
+
+func TestUpdateREADME_PipesInTitleAndDescription(t *testing.T) {
+	// Create temp directory
+	tmpDir := t.TempDir()
+	readmePath := filepath.Join(tmpDir, "README.md")
+
+	// Title and description with pipes
+	title := "Feature | Component A"
+	description := "Implements A | B | C functionality"
+
+	err := updateREADME(readmePath, "test-spec.md", title, description)
+	if err != nil {
+		t.Fatalf("updateREADME() failed: %v", err)
+	}
+
+	content, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("Failed to read README: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Verify pipes are escaped in the table
+	if !strings.Contains(contentStr, "Feature \\| Component A") {
+		t.Error("Pipes in title should be escaped")
+	}
+	if !strings.Contains(contentStr, "Implements A \\| B \\| C functionality") {
+		t.Error("Pipes in description should be escaped")
+	}
+
+	// Verify table is still valid (count pipes per row)
+	lines := strings.Split(contentStr, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "| [Feature") {
+			// Count unescaped pipes: should be exactly 4 (| title | desc | date |)
+			unescapedPipes := 0
+			escaped := false
+			for i, ch := range trimmed {
+				if ch == '\\' && i+1 < len(trimmed) && trimmed[i+1] == '|' {
+					escaped = true
+				} else if ch == '|' && !escaped {
+					unescapedPipes++
+				} else {
+					escaped = false
+				}
+			}
+			if unescapedPipes != 4 {
+				t.Errorf("Table row should have exactly 4 unescaped pipes, got %d: %s", unescapedPipes, trimmed)
+			}
+		}
+	}
+}
+
+func TestUpdateREADME_LongTitleWithUnicode(t *testing.T) {
+	// Create temp directory
+	tmpDir := t.TempDir()
+	readmePath := filepath.Join(tmpDir, "README.md")
+
+	// Long title with unicode (over 100 runes)
+	longTitle := "一二三四五六七八九十" + strings.Repeat("a", 95) // 105 runes total
+	description := "Test description"
+
+	err := updateREADME(readmePath, "test-spec.md", longTitle, description)
+	if err != nil {
+		t.Fatalf("updateREADME() failed: %v", err)
+	}
+
+	content, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("Failed to read README: %v", err)
+	}
+
+	contentStr := string(content)
+
+	// Find the table row with our spec
+	lines := strings.Split(contentStr, "\n")
+	var titleInTable string
+	for _, line := range lines {
+		if strings.Contains(line, "test-spec.md") {
+			// Extract title from [title](link) format
+			start := strings.Index(line, "[")
+			end := strings.Index(line, "]")
+			if start != -1 && end != -1 && end > start {
+				titleInTable = line[start+1 : end]
+			}
+			break
+		}
+	}
+
+	// Verify title was truncated to 100 runes + "..."
+	titleRunes := []rune(titleInTable)
+	if len(titleRunes) > 103 { // 100 chars + "..."
+		t.Errorf("Title should be truncated to 100 runes + '...', got %d runes", len(titleRunes))
+	}
+	if !strings.HasSuffix(titleInTable, "...") {
+		t.Error("Truncated title should end with '...'")
+	}
+}

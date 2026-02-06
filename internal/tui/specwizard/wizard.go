@@ -76,10 +76,19 @@ type WizardModel struct {
 	buttonBar     *wizard.ButtonBar
 	buttonFocused bool // True if buttons have focus (vs step content)
 
+	// Cached button bars per step (prevents focus reset on re-render)
+	titleButtonBar       *wizard.ButtonBar
+	descriptionButtonBar *wizard.ButtonBar
+	modelButtonBar       *wizard.ButtonBar
+
 	// Agent infrastructure
 	mcpServer   *specmcp.Server
 	agentRunner *agent.Runner
 	agentError  *error // Error from agent startup or runtime
+
+	// Save error state
+	saveError     string // Non-empty if save failed, shows error modal with retry/cancel
+	showSaveError bool   // True if save error modal should be displayed
 
 	// Program reference for sending messages from callbacks
 	program ProgramSender
@@ -138,6 +147,24 @@ func (m *WizardModel) Init() tea.Cmd {
 func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		// If save error modal is visible, handle Y/N/ESC
+		if m.showSaveError {
+			switch msg.String() {
+			case "y", "Y":
+				// Retry save
+				return m, func() tea.Msg {
+					return RetrySaveMsg{}
+				}
+			case "n", "N", "esc":
+				// Cancel - hide error modal and stay on review step
+				m.showSaveError = false
+				m.saveError = ""
+				return m, nil
+			}
+			// Ignore other keys when modal is visible
+			return m, nil
+		}
+
 		// Handle button-focused keyboard input
 		if m.buttonFocused && m.buttonBar != nil {
 			switch msg.String() {
@@ -218,6 +245,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.Title = msg.Title
 		m.step = StepDescription
 		m.buttonFocused = false
+		m.buttonBar = nil // Clear button bar reference when changing steps
 		cmd := m.initCurrentStep()
 		return m, cmd
 
@@ -226,6 +254,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.Description = msg.Description
 		m.step = StepModel
 		m.buttonFocused = false
+		m.buttonBar = nil // Clear button bar reference when changing steps
 		cmd := m.initCurrentStep()
 		return m, cmd
 
@@ -234,6 +263,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.Model = msg.ModelID
 		m.step = StepAgent
 		m.buttonFocused = false
+		m.buttonBar = nil // Clear button bar reference when changing steps
 		m.initCurrentStep()
 		return m, m.startAgentPhase
 
@@ -242,6 +272,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.SpecContent = msg.Content
 		m.step = StepReview
 		m.buttonFocused = false
+		m.buttonBar = nil // Clear button bar reference when changing steps
 		cmd := m.initCurrentStep()
 		return m, cmd
 
@@ -250,6 +281,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.result.SpecPath = msg.Path
 		m.step = StepCompletion
 		m.buttonFocused = false
+		m.buttonBar = nil // Clear button bar reference when changing steps
 		cmd := m.initCurrentStep()
 		return m, cmd
 
@@ -272,9 +304,14 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Debug("Restarting wizard from title step")
 		m.step = StepTitle
 		m.buttonFocused = false
+		m.buttonBar = nil // Clear button bar reference when changing steps
 		m.agentError = nil
 		// Reset result
 		m.result = WizardResult{}
+		// Clear all cached button bars
+		m.titleButtonBar = nil
+		m.descriptionButtonBar = nil
+		m.modelButtonBar = nil
 		// Clean up agent resources
 		if m.agentStep != nil {
 			m.agentStep.Cleanup()
@@ -345,9 +382,10 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		specPath, err := saveSpec(m.cfg.SpecDir, m.result.Title, m.result.Description, m.result.SpecContent)
 		if err != nil {
 			logger.Error("Failed to save spec: %v", err)
-			// Show error to user
-			// TODO: Add error handling UI (could show error modal)
-			return m, nil
+			// Show error modal to user
+			return m, func() tea.Msg {
+				return SaveErrorMsg{Err: err}
+			}
 		}
 
 		logger.Debug("Spec saved to %s", specPath)
@@ -355,6 +393,21 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Advance to completion step with saved path
 		return m, func() tea.Msg {
 			return SpecSavedMsg{Path: specPath}
+		}
+
+	case SaveErrorMsg:
+		// Save failed - show error modal
+		m.saveError = msg.Err.Error()
+		m.showSaveError = true
+		return m, nil
+
+	case RetrySaveMsg:
+		// User chose to retry save
+		m.showSaveError = false
+		m.saveError = ""
+		// Trigger save again
+		return m, func() tea.Msg {
+			return SaveSpecMsg{}
 		}
 
 	case StartBuildMsg:
@@ -553,6 +606,11 @@ func (m *WizardModel) renderCurrentStep() string {
 	// If there's an agent error, show error screen
 	if m.agentError != nil {
 		return m.renderErrorScreen(*m.agentError)
+	}
+
+	// If save error modal is visible, render it as overlay
+	if m.showSaveError {
+		return m.renderSaveErrorModal()
 	}
 
 	// Step title
@@ -764,6 +822,47 @@ Please check the logs for more details.`
 	return modalStyle.Render(content)
 }
 
+// renderSaveErrorModal renders an error modal for save failures with retry/cancel options.
+func (m *WizardModel) renderSaveErrorModal() string {
+	t := theme.Current()
+
+	// Title with error icon
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color(t.Error)).
+		MarginBottom(1)
+	titleText := titleStyle.Render("⚠ Save Failed")
+
+	// Error message
+	messageStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.FgBase)).
+		MarginBottom(1)
+	messageText := messageStyle.Render(fmt.Sprintf("Failed to save spec: %s", m.saveError))
+
+	// Buttons
+	buttonStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.FgMuted))
+	buttons := buttonStyle.Render("Press Y to retry, N or ESC to cancel")
+
+	// Combine content
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		titleText,
+		messageText,
+		"",
+		buttons,
+	)
+
+	// Modal styling
+	modalStyle := lipgloss.NewStyle().
+		Width(60).
+		Padding(2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(t.Error))
+
+	return modalStyle.Render(content)
+}
+
 // hasButtons returns true if the current step needs wizard-level navigation buttons.
 func (m *WizardModel) hasButtons() bool {
 	// These steps handle their own buttons/navigation:
@@ -773,8 +872,26 @@ func (m *WizardModel) hasButtons() bool {
 	return m.step != StepAgent && m.step != StepReview && m.step != StepCompletion
 }
 
-// ensureButtonBar creates the button bar if needed.
+// ensureButtonBar creates the button bar if needed, using cached instance per step.
 func (m *WizardModel) ensureButtonBar() {
+	// Get cached button bar for current step
+	var cachedBar *wizard.ButtonBar
+	switch m.step {
+	case StepTitle:
+		cachedBar = m.titleButtonBar
+	case StepDescription:
+		cachedBar = m.descriptionButtonBar
+	case StepModel:
+		cachedBar = m.modelButtonBar
+	}
+
+	// If cached bar exists, reuse it (preserves focus state)
+	if cachedBar != nil {
+		m.buttonBar = cachedBar
+		return
+	}
+
+	// Create new button bar for this step
 	var buttons []wizard.Button
 
 	// Back button (not on first step)
@@ -795,7 +912,19 @@ func (m *WizardModel) ensureButtonBar() {
 		State: wizard.ButtonNormal,
 	})
 
-	m.buttonBar = wizard.NewButtonBar(buttons)
+	newBar := wizard.NewButtonBar(buttons)
+
+	// Cache the button bar for this step
+	switch m.step {
+	case StepTitle:
+		m.titleButtonBar = newBar
+	case StepDescription:
+		m.descriptionButtonBar = newBar
+	case StepModel:
+		m.modelButtonBar = newBar
+	}
+
+	m.buttonBar = newBar
 }
 
 // activateButton handles button activation.
@@ -820,6 +949,7 @@ func (m *WizardModel) goBack() (tea.Model, tea.Cmd) {
 
 		m.step--
 		m.buttonFocused = false
+		m.buttonBar = nil // Clear button bar reference when changing steps
 		cmd := m.initCurrentStep()
 		return m, cmd
 	}

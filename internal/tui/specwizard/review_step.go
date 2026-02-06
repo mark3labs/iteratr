@@ -228,11 +228,8 @@ func (s *ReviewStep) Update(msg tea.Msg) tea.Cmd {
 		s.edited = true
 		s.viewport.SetContent(renderMarkdown(s.content, s.width))
 		s.viewport.GotoTop()
-		// Clean up temp file
-		if s.tmpFile != "" {
-			_ = os.Remove(s.tmpFile)
-			s.tmpFile = ""
-		}
+		// Clear temp file path (file already cleaned up in callback)
+		s.tmpFile = ""
 		return nil
 	}
 
@@ -283,6 +280,9 @@ func (s *ReviewStep) openEditor() tea.Cmd {
 			_ = os.Remove(tmpfile.Name())
 			return nil
 		}
+
+		// Clean up temp file after successful read
+		_ = os.Remove(tmpfile.Name())
 
 		return SpecEditedMsg{
 			Content: string(content),
