@@ -525,17 +525,19 @@ func (m *SubagentModal) refreshContent() {
 	}
 	m.scrollList.SetItems(items)
 
-	// Compute messageLineStarts for click-to-expand hit detection
+	// Compute messageLineStarts for click-to-expand hit detection.
+	// Must include gap lines between items to match currentOffsetInLines.
 	m.messageLineStarts = make([]int, len(items))
 	offset := 0
+	gap := m.scrollList.ItemGap()
 	for i, item := range items {
 		m.messageLineStarts[i] = offset
-		h := item.Height()
-		if h == 0 {
-			item.Render(m.scrollList.width)
-			h = item.Height()
+		// Always render to get accurate height after expand/collapse toggle
+		item.Render(m.scrollList.width)
+		offset += item.Height()
+		if gap > 0 && i < len(items)-1 {
+			offset += gap
 		}
-		offset += h
 	}
 
 	// Auto-scroll to bottom if enabled

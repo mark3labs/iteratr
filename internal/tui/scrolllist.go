@@ -79,6 +79,11 @@ func (s *ScrollList) SetItemGap(gap int) {
 	s.itemGap = gap
 }
 
+// ItemGap returns the number of blank lines rendered between items.
+func (s *ScrollList) ItemGap() int {
+	return s.itemGap
+}
+
 // SetAutoScroll enables or disables auto-scrolling to bottom.
 func (s *ScrollList) SetAutoScroll(enabled bool) {
 	s.autoScroll = enabled

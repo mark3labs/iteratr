@@ -665,17 +665,22 @@ func (a *AgentOutput) refreshContent() {
 	a.scrollList.SetItems(items)
 
 	// Compute messageLineStarts for click-to-expand hit detection.
-	// Each entry is the cumulative line offset where that message starts.
+	// Each entry is the cumulative line offset where that message starts,
+	// including gap lines between items (must match currentOffsetInLines).
 	a.messageLineStarts = make([]int, len(items))
 	offset := 0
+	gap := a.scrollList.ItemGap()
 	for i, item := range items {
 		a.messageLineStarts[i] = offset
-		h := item.Height()
-		if h == 0 {
-			item.Render(a.scrollList.width)
-			h = item.Height()
+		// Always render to get accurate height (Render caches internally,
+		// but after ToggleExpanded the cache is invalidated so we must
+		// re-render to pick up the new expanded/collapsed height).
+		item.Render(a.scrollList.width)
+		offset += item.Height()
+		// Account for gap lines between items
+		if gap > 0 && i < len(items)-1 {
+			offset += gap
 		}
-		offset += h
 	}
 
 	// Only adjust scroll position if auto-scroll is enabled
