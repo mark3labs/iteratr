@@ -507,12 +507,12 @@ func TestSaveSpecMsg(t *testing.T) {
 
 	wizModel := updatedModel.(*WizardModel)
 
-	// Should stay on review step (save logic not yet implemented)
+	// SaveSpecMsg returns a command; the actual save is handled asynchronously
+	// by the returned cmd from WizardModel.Update. See save_test.go and
+	// TestOverwriteFlow_ConfirmYes for full save integration tests.
 	if wizModel.step != StepReview {
 		t.Errorf("Expected to stay on StepReview, got %v", wizModel.step)
 	}
-
-	// Note: Actual save functionality will be tested in TAS-47
 }
 
 func TestSaveErrorMsg(t *testing.T) {

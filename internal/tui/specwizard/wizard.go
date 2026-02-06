@@ -1,6 +1,7 @@
 package specwizard
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -1102,31 +1103,31 @@ func (m *WizardModel) startAgentPhase() tea.Msg {
 }
 
 // execBuild returns a tea.Cmd that executes iteratr build --spec <path> after the TUI quits.
-// The build command is executed using syscall.Exec to replace the current process.
+// Subprocess output is captured into buffers and logged to avoid corrupting terminal restoration.
 func (m *WizardModel) execBuild(specPath string) tea.Cmd {
 	return func() tea.Msg {
 		// Find the iteratr binary path
-		// Use os.Executable() to get the current binary path
 		execPath, err := os.Executable()
 		if err != nil {
 			logger.Error("Failed to get executable path: %v", err)
-			// Fall back to "iteratr" in PATH
 			execPath = "iteratr"
 		}
 
 		// Build the command: iteratr build --spec <path>
 		cmd := exec.Command(execPath, "build", "--spec", specPath)
 
-		// Inherit stdin, stdout, stderr from current process
+		// Capture output into buffers instead of inheriting streams
+		// to avoid writing to stdout/stderr during TUI shutdown.
+		var stdoutBuf, stderrBuf bytes.Buffer
 		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		cmd.Stdout = &stdoutBuf
+		cmd.Stderr = &stderrBuf
 
-		// Run the command and wait for it to complete
 		logger.Debug("Executing: %s build --spec %s", execPath, specPath)
 		if err := cmd.Run(); err != nil {
-			logger.Error("Failed to execute build command: %v", err)
-			fmt.Fprintf(os.Stderr, "Failed to start build: %v\n", err)
+			logger.Error("Build command failed: %v, stderr: %s", err, stderrBuf.String())
+		} else {
+			logger.Info("Build command completed, stdout: %s", stdoutBuf.String())
 		}
 
 		// Return nil message since we're exiting anyway
@@ -1150,11 +1151,19 @@ Detailed requirements
 ## Technical Implementation
 Implementation details
 
+## UI Mockup
+ASCII or description of the interface
+
 ## Tasks
-Byte-sized implementation tasks
+Small, sequential, dependency-ordered checklist items.
+Each task completable in one focused session.
+- [ ] Task description — success: <one-line criterion>
 
 ## Out of Scope
-What's not included in v1`
+What's not included in v1
+
+## Open Questions
+Unresolved decisions for future discussion`
 
 	return fmt.Sprintf(`You are helping create a feature specification.
 
@@ -1180,6 +1189,13 @@ When you have enough information, immediately use the finish-spec tool. Do not a
 The spec MUST follow this format:
 
 %s
+
+TASK FORMAT RULES:
+- Each task is a checkbox item: - [ ] Description — success: <criterion>
+- Order tasks by dependency (earlier tasks unblock later ones)
+- Each task must be completable in a single focused session
+- Include a one-line success criterion after each checkbox
+- Aim for 5-15 tasks; group related subtasks under numbered headings
 
 Make the spec extremely concise. Sacrifice grammar for the sake of concision.`,
 		title, description, specFormat)

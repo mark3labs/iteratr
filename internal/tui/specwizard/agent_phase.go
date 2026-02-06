@@ -122,7 +122,8 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 					}
 				}()
 			}
-			return a, nil
+			// Re-register listener so the agent continues to receive future requests
+			return a, waitForQuestionRequest(a.listenerCtx, a.questionReqCh)
 		}
 
 		// Convert from specmcp.Question to Question
@@ -454,19 +455,6 @@ func waitForSpecContent(ctx context.Context, ch <-chan specmcp.SpecContentReques
 		select {
 		case req := <-ch:
 			return SpecContentRequestMsg{Request: req}
-		case <-ctx.Done():
-			return nil
-		}
-	}
-}
-
-// ListenForQuestions starts a goroutine that listens for question requests
-// and sends them as messages to the Bubbletea program.
-func ListenForQuestions(ctx context.Context, mcpServer *specmcp.Server) tea.Cmd {
-	return func() tea.Msg {
-		select {
-		case req := <-mcpServer.QuestionChan():
-			return QuestionRequestMsg{Request: req}
 		case <-ctx.Done():
 			return nil
 		}
