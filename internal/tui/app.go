@@ -931,10 +931,11 @@ func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		toastContent := a.toast.View(area.Dx(), area.Dy())
 		if toastContent != "" {
 			// Calculate position at bottom-right with 1 cell padding from edges
-			// Position above the status bar (area.Max.Y - 2)
+			// Position above the status bar (area.Max.Y - 1 - contentHeight)
 			contentWidth := lipglossv2.Width(toastContent)
+			contentHeight := lipglossv2.Height(toastContent)
 			toastX := area.Max.X - contentWidth - 1
-			toastY := area.Max.Y - 2
+			toastY := area.Max.Y - 1 - contentHeight
 			if toastX < area.Min.X {
 				toastX = area.Min.X
 			}
@@ -943,7 +944,7 @@ func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			}
 			toastArea := uv.Rectangle{
 				Min: uv.Position{X: toastX, Y: toastY},
-				Max: uv.Position{X: toastX + contentWidth, Y: toastY + lipglossv2.Height(toastContent)},
+				Max: uv.Position{X: toastX + contentWidth, Y: toastY + contentHeight},
 			}
 			uv.NewStyledString(toastContent).Draw(scr, toastArea)
 		}

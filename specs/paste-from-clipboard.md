@@ -39,7 +39,7 @@ case tea.PasteMsg:
 
 ### Paste Sanitization (new helper)
 
-`internal/tui/paste.go` — `sanitizePaste(content string) string`:
+`internal/tui/paste.go` — `SanitizePaste(content string) string`:
 - Strip ANSI escape sequences (`\x1b\[...m` etc.)
 - Remove null bytes and non-printable control chars (except `\n`, `\t`, `\r`)
 - Normalize `\r\n` → `\n`
@@ -83,7 +83,7 @@ In each textarea/textinput wrapper's Update handler:
 ## Tasks
 
 ### 1. Paste sanitization helper
-- [ ] [P0] Create `internal/tui/paste.go` with `sanitizePaste(string) string` — strip ANSI escapes, null bytes, non-printable control chars, normalize CRLF→LF, trim trailing whitespace
+- [ ] [P0] Create `internal/tui/paste.go` with `SanitizePaste(string) string` — strip ANSI escapes, null bytes, non-printable control chars, normalize CRLF→LF, trim trailing whitespace
 - [ ] [P0] Create `internal/tui/paste_test.go` — unit tests for ANSI stripping, null byte removal, CRLF normalization, trailing whitespace trimming, preserving valid newlines/tabs
 
 ### 2. Add PasteMsg routing in App.Update

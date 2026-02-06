@@ -43,7 +43,7 @@ func SanitizePaste(content string) string {
 	// Normalize CRLF to LF
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 
-	// Trim trailing whitespace from entire content and each line
+	// Trim trailing whitespace from entire content
 	content = strings.TrimRight(content, " \t\n\r")
 
 	return content

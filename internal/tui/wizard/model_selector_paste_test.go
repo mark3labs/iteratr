@@ -137,6 +137,7 @@ func TestModelSelectorStep_Paste_SingleLine_NoChange(t *testing.T) {
 func TestModelSelectorStep_Paste_EmptyContent(t *testing.T) {
 	step := NewModelSelectorStep()
 	step.loading = false
+	step.searchInput.Focus() // Focus the search input
 
 	// Paste empty content
 	pasteMsg := tea.PasteMsg{Content: ""}

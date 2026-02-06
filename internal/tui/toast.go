@@ -9,7 +9,9 @@ import (
 )
 
 // ToastDismissMsg is sent when the toast should be dismissed.
-type ToastDismissMsg struct{}
+type ToastDismissMsg struct {
+	Generation int
+}
 
 // ShowToastMsg is sent to show a toast notification.
 type ShowToastMsg struct {
@@ -19,9 +21,10 @@ type ShowToastMsg struct {
 // Toast is a minimal toast notification component.
 // Shows a message in the bottom-right corner that auto-dismisses after 3 seconds.
 type Toast struct {
-	message   string
-	visible   bool
-	dismissAt time.Time
+	message    string
+	visible    bool
+	dismissAt  time.Time
+	generation int
 }
 
 // NewToast creates a new Toast component.
@@ -34,6 +37,7 @@ func NewToast() *Toast {
 func (t *Toast) Show(msg string) tea.Cmd {
 	t.message = msg
 	t.visible = true
+	t.generation++
 	t.dismissAt = time.Now().Add(3 * time.Second)
 	return t.dismissCmd()
 }
@@ -44,26 +48,30 @@ func (t *Toast) dismissCmd() tea.Cmd {
 	if remaining <= 0 {
 		remaining = 1 * time.Millisecond
 	}
+	generation := t.generation
 	return tea.Tick(remaining, func(time.Time) tea.Msg {
-		return ToastDismissMsg{}
+		return ToastDismissMsg{Generation: generation}
 	})
 }
 
 // Update handles messages for the toast component.
 // Returns a command to re-schedule dismissal if needed.
 func (t *Toast) Update(msg tea.Msg) tea.Cmd {
-	switch msg.(type) {
+	switch m := msg.(type) {
 	case ToastDismissMsg:
-		t.visible = false
-		t.message = ""
+		// Only dismiss if generation matches (prevents stale dismissals)
+		if m.Generation == t.generation {
+			t.visible = false
+			t.message = ""
+		}
 		return nil
 	}
 	return nil
 }
 
-// View renders the toast at the given screen dimensions.
+// View renders the toast content with styling.
 // Returns empty string if toast is not visible.
-// Positions the toast in the bottom-right corner, above the status bar.
+// Positioning is handled by the caller (app.go Draw method).
 func (t *Toast) View(width, height int) string {
 	if !t.visible || t.message == "" {
 		return ""
@@ -80,31 +88,13 @@ func (t *Toast) View(width, height int) string {
 
 	content := style.Render(t.message)
 
-	// Calculate position: bottom-right with 1 cell padding from edges
-	// The toast appears above the status bar, so we position at height-2
+	// Clamp width if needed (leave room for padding from edges)
 	contentWidth := lipgloss.Width(content)
 	if contentWidth > width-2 {
 		content = style.Width(width - 2).Render(t.message)
 	}
 
-	// Position at row height-2 (1 row above status bar)
-	verticalPadding := height - 2
-	if verticalPadding < 0 {
-		verticalPadding = 0
-	}
-
-	// Build the positioned toast with bottom-right alignment
-	var result string
-	for i := 0; i < verticalPadding; i++ {
-		result += "\n"
-	}
-	result += lipgloss.NewStyle().
-		Width(width).
-		Align(lipgloss.Right).
-		PaddingRight(1).
-		Render(content)
-
-	return result
+	return content
 }
 
 // IsVisible returns whether the toast is currently visible.

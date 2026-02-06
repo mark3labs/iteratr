@@ -323,8 +323,10 @@ func TestApp_ToastIntegration_ShowsAndDismisses(t *testing.T) {
 		t.Errorf("Expected toast message '50 chars truncated', got: %s", app.toast.GetMessage())
 	}
 
-	// Simulate dismissal by sending ToastDismissMsg
-	_, _ = app.Update(ToastDismissMsg{})
+	// Simulate dismissal by executing the dismiss command
+	// (which will include the correct generation)
+	dismissMsg := cmd()
+	_, _ = app.Update(dismissMsg)
 
 	// Toast should no longer be visible
 	if app.toast.IsVisible() {
