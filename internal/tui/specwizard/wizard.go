@@ -313,6 +313,7 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			err := runner.RunIteration(ctx, prompt, "")
 			if err != nil {
 				logger.Error("Agent iteration failed: %v", err)
+				return AgentErrorMsg{Err: err}
 			}
 			return nil
 		}
