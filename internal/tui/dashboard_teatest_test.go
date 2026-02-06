@@ -839,8 +839,12 @@ func TestDashboard_RenderWithQueueDepth(t *testing.T) {
 	// Add message
 	agentOutput.AppendText("Working on task...")
 
+	// Add queued user messages (shown inline with QUEUED badge)
+	agentOutput.AppendQueuedUserMessage("fix the bug")
+	agentOutput.AppendQueuedUserMessage("also update tests")
+
 	// Set queue depth
-	d.SetQueueDepth(3)
+	d.SetQueueDepth(2)
 
 	// Set agent busy
 	d.SetAgentBusy(true)

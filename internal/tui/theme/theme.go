@@ -214,8 +214,16 @@ func (t *Theme) buildStyles() *Styles {
 		BorderForeground(lipgloss.Color(t.Primary)).
 		PaddingLeft(1)
 	s.UserBorder = lipgloss.NewStyle().
-		Border(lipgloss.ThickBorder(), false, true, false, false). // Right border only
+		Border(lipgloss.ThickBorder(), false, false, false, true). // Left border only
 		BorderForeground(lipgloss.Color(t.Secondary)).
+		PaddingLeft(1).
+		PaddingTop(1).
+		PaddingBottom(1)
+	s.QueuedBadge = lipgloss.NewStyle().
+		Background(lipgloss.Color(t.Secondary)).
+		Foreground(lipgloss.Color(t.BgCrust)).
+		Bold(true).
+		PaddingLeft(1).
 		PaddingRight(1)
 	s.IterationDivider = lipgloss.NewStyle().
 		Foreground(lipgloss.Color(t.FgMuted)).

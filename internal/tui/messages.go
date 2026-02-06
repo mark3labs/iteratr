@@ -116,7 +116,7 @@ func (u *UserMessageItem) ID() string {
 }
 
 // Render renders the user message at the given width.
-// Wraps text, applies user border (right border), right-aligns content, and caps width at min(width-2, 120).
+// Wraps text, applies user border (left border), and caps width at min(width-2, 120).
 func (u *UserMessageItem) Render(width int) string {
 	// Return cached render if width matches
 	if u.cachedWidth == width && u.cachedRender != "" {
@@ -124,7 +124,7 @@ func (u *UserMessageItem) Render(width int) string {
 	}
 
 	// Cap effective width at min(width-2, 120) to prevent overly long lines
-	// Subtract 2 for the right border and padding added by styleUserBorder
+	// Subtract 2 for the left border and padding added by UserBorder
 	effectiveWidth := width - 2
 	if effectiveWidth > 120 {
 		effectiveWidth = 120
@@ -136,11 +136,8 @@ func (u *UserMessageItem) Render(width int) string {
 	// Wrap text (plain text, no markdown for user messages)
 	wrapped := wrapText(u.content, effectiveWidth)
 
-	// Apply user border styling (right border + padding)
-	styled := theme.Current().S().UserBorder.Render(wrapped)
-
-	// Right-align the entire styled block
-	result := rightAlign(styled, width)
+	// Apply user border styling (left border + padding)
+	result := theme.Current().S().UserBorder.Render(wrapped)
 
 	// Cache and return
 	u.cachedRender = result
@@ -156,6 +153,68 @@ func (u *UserMessageItem) Height() int {
 	// Count newlines in cached render
 	lines := 1
 	for _, ch := range u.cachedRender {
+		if ch == '\n' {
+			lines++
+		}
+	}
+	return lines
+}
+
+// QueuedUserMessageItem represents a user message that has been queued but not yet processed.
+// Renders like UserMessageItem but with a "QUEUED" badge below the text.
+// When finalized, it is replaced by a regular UserMessageItem.
+type QueuedUserMessageItem struct {
+	id           string
+	content      string
+	cachedRender string
+	cachedWidth  int
+}
+
+// ID returns the unique identifier for this queued user message.
+func (q *QueuedUserMessageItem) ID() string {
+	return q.id
+}
+
+// Render renders the queued user message at the given width.
+// Shows user text with left border (like UserMessageItem) plus a QUEUED badge.
+func (q *QueuedUserMessageItem) Render(width int) string {
+	// Return cached render if width matches
+	if q.cachedWidth == width && q.cachedRender != "" {
+		return q.cachedRender
+	}
+
+	// Cap effective width at min(width-2, 120)
+	effectiveWidth := width - 2
+	if effectiveWidth > 120 {
+		effectiveWidth = 120
+	}
+	if effectiveWidth < 1 {
+		effectiveWidth = 1
+	}
+
+	// Wrap text (plain text, no markdown for user messages)
+	wrapped := wrapText(q.content, effectiveWidth)
+
+	// Add QUEUED badge inside the border below the text
+	badge := theme.Current().S().QueuedBadge.Render("QUEUED")
+	content := wrapped + "\n" + badge
+
+	// Apply user border styling (left border + padding)
+	result := theme.Current().S().UserBorder.Render(content)
+
+	// Cache and return
+	q.cachedRender = result
+	q.cachedWidth = width
+	return result
+}
+
+// Height returns the number of lines this queued user message occupies.
+func (q *QueuedUserMessageItem) Height() int {
+	if q.cachedRender == "" {
+		return 0
+	}
+	lines := 1
+	for _, ch := range q.cachedRender {
 		if ch == '\n' {
 			lines++
 		}

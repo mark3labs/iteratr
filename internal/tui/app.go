@@ -245,10 +245,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.sendChan != nil {
 			select {
 			case a.sendChan <- msg.Text:
-				// Message queued successfully - update UI with new queue depth
-				if a.dashboard != nil {
-					return a, a.dashboard.SetQueueDepth(a.queueDepth)
+				// Message queued successfully - show as queued in viewport immediately
+				var cmds []tea.Cmd
+				if a.dashboard != nil && a.dashboard.agentOutput != nil {
+					_, cmd := a.dashboard.agentOutput.AppendQueuedUserMessage(msg.Text)
+					cmds = append(cmds, cmd)
 				}
+				if a.dashboard != nil {
+					cmds = append(cmds, a.dashboard.SetQueueDepth(a.queueDepth))
+				}
+				return a, tea.Batch(cmds...)
 			default:
 				// Channel full - message dropped
 				a.queueDepth-- // Revert increment since message wasn't queued
@@ -259,7 +265,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case QueuedMessageProcessingMsg:
-		// User message delivered - show in viewport now
+		// User message delivered - finalize the queued message in viewport (remove QUEUED badge)
 		a.queueDepth--
 		if a.queueDepth < 0 {
 			a.queueDepth = 0
@@ -267,9 +273,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		var cmds []tea.Cmd
 
-		// Append user message to viewport at the moment agent starts processing it
+		// Finalize the oldest queued message (converts QueuedUserMessageItem → UserMessageItem)
 		if a.dashboard != nil && a.dashboard.agentOutput != nil {
-			cmd := a.dashboard.agentOutput.AppendUserMessage(msg.Text)
+			cmd := a.dashboard.agentOutput.FinalizeQueuedMessage(msg.Text)
 			cmds = append(cmds, cmd)
 		}
 
