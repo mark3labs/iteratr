@@ -67,6 +67,7 @@ type Orchestrator struct {
 	pendingMu         sync.Mutex         // Protects pendingHookOutput (needed for NATS callback)
 	paused            atomic.Bool        // Pause state (atomic for thread-safe access)
 	resumeChan        chan struct{}      // Signals resume from pause
+	hookCounter       atomic.Int64       // Counter for generating unique hook IDs
 }
 
 // New creates a new Orchestrator with the given configuration.
@@ -429,7 +430,8 @@ func (o *Orchestrator) Run() error {
 				TaskID:      meta.TaskID,
 				TaskContent: task.Content,
 			}
-			output, err := hooks.ExecuteAllPiped(o.ctx, o.hooksConfig.Hooks.OnTaskComplete, o.cfg.WorkDir, hookVars)
+			onStart, onComplete, _ := o.hookCallbacks("on_task_complete")
+			output, err := hooks.ExecuteAllPipedWithCallbacks(o.ctx, o.hooksConfig.Hooks.OnTaskComplete, o.cfg.WorkDir, hookVars, onStart, onComplete)
 			if err != nil {
 				// Context cancelled or error - just log
 				if o.ctx.Err() != nil {
@@ -469,7 +471,8 @@ func (o *Orchestrator) Run() error {
 		hookVars := hooks.Variables{
 			Session: o.cfg.SessionName,
 		}
-		output, err := hooks.ExecuteAllPiped(o.ctx, o.hooksConfig.Hooks.SessionStart, o.cfg.WorkDir, hookVars)
+		onStart, onComplete, _ := o.hookCallbacks("session_start")
+		output, err := hooks.ExecuteAllPipedWithCallbacks(o.ctx, o.hooksConfig.Hooks.SessionStart, o.cfg.WorkDir, hookVars, onStart, onComplete)
 		if err != nil {
 			// Context cancelled - propagate
 			if o.ctx.Err() != nil {
@@ -535,7 +538,8 @@ func (o *Orchestrator) Run() error {
 				Session:   o.cfg.SessionName,
 				Iteration: strconv.Itoa(currentIteration),
 			}
-			output, err := hooks.ExecuteAllPiped(o.ctx, o.hooksConfig.Hooks.PreIteration, o.cfg.WorkDir, hookVars)
+			onStart, onComplete, _ := o.hookCallbacks("pre_iteration")
+			output, err := hooks.ExecuteAllPipedWithCallbacks(o.ctx, o.hooksConfig.Hooks.PreIteration, o.cfg.WorkDir, hookVars, onStart, onComplete)
 			if err != nil {
 				// Context cancelled - propagate
 				if o.ctx.Err() != nil {
@@ -609,7 +613,8 @@ func (o *Orchestrator) Run() error {
 					Iteration: strconv.Itoa(currentIteration),
 					Error:     err.Error(),
 				}
-				hookOutput, hookErr := hooks.ExecuteAllPiped(o.ctx, o.hooksConfig.Hooks.OnError, o.cfg.WorkDir, hookVars)
+				onStart, onComplete, _ := o.hookCallbacks("on_error")
+				hookOutput, hookErr := hooks.ExecuteAllPipedWithCallbacks(o.ctx, o.hooksConfig.Hooks.OnError, o.cfg.WorkDir, hookVars, onStart, onComplete)
 				if hookErr != nil {
 					// Context cancelled - propagate
 					if o.ctx.Err() != nil {
@@ -669,7 +674,8 @@ func (o *Orchestrator) Run() error {
 				Session:   o.cfg.SessionName,
 				Iteration: strconv.Itoa(currentIteration),
 			}
-			output, err := hooks.ExecuteAllPiped(o.ctx, o.hooksConfig.Hooks.PostIteration, o.cfg.WorkDir, hookVars)
+			onStart, onComplete, _ := o.hookCallbacks("post_iteration")
+			output, err := hooks.ExecuteAllPipedWithCallbacks(o.ctx, o.hooksConfig.Hooks.PostIteration, o.cfg.WorkDir, hookVars, onStart, onComplete)
 			if err != nil {
 				// Context cancelled - propagate
 				if o.ctx.Err() != nil {
@@ -805,7 +811,8 @@ func (o *Orchestrator) Run() error {
 			Session: o.cfg.SessionName,
 			// Iteration is not set for session_end hooks (session-level, not iteration-level)
 		}
-		_, err := hooks.ExecuteAll(o.ctx, o.hooksConfig.Hooks.SessionEnd, o.cfg.WorkDir, hookVars)
+		onStart, onComplete, _ := o.hookCallbacks("session_end")
+		_, err := hooks.ExecuteAllWithCallbacks(o.ctx, o.hooksConfig.Hooks.SessionEnd, o.cfg.WorkDir, hookVars, onStart, onComplete)
 		if err != nil {
 			// Context cancelled - just log and exit gracefully
 			if o.ctx.Err() != nil {
@@ -1264,4 +1271,45 @@ func (o *Orchestrator) waitIfPaused() error {
 		logger.Info("Context cancelled during pause")
 		return o.ctx.Err()
 	}
+}
+
+// hookCallbacks returns onStart and onComplete callbacks that send TUI messages.
+// hookType is the lifecycle phase (e.g. "session_start", "pre_iteration").
+// Returns (onStart, onComplete, hookIDs) where hookIDs maps hook index → hookID.
+func (o *Orchestrator) hookCallbacks(hookType string) (hooks.OnHookStart, hooks.OnHookComplete, map[int]string) {
+	hookIDs := make(map[int]string)
+
+	if o.tuiProgram == nil {
+		// Headless mode - no TUI to notify
+		return nil, nil, hookIDs
+	}
+
+	onStart := func(hookIndex int, command string) {
+		id := fmt.Sprintf("hook-%s-%d", hookType, o.hookCounter.Add(1))
+		hookIDs[hookIndex] = id
+		o.tuiProgram.Send(tui.HookStartMsg{
+			HookID:   id,
+			HookType: hookType,
+			Command:  command,
+		})
+	}
+
+	onComplete := func(hookIndex int, result hooks.HookResult) {
+		id, ok := hookIDs[hookIndex]
+		if !ok {
+			return
+		}
+		status := tui.HookStatusSuccess
+		if result.Failed {
+			status = tui.HookStatusError
+		}
+		o.tuiProgram.Send(tui.HookCompleteMsg{
+			HookID:   id,
+			Status:   status,
+			Output:   result.Output,
+			Duration: result.Duration,
+		})
+	}
+
+	return onStart, onComplete, hookIDs
 }

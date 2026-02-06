@@ -15,7 +15,7 @@ Iteratr is a Go TUI application built with BubbleTea v2 that manages iterative d
 ## Component Tree
 
 ```
-App (internal/tui/app.go:29-1045)
+App (internal/tui/app.go:37-1158)
 ├── Root BubbleTea Model
 ├── Implements: tea.Model (Init, Update, View)
 ├── State Management: session.Store, NATS event subscription, Orchestrator control
@@ -35,7 +35,7 @@ App (internal/tui/app.go:29-1045)
 │        ├── UserInputMsg → emitted when user submits text
 │        └── Focus delegation to child components
 │
-├─── AgentOutput (internal/tui/agent.go:15-903)
+├─── AgentOutput (internal/tui/agent.go:15-1024)
 │    ├── Streaming agent conversation display
 │    ├── Implements: Component (Draw, Update)
 │    ├── Child Components:
@@ -49,6 +49,7 @@ App (internal/tui/app.go:29-1045)
 │    │   ├── ToolMessageItem (tool calls with status, expandable)
 │    │   ├── SubagentMessageItem (subagent tasks with session viewer)
 │    │   ├── InfoMessageItem (model/provider/duration metadata)
+│    │   ├── HookMessageItem (hook command execution, expandable)
 │    │   └── DividerMessageItem (iteration separator)
 │    ├── Layout: Vertical split (viewport: height-5, input area: 5 lines)
 │    ├── Renders:
@@ -57,7 +58,7 @@ App (internal/tui/app.go:29-1045)
 │    │   ├── Input field ("> " prompt + text input + queue indicator)
 │    │   └── Help text (context-sensitive hints)
 │    ├── Mouse Interaction:
-│    │   ├── Click-to-expand: Toggles expandable messages (ToolMessageItem, ThinkingMessageItem)
+│    │   ├── Click-to-expand: Toggles expandable messages (ToolMessageItem, ThinkingMessageItem, HookMessageItem)
 │    │   ├── Click SubagentMessageItem → opens SubagentModal
 │    │   └── Input area click: Focuses text input
 │    └── Message Handling:
@@ -65,6 +66,8 @@ App (internal/tui/app.go:29-1045)
 │        ├── AgentToolCallMsg → AppendToolCall()
 │        ├── AgentThinkingMsg → AppendThinking()
 │        ├── AgentFinishMsg → AppendFinish()
+│        ├── HookStartMsg → AppendHook()
+│        ├── HookCompleteMsg → UpdateHook()
 │        ├── KeyPress: up/down (scroll), j/k (vim scroll), space/enter (toggle expand)
 │        └── GradientSpinnerMsg → spinner animation updates
 │
@@ -225,13 +228,14 @@ All implement ScrollItem interface:
 
 | Item | Lines | Purpose |
 |------|-------|---------|
-| TextMessageItem | 45-110 | Assistant text with markdown rendering via glamour |
-| UserMessageItem | 53-163 | User text, right-aligned with border |
-| ThinkingMessageItem | 165-266 | Reasoning content, collapsible (last 10 lines when collapsed) |
-| ToolMessageItem | 267-552 | Tool execution: header, code output, diffs, expandable |
-| SubagentMessageItem | 621-738 | Subagent task: spinner, status, click-to-view hint |
-| InfoMessageItem | 553-619 | Model/provider/duration metadata |
-| DividerMessageItem | 740-797 | Iteration separator |
+| TextMessageItem | 47-111 | Assistant text with markdown rendering via glamour |
+| UserMessageItem | 54-161 | User text, right-aligned with border |
+| ThinkingMessageItem | 225-325 | Reasoning content, collapsible (last 10 lines when collapsed) |
+| ToolMessageItem | 327-611 | Tool execution: header, code output, diffs, expandable |
+| SubagentMessageItem | 681-798 | Subagent task: spinner, status, click-to-view hint |
+| InfoMessageItem | 613-679 | Model/provider/duration metadata |
+| HookMessageItem | 869-1014 | Hook command: icon (running/success/error), hook type label, command, duration, expandable output |
+| DividerMessageItem | 800-857 | Iteration separator |
 
 ### Animation Components (internal/tui/anim.go)
 
@@ -305,7 +309,9 @@ Agent runner → orchestrator → NATS/direct
     ├─ AgentOutputMsg → agent.AppendText()
     ├─ AgentToolCallMsg → agent.AppendToolCall()
     ├─ AgentThinkingMsg → agent.AppendThinking()
-    └─ AgentFinishMsg → agent.AppendFinish()
+    ├─ AgentFinishMsg → agent.AppendFinish()
+    ├─ HookStartMsg → agent.AppendHook()
+    └─ HookCompleteMsg → agent.UpdateHook()
       → ScrollList.SetItems() → auto-scroll
 ```
 
@@ -411,9 +417,9 @@ App.View()
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `internal/tui/app.go` | Root BubbleTea model, message routing, layout | 1045 |
+| `internal/tui/app.go` | Root BubbleTea model, message routing, layout | 1158 |
 | `internal/tui/dashboard.go` | Main content area, focus management | 325 |
-| `internal/tui/agent.go` | Agent conversation display, user input | 903 |
+| `internal/tui/agent.go` | Agent conversation display, user input | 1024 |
 | `internal/tui/sidebar.go` | Tasks/notes lists with logo and pulse animation | 878 |
 | `internal/tui/status.go` | Status bar with session/git info, pause state | 374 |
 | `internal/tui/logs.go` | Event log modal overlay | 223 |
@@ -424,7 +430,7 @@ App.View()
 | `internal/tui/subagent_modal.go` | Subagent session viewer modal | 630 |
 | `internal/tui/dialog.go` | Simple confirmation dialog | 172 |
 | `internal/tui/scrolllist.go` | Lazy-rendering scroll container | 480 |
-| `internal/tui/messages.go` | Message item types for conversation display | 1488 |
+| `internal/tui/messages.go` | Message item types for conversation display | 1680 |
 | `internal/tui/anim.go` | Animation components (Spinner, Pulse, GradientSpinner) | 229 |
 | `internal/tui/draw.go` | Drawing utilities (DrawText, DrawStyled, DrawPanel) | 122 |
 | `internal/tui/hints.go` | Keybinding hint rendering utilities | 118 |

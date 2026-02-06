@@ -856,6 +856,163 @@ func (d *DividerMessageItem) Height() int {
 	return lines
 }
 
+// HookStatus represents the execution status of a hook.
+type HookStatus int
+
+const (
+	HookStatusRunning HookStatus = iota
+	HookStatusSuccess
+	HookStatusError
+)
+
+// HookMessageItem represents a hook command execution block.
+type HookMessageItem struct {
+	id           string
+	hookType     string // "session_start", "pre_iteration", etc.
+	command      string
+	status       HookStatus
+	output       string
+	duration     time.Duration
+	collapsed    bool // default true - show max 10 lines
+	maxLines     int  // default 10
+	cachedRender string
+	cachedWidth  int
+}
+
+// ID returns the unique identifier for this hook message.
+func (h *HookMessageItem) ID() string {
+	return h.id
+}
+
+// Render renders the hook message at the given width.
+// Shows header with status icon, hook type, command, and duration.
+// Shows output body capped at maxLines (or all if expanded).
+func (h *HookMessageItem) Render(width int) string {
+	// Return cached render if width matches
+	if h.cachedWidth == width && h.cachedRender != "" {
+		return h.cachedRender
+	}
+
+	var result strings.Builder
+	s := theme.Current().S()
+
+	// --- HEADER: [icon] [hookType] ─ [command] [status] ---
+	var icon string
+	var iconStyle lipgloss.Style
+	switch h.status {
+	case HookStatusRunning:
+		icon = "●"
+		iconStyle = s.HookIconRunning
+	case HookStatusSuccess:
+		icon = "✓"
+		iconStyle = s.HookIconSuccess
+	case HookStatusError:
+		icon = "×"
+		iconStyle = s.HookIconError
+	default:
+		icon = "●"
+		iconStyle = s.HookIconRunning
+	}
+
+	// Format hook type for display (e.g. "pre_iteration" → "pre_iteration")
+	hookLabel := s.HookType.Render(h.hookType)
+
+	// Truncate command for display
+	displayCmd := h.command
+	maxCmdWidth := width - len(h.hookType) - 12 // icon + spaces + separator + status
+	if maxCmdWidth < 10 {
+		maxCmdWidth = 10
+	}
+	if len(displayCmd) > maxCmdWidth {
+		displayCmd = displayCmd[:maxCmdWidth-3] + "..."
+	}
+
+	header := "  " + iconStyle.Render(icon) + " " + hookLabel +
+		"  " + s.HookSeparator.Render("─") + "  " +
+		s.HookCommand.Render(displayCmd)
+
+	// Add duration if finished
+	if h.status != HookStatusRunning && h.duration > 0 {
+		durationStr := formatDuration(h.duration)
+		header += "  " + s.HookDuration.Render(durationStr)
+	}
+
+	result.WriteString(header)
+
+	// --- BODY: output with truncation ---
+	if h.output != "" {
+		outputWidth := width - 2 // account for MarginLeft(2)
+		if outputWidth < 1 {
+			outputWidth = 1
+		}
+
+		result.WriteString("\n")
+
+		// Split output into lines
+		outputLines := strings.Split(h.output, "\n")
+
+		// Remove trailing empty line if present
+		if len(outputLines) > 0 && outputLines[len(outputLines)-1] == "" {
+			outputLines = outputLines[:len(outputLines)-1]
+		}
+
+		// Determine visible lines based on expansion state
+		var visibleLines []string
+		var hiddenCount int
+
+		if !h.collapsed || len(outputLines) <= h.maxLines {
+			visibleLines = outputLines
+		} else {
+			visibleLines = outputLines[:h.maxLines]
+			hiddenCount = len(outputLines) - h.maxLines
+		}
+
+		// Render visible lines with hook output style
+		for _, line := range visibleLines {
+			result.WriteString(s.HookOutput.Width(outputWidth).Render(line))
+			result.WriteString("\n")
+		}
+
+		// Add truncation hint if lines were hidden
+		if hiddenCount > 0 {
+			truncMsg := fmt.Sprintf("…(%d more lines, click to expand)", hiddenCount)
+			result.WriteString(s.HookTruncation.Width(outputWidth).Render(truncMsg))
+			result.WriteString("\n")
+		}
+	}
+
+	// Cache and return
+	h.cachedRender = result.String()
+	h.cachedWidth = width
+	return h.cachedRender
+}
+
+// Height returns the number of lines this hook message occupies.
+func (h *HookMessageItem) Height() int {
+	if h.cachedRender == "" {
+		return 0
+	}
+	lines := 1
+	for _, ch := range h.cachedRender {
+		if ch == '\n' {
+			lines++
+		}
+	}
+	return lines
+}
+
+// IsExpanded returns whether the hook message is expanded.
+func (h *HookMessageItem) IsExpanded() bool {
+	return !h.collapsed
+}
+
+// ToggleExpanded toggles the expanded/collapsed state.
+func (h *HookMessageItem) ToggleExpanded() {
+	h.collapsed = !h.collapsed
+	// Invalidate cache
+	h.cachedWidth = 0
+}
+
 // PauseStateMsg signals pause state change to TUI.
 type PauseStateMsg struct{ Paused bool }
 

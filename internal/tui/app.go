@@ -187,6 +187,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		statusCmd := func() tea.Msg { return AgentBusyMsg{Busy: false} }
 		return a, tea.Batch(a.agent.AppendFinish(msg), queueCmd, statusCmd)
 
+	case HookStartMsg:
+		return a, a.agent.AppendHook(msg.HookID, msg.HookType, msg.Command)
+
+	case HookCompleteMsg:
+		return a, a.agent.UpdateHook(msg.HookID, msg.Status, msg.Output, msg.Duration)
+
 	case IterationStartMsg:
 		a.iteration = msg.Number // Track current iteration for note creation
 		a.modifiedFileCount = 0  // Reset modified file count for new iteration
@@ -1036,6 +1042,21 @@ type CreateTaskMsg struct {
 	Content   string
 	Priority  int
 	Iteration int
+}
+
+// HookStartMsg is sent when a hook command starts executing.
+type HookStartMsg struct {
+	HookID   string // Unique ID for this hook execution
+	HookType string // "session_start", "pre_iteration", etc.
+	Command  string // The shell command being run
+}
+
+// HookCompleteMsg is sent when a hook command finishes executing.
+type HookCompleteMsg struct {
+	HookID   string        // Matches the HookStartMsg.HookID
+	Status   HookStatus    // Success or Error
+	Output   string        // Command output (stdout + stderr)
+	Duration time.Duration // How long the hook took
 }
 
 // FileChangeMsg is sent when a file is modified during an iteration.

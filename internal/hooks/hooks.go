@@ -166,6 +166,155 @@ func ExecuteAllPiped(ctx context.Context, hooks []*HookConfig, workDir string, v
 	return strings.Join(pipedOutputs, "\n"), nil
 }
 
+// HookResult contains the result of executing a single hook command.
+type HookResult struct {
+	Command  string        // The expanded command that was run
+	Output   string        // Command output (stdout + stderr)
+	Failed   bool          // Whether the command failed (non-zero exit or timeout)
+	Duration time.Duration // How long the command took
+}
+
+// OnHookStart is called before a hook command starts executing.
+// hookIndex is the 0-based index within the hook list.
+type OnHookStart func(hookIndex int, command string)
+
+// OnHookComplete is called after a hook command finishes executing.
+type OnHookComplete func(hookIndex int, result HookResult)
+
+// ExecuteAllPipedWithCallbacks is like ExecuteAllPiped but calls onStart/onComplete
+// around each individual hook execution, allowing the caller to update the TUI in real time.
+// Returns combined piped output (same as ExecuteAllPiped).
+// Only returns error for context cancellation.
+func ExecuteAllPipedWithCallbacks(
+	ctx context.Context,
+	hooks []*HookConfig,
+	workDir string,
+	vars Variables,
+	onStart OnHookStart,
+	onComplete OnHookComplete,
+) (string, error) {
+	if len(hooks) == 0 {
+		return "", nil
+	}
+
+	var pipedOutputs []string
+	for i, hook := range hooks {
+		if hook == nil || hook.Command == "" {
+			continue
+		}
+
+		// Expand variables for the callback (show what's actually being run)
+		expandedCmd := expandVariables(hook.Command, vars)
+
+		// Notify start
+		if onStart != nil {
+			onStart(i, expandedCmd)
+		}
+
+		start := time.Now()
+		output, err := Execute(ctx, hook, workDir, vars)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			// Context cancelled - notify and propagate
+			if onComplete != nil {
+				onComplete(i, HookResult{
+					Command:  expandedCmd,
+					Output:   output,
+					Failed:   true,
+					Duration: elapsed,
+				})
+			}
+			return "", err
+		}
+
+		// Determine if command failed (output starts with "[Hook" markers)
+		failed := strings.HasPrefix(output, "[Hook command failed:") ||
+			strings.HasPrefix(output, "[Hook timed out")
+
+		// Notify completion
+		if onComplete != nil {
+			onComplete(i, HookResult{
+				Command:  expandedCmd,
+				Output:   output,
+				Failed:   failed,
+				Duration: elapsed,
+			})
+		}
+
+		// Only include output if pipe_output is true
+		if hook.PipeOutput && output != "" {
+			pipedOutputs = append(pipedOutputs, output)
+		}
+	}
+
+	return strings.Join(pipedOutputs, "\n"), nil
+}
+
+// ExecuteAllWithCallbacks is like ExecuteAll but calls onStart/onComplete
+// around each individual hook execution.
+// Returns combined output from all hooks separated by newlines.
+// Only returns error for context cancellation.
+func ExecuteAllWithCallbacks(
+	ctx context.Context,
+	hooks []*HookConfig,
+	workDir string,
+	vars Variables,
+	onStart OnHookStart,
+	onComplete OnHookComplete,
+) (string, error) {
+	if len(hooks) == 0 {
+		return "", nil
+	}
+
+	var outputs []string
+	for i, hook := range hooks {
+		if hook == nil || hook.Command == "" {
+			continue
+		}
+
+		expandedCmd := expandVariables(hook.Command, vars)
+
+		if onStart != nil {
+			onStart(i, expandedCmd)
+		}
+
+		start := time.Now()
+		output, err := Execute(ctx, hook, workDir, vars)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			if onComplete != nil {
+				onComplete(i, HookResult{
+					Command:  expandedCmd,
+					Output:   output,
+					Failed:   true,
+					Duration: elapsed,
+				})
+			}
+			return "", err
+		}
+
+		failed := strings.HasPrefix(output, "[Hook command failed:") ||
+			strings.HasPrefix(output, "[Hook timed out")
+
+		if onComplete != nil {
+			onComplete(i, HookResult{
+				Command:  expandedCmd,
+				Output:   output,
+				Failed:   failed,
+				Duration: elapsed,
+			})
+		}
+
+		if output != "" {
+			outputs = append(outputs, output)
+		}
+	}
+
+	return strings.Join(outputs, "\n"), nil
+}
+
 // expandVariables replaces {{variable}} placeholders in the command string.
 func expandVariables(command string, vars Variables) string {
 	replacements := map[string]string{

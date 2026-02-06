@@ -154,6 +154,17 @@ type Styles struct {
 	// Subagent modal styles
 	SubagentMessageBox lipgloss.Style
 
+	// Hook block styles
+	HookIconRunning lipgloss.Style
+	HookIconSuccess lipgloss.Style
+	HookIconError   lipgloss.Style
+	HookType        lipgloss.Style
+	HookCommand     lipgloss.Style
+	HookSeparator   lipgloss.Style
+	HookDuration    lipgloss.Style
+	HookOutput      lipgloss.Style
+	HookTruncation  lipgloss.Style
+
 	// Input styles
 	TextInputStyles textinput.Styles
 

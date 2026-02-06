@@ -493,6 +493,44 @@ func (a *AgentOutput) AddIterationDivider(iteration int) tea.Cmd {
 	return nil
 }
 
+// AppendHook adds a new hook message to the output in running state.
+// Returns the generated ID for later updates via UpdateHook.
+func (a *AgentOutput) AppendHook(hookID, hookType, command string) tea.Cmd {
+	newMsg := &HookMessageItem{
+		id:        hookID,
+		hookType:  hookType,
+		command:   command,
+		status:    HookStatusRunning,
+		collapsed: true,
+		maxLines:  10,
+	}
+	a.appendBeforeQueued(newMsg)
+	a.toolIndex[hookID] = a.indexOfMessage(hookID)
+	a.refreshContent()
+	return nil
+}
+
+// UpdateHook updates an existing hook message with completion status and output.
+func (a *AgentOutput) UpdateHook(hookID string, status HookStatus, output string, duration time.Duration) tea.Cmd {
+	idx, exists := a.toolIndex[hookID]
+	if !exists {
+		return nil
+	}
+
+	hookMsg, ok := a.messages[idx].(*HookMessageItem)
+	if !ok {
+		return nil
+	}
+
+	hookMsg.status = status
+	hookMsg.output = output
+	hookMsg.duration = duration
+	// Invalidate cache
+	hookMsg.cachedWidth = 0
+	a.refreshContent()
+	return nil
+}
+
 // HandleClick processes a mouse click at screen coordinates (x, y).
 // Returns a command if the click should open a modal (e.g., subagent viewer).
 // Returns nil if the click toggled an expandable message or had no effect.

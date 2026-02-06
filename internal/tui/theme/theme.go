@@ -239,6 +239,17 @@ func (t *Theme) buildStyles() *Styles {
 		Padding(0, 1, 1, 1). // top, right, bottom, left
 		MarginLeft(2)
 
+	// Hook block styles
+	s.HookIconRunning = lipgloss.NewStyle().Foreground(lipgloss.Color(t.Tertiary))
+	s.HookIconSuccess = lipgloss.NewStyle().Foreground(lipgloss.Color(t.Success))
+	s.HookIconError = lipgloss.NewStyle().Foreground(lipgloss.Color(t.Error))
+	s.HookType = lipgloss.NewStyle().Foreground(lipgloss.Color(t.Tertiary)).Bold(true)
+	s.HookCommand = lipgloss.NewStyle().Foreground(lipgloss.Color(t.FgSubtle))
+	s.HookSeparator = lipgloss.NewStyle().Foreground(lipgloss.Color(t.BgSurface2))
+	s.HookDuration = lipgloss.NewStyle().Foreground(lipgloss.Color(t.FgMuted))
+	s.HookOutput = lipgloss.NewStyle().Background(lipgloss.Color(t.BgSurface0)).MarginLeft(2).PaddingLeft(1)
+	s.HookTruncation = lipgloss.NewStyle().Foreground(lipgloss.Color(t.FgMuted)).Background(lipgloss.Color(t.BgSurface0)).Italic(true).MarginLeft(2)
+
 	// Input styles (bubbles textinput)
 	s.TextInputStyles = t.buildTextInputStyles()
 
