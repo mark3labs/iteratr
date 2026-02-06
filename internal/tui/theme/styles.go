@@ -148,6 +148,7 @@ type Styles struct {
 	// Message styles
 	AssistantBorder  lipgloss.Style
 	UserBorder       lipgloss.Style
+	QueuedBadge      lipgloss.Style
 	IterationDivider lipgloss.Style
 
 	// Subagent modal styles

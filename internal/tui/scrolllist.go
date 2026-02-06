@@ -28,6 +28,7 @@ type ScrollList struct {
 	offsetLine  int          // Number of lines to skip from the first visible item
 	width       int          // Viewport width
 	height      int          // Viewport height
+	itemGap     int          // Number of blank lines between items (0 = no gap)
 	autoScroll  bool         // Whether to auto-scroll to bottom on content changes
 	focused     bool         // Whether this list has keyboard focus
 	selectedIdx int          // Index of selected item (-1 = no selection)
@@ -71,6 +72,11 @@ func (s *ScrollList) SetWidth(width int) {
 func (s *ScrollList) SetHeight(height int) {
 	s.height = height
 	s.clampOffset()
+}
+
+// SetItemGap sets the number of blank lines rendered between items.
+func (s *ScrollList) SetItemGap(gap int) {
+	s.itemGap = gap
 }
 
 // SetAutoScroll enables or disables auto-scrolling to bottom.
@@ -149,9 +155,14 @@ func (s *ScrollList) View() string {
 		result.WriteString(rendered)
 		linesRendered += strings.Count(rendered, "\n") + 1
 
-		// Add newline between items (if not the last visible item)
+		// Add newline + gap between items (if not the last visible item)
 		if linesRendered < s.height && i < len(s.items)-1 {
 			result.WriteString("\n")
+			// Add gap blank lines between items
+			for g := 0; g < s.itemGap && linesRendered+1 < s.height; g++ {
+				result.WriteString("\n")
+				linesRendered++
+			}
 		}
 	}
 
@@ -178,10 +189,18 @@ func (s *ScrollList) ScrollBy(lines int) {
 
 			remainingLines := itemHeight - s.offsetLine
 			if lines >= remainingLines {
-				// Move to next item
+				// Move past current item
 				s.offsetIdx++
 				s.offsetLine = 0
 				lines -= remainingLines
+				// Consume gap lines between items
+				if s.itemGap > 0 && s.offsetIdx < len(s.items) {
+					if lines >= s.itemGap {
+						lines -= s.itemGap
+					} else {
+						lines = 0
+					}
+				}
 			} else {
 				// Scroll within current item
 				s.offsetLine += lines
@@ -201,6 +220,15 @@ func (s *ScrollList) ScrollBy(lines int) {
 				lines -= s.offsetLine
 				s.offsetLine = 0
 				if s.offsetIdx > 0 {
+					// Consume gap lines between items
+					if s.itemGap > 0 {
+						if lines > s.itemGap {
+							lines -= s.itemGap
+						} else {
+							lines = 0
+							continue
+						}
+					}
 					s.offsetIdx--
 					prevItem := s.items[s.offsetIdx]
 					prevHeight := prevItem.Height()
@@ -256,6 +284,10 @@ func (s *ScrollList) GotoBottom() {
 		}
 
 		currentLine += itemHeight
+		// Add gap after item (except the last)
+		if s.itemGap > 0 && i < len(s.items)-1 {
+			currentLine += s.itemGap
+		}
 	}
 
 	// Fallback: show last item
@@ -285,6 +317,9 @@ func (s *ScrollList) ScrollToItem(idx int) {
 			h = s.items[i].Height()
 		}
 		itemStartLine += h
+		if s.itemGap > 0 {
+			itemStartLine += s.itemGap
+		}
 	}
 
 	itemHeight := s.items[idx].Height()
@@ -325,6 +360,9 @@ func (s *ScrollList) ScrollToItem(idx int) {
 				return
 			}
 			lineCount += h
+			if s.itemGap > 0 && i < len(s.items)-1 {
+				lineCount += s.itemGap
+			}
 		}
 	}
 	// Item is already visible, no scrolling needed
@@ -343,7 +381,8 @@ func (s *ScrollList) AtBottom() bool {
 	return currentOffset+s.height >= totalLines
 }
 
-// TotalLineCount returns the total number of lines across all items.
+// TotalLineCount returns the total number of lines across all items,
+// including gap lines between items.
 func (s *ScrollList) TotalLineCount() int {
 	total := 0
 	for _, item := range s.items {
@@ -354,6 +393,10 @@ func (s *ScrollList) TotalLineCount() int {
 			h = item.Height()
 		}
 		total += h
+	}
+	// Add gap lines between items (N-1 gaps for N items)
+	if len(s.items) > 1 && s.itemGap > 0 {
+		total += (len(s.items) - 1) * s.itemGap
 	}
 	return total
 }
@@ -437,6 +480,10 @@ func (s *ScrollList) currentOffsetInLines() int {
 			h = s.items[i].Height()
 		}
 		offset += h
+		// Add gap after each item (except the last one before offsetIdx)
+		if s.itemGap > 0 {
+			offset += s.itemGap
+		}
 	}
 	offset += s.offsetLine
 	return offset

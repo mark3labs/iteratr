@@ -18,6 +18,7 @@ type AgentOutput struct {
 	input             textinput.Model // User input field below viewport
 	messages          []MessageItem
 	toolIndex         map[string]int // toolCallId → message index
+	queuedMsgIDs      []string       // Ordered list of queued message IDs (FIFO for finalization)
 	width             int
 	height            int
 	ready             bool // Whether scrollList is initialized
@@ -221,34 +222,9 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		inputView := a.input.View()
 		inputY := separatorY + 1
 
-		// Calculate queue indicator if messages are queued
-		var queueIndicator string
-		var queueIndicatorWidth int
-		if a.queueDepth > 0 {
-			queueIndicator = theme.Current().S().Dim.Render(fmt.Sprintf("(%d queued)", a.queueDepth))
-			// Strip ANSI codes to measure actual width (lipgloss adds invisible codes)
-			queueIndicatorWidth = len(fmt.Sprintf("(%d queued)", a.queueDepth))
-		}
-
-		// Adjust input area to make room for queue indicator on the right
 		inputWidth := inputArea.Dx() - leftPad
-		if queueIndicatorWidth > 0 {
-			// Leave space for indicator plus 2 spaces padding
-			inputWidth = inputWidth - queueIndicatorWidth - 2
-			if inputWidth < 10 {
-				inputWidth = 10 // Minimum width for input
-			}
-		}
-
 		inputContentArea := uv.Rect(inputArea.Min.X+leftPad, inputY, inputWidth, 1)
 		uv.NewStyledString(inputView).Draw(scr, inputContentArea)
-
-		// Draw queue indicator on the right side if present
-		if queueIndicatorWidth > 0 {
-			indicatorX := inputArea.Min.X + inputArea.Dx() - queueIndicatorWidth - 1
-			indicatorArea := uv.Rect(indicatorX, inputY, queueIndicatorWidth+1, 1)
-			uv.NewStyledString(queueIndicator).Draw(scr, indicatorArea)
-		}
 
 		// Draw help text below input
 		if inputArea.Dy() >= 4 {
@@ -266,7 +242,13 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 		// Return cursor position if input is focused
 		if a.input.Focused() {
-			return a.input.Cursor()
+			cur := a.input.Cursor()
+			if cur != nil {
+				// Offset cursor by the input's screen position
+				cur.X += inputContentArea.Min.X
+				cur.Y += inputContentArea.Min.Y
+			}
+			return cur
 		}
 	}
 
@@ -289,6 +271,7 @@ func (a *AgentOutput) UpdateSize(width, height int) tea.Cmd {
 
 	if a.scrollList == nil {
 		a.scrollList = NewScrollList(contentWidth, scrollListHeight)
+		a.scrollList.SetItemGap(1)
 		a.ready = true
 	} else {
 		a.scrollList.SetWidth(contentWidth)
@@ -324,9 +307,9 @@ func (a *AgentOutput) AppendText(content string) tea.Cmd {
 		a.spinner = nil
 	}
 
-	// If last message is a TextMessageItem, append to it
-	if len(a.messages) > 0 {
-		if textMsg, ok := a.messages[len(a.messages)-1].(*TextMessageItem); ok {
+	// If last non-queued message is a TextMessageItem, append to it
+	if lastMsg, _ := a.lastNonQueuedMessage(); lastMsg != nil {
+		if textMsg, ok := lastMsg.(*TextMessageItem); ok {
 			textMsg.content += content
 			// Invalidate cache - ScrollList will re-render on next View() call
 			textMsg.cachedWidth = 0
@@ -338,12 +321,12 @@ func (a *AgentOutput) AppendText(content string) tea.Cmd {
 		}
 	}
 
-	// Create new TextMessageItem
+	// Create new TextMessageItem (inserted before any trailing queued messages)
 	newMsg := &TextMessageItem{
 		id:      fmt.Sprintf("text-%d", len(a.messages)),
 		content: content,
 	}
-	a.messages = append(a.messages, newMsg)
+	a.appendBeforeQueued(newMsg)
 	a.refreshContent()
 	return spinnerCmd
 }
@@ -374,13 +357,13 @@ func (a *AgentOutput) AppendToolCall(msg AgentToolCallMsg) tea.Cmd {
 			if status == ToolStatusRunning {
 				spinner := NewDefaultSpinner()
 				newMsg.spinner = &spinner
-				a.messages = append(a.messages, newMsg)
-				a.toolIndex[msg.ToolCallID] = len(a.messages) - 1
+				a.appendBeforeQueued(newMsg)
+				a.toolIndex[msg.ToolCallID] = a.indexOfMessage(msg.ToolCallID)
 				a.refreshContent()
 				return newMsg.spinner.Tick()
 			}
-			a.messages = append(a.messages, newMsg)
-			a.toolIndex[msg.ToolCallID] = len(a.messages) - 1
+			a.appendBeforeQueued(newMsg)
+			a.toolIndex[msg.ToolCallID] = a.indexOfMessage(msg.ToolCallID)
 			a.refreshContent()
 		} else {
 			// Create regular ToolMessageItem
@@ -394,8 +377,8 @@ func (a *AgentOutput) AppendToolCall(msg AgentToolCallMsg) tea.Cmd {
 				fileDiff: msg.FileDiff,
 				maxLines: 10,
 			}
-			a.messages = append(a.messages, newMsg)
-			a.toolIndex[msg.ToolCallID] = len(a.messages) - 1
+			a.appendBeforeQueued(newMsg)
+			a.toolIndex[msg.ToolCallID] = a.indexOfMessage(msg.ToolCallID)
 			a.refreshContent()
 		}
 	} else {
@@ -505,7 +488,7 @@ func (a *AgentOutput) AddIterationDivider(iteration int) tea.Cmd {
 		id:        fmt.Sprintf("divider-%d", iteration),
 		iteration: iteration,
 	}
-	a.messages = append(a.messages, newMsg)
+	a.appendBeforeQueued(newMsg)
 	a.refreshContent()
 	return nil
 }
@@ -562,6 +545,60 @@ func (a *AgentOutput) HandleClick(x, y int) tea.Cmd {
 	}
 
 	return nil
+}
+
+// indexOfMessage returns the index of a message with the given ID, or -1 if not found.
+func (a *AgentOutput) indexOfMessage(id string) int {
+	for i, msg := range a.messages {
+		if msg.ID() == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// lastNonQueuedMessage returns the last message that is not a QueuedUserMessageItem,
+// along with its index. Returns nil, -1 if no such message exists.
+func (a *AgentOutput) lastNonQueuedMessage() (MessageItem, int) {
+	for i := len(a.messages) - 1; i >= 0; i-- {
+		if _, ok := a.messages[i].(*QueuedUserMessageItem); !ok {
+			return a.messages[i], i
+		}
+	}
+	return nil, -1
+}
+
+// appendBeforeQueued inserts a message before any trailing QueuedUserMessageItems.
+// This ensures queued messages always stay at the bottom of the message list.
+// It also updates toolIndex entries for any shifted messages.
+func (a *AgentOutput) appendBeforeQueued(msg MessageItem) {
+	// Find the insertion point: right before the first trailing queued message
+	insertAt := len(a.messages)
+	for i := len(a.messages) - 1; i >= 0; i-- {
+		if _, ok := a.messages[i].(*QueuedUserMessageItem); ok {
+			insertAt = i
+		} else {
+			break
+		}
+	}
+
+	if insertAt == len(a.messages) {
+		// No trailing queued messages, just append normally
+		a.messages = append(a.messages, msg)
+		return
+	}
+
+	// Insert at the position before queued messages
+	a.messages = append(a.messages, nil) // grow by one
+	copy(a.messages[insertAt+1:], a.messages[insertAt:])
+	a.messages[insertAt] = msg
+
+	// Update toolIndex for any entries that were shifted
+	for id, idx := range a.toolIndex {
+		if idx >= insertAt {
+			a.toolIndex[id] = idx + 1
+		}
+	}
 }
 
 // refreshContent updates the scroll list with current messages.
@@ -667,9 +704,9 @@ func (a *AgentOutput) AppendThinking(content string) tea.Cmd {
 		a.spinner = nil
 	}
 
-	// If last message is a ThinkingMessageItem, append to it
-	if len(a.messages) > 0 {
-		if thinkingMsg, ok := a.messages[len(a.messages)-1].(*ThinkingMessageItem); ok {
+	// If last non-queued message is a ThinkingMessageItem, append to it
+	if lastMsg, _ := a.lastNonQueuedMessage(); lastMsg != nil {
+		if thinkingMsg, ok := lastMsg.(*ThinkingMessageItem); ok {
 			thinkingMsg.content += content
 			// Invalidate cache - ScrollList will re-render on next View() call
 			thinkingMsg.cachedWidth = 0
@@ -681,20 +718,20 @@ func (a *AgentOutput) AppendThinking(content string) tea.Cmd {
 		}
 	}
 
-	// Create new ThinkingMessageItem
+	// Create new ThinkingMessageItem (inserted before any trailing queued messages)
 	newMsg := &ThinkingMessageItem{
 		id:        fmt.Sprintf("thinking-%d", len(a.messages)),
 		content:   content,
 		collapsed: true, // default true
 	}
-	a.messages = append(a.messages, newMsg)
+	a.appendBeforeQueued(newMsg)
 	a.refreshContent()
 	return spinnerCmd
 }
 
 // AppendUserMessage adds a user message to the conversation viewport.
 // User messages appear when the agent receives them (not when user sends),
-// preserving accurate conversation order.
+// preserving accurate conversation order. Inserted before any queued messages.
 func (a *AgentOutput) AppendUserMessage(text string) tea.Cmd {
 	// Generate unique ID with nanosecond timestamp
 	id := fmt.Sprintf("user-%d", time.Now().UnixNano())
@@ -705,13 +742,59 @@ func (a *AgentOutput) AppendUserMessage(text string) tea.Cmd {
 		content: text,
 	}
 
-	// Append to messages slice
-	a.messages = append(a.messages, newMsg)
+	// Insert before any trailing queued messages
+	a.appendBeforeQueued(newMsg)
 
 	// Refresh content and scroll to bottom
 	a.refreshContent()
 
 	return nil
+}
+
+// AppendQueuedUserMessage adds a queued user message to the conversation viewport.
+// The message is shown immediately with a QUEUED badge, sticky to the bottom.
+// Returns the generated message ID for later finalization.
+func (a *AgentOutput) AppendQueuedUserMessage(text string) (string, tea.Cmd) {
+	id := fmt.Sprintf("queued-%d", time.Now().UnixNano())
+
+	newMsg := &QueuedUserMessageItem{
+		id:      id,
+		content: text,
+	}
+
+	a.messages = append(a.messages, newMsg)
+	a.queuedMsgIDs = append(a.queuedMsgIDs, id)
+	a.refreshContent()
+
+	return id, nil
+}
+
+// FinalizeQueuedMessage converts the oldest queued message into a regular UserMessageItem.
+// The message text is matched by the orchestrator's processing order (FIFO).
+func (a *AgentOutput) FinalizeQueuedMessage(text string) tea.Cmd {
+	if len(a.queuedMsgIDs) == 0 {
+		// No queued messages to finalize; fall back to append
+		return a.AppendUserMessage(text)
+	}
+
+	// Pop the oldest queued message ID
+	targetID := a.queuedMsgIDs[0]
+	a.queuedMsgIDs = a.queuedMsgIDs[1:]
+
+	// Find and replace in messages slice
+	for i, msg := range a.messages {
+		if msg.ID() == targetID {
+			a.messages[i] = &UserMessageItem{
+				id:      targetID,
+				content: text,
+			}
+			a.refreshContent()
+			return nil
+		}
+	}
+
+	// If not found (shouldn't happen), fall back to append
+	return a.AppendUserMessage(text)
 }
 
 // AppendFinish marks the iteration as finished and displays completion metadata.
@@ -724,9 +807,9 @@ func (a *AgentOutput) AppendFinish(msg AgentFinishMsg) tea.Cmd {
 		a.spinner = nil
 	}
 
-	// 1. Mark last ThinkingMessageItem as finished with duration
-	if len(a.messages) > 0 {
-		if thinkingMsg, ok := a.messages[len(a.messages)-1].(*ThinkingMessageItem); ok {
+	// 1. Mark last non-queued ThinkingMessageItem as finished with duration
+	if lastMsg, _ := a.lastNonQueuedMessage(); lastMsg != nil {
+		if thinkingMsg, ok := lastMsg.(*ThinkingMessageItem); ok {
 			thinkingMsg.finished = true
 			thinkingMsg.duration = msg.Duration
 			// Invalidate cache to trigger re-render with footer
@@ -747,16 +830,16 @@ func (a *AgentOutput) AppendFinish(msg AgentFinishMsg) tea.Cmd {
 		}
 	}
 
-	// 2. Append InfoMessageItem with model/provider/duration
+	// 2. Append InfoMessageItem with model/provider/duration (before queued messages)
 	infoMsg := &InfoMessageItem{
 		id:       fmt.Sprintf("info-%d", len(a.messages)),
 		model:    msg.Model,
 		provider: msg.Provider,
 		duration: msg.Duration,
 	}
-	a.messages = append(a.messages, infoMsg)
+	a.appendBeforeQueued(infoMsg)
 
-	// 3. If error or canceled, append styled finish reason
+	// 3. If error or canceled, append styled finish reason (before queued messages)
 	if msg.Error != "" {
 		// Error finish
 		errorText := theme.Current().S().FinishError.Render(fmt.Sprintf("Error: %s", msg.Error))
@@ -764,7 +847,7 @@ func (a *AgentOutput) AppendFinish(msg AgentFinishMsg) tea.Cmd {
 			id:      fmt.Sprintf("finish-error-%d", len(a.messages)),
 			content: errorText,
 		}
-		a.messages = append(a.messages, errorItem)
+		a.appendBeforeQueued(errorItem)
 	} else if msg.Reason == "cancelled" {
 		// Canceled finish
 		cancelText := theme.Current().S().FinishCanceled.Render("Iteration canceled")
@@ -772,7 +855,7 @@ func (a *AgentOutput) AppendFinish(msg AgentFinishMsg) tea.Cmd {
 			id:      fmt.Sprintf("finish-cancel-%d", len(a.messages)),
 			content: cancelText,
 		}
-		a.messages = append(a.messages, cancelItem)
+		a.appendBeforeQueued(cancelItem)
 	}
 
 	a.refreshContent()
@@ -895,8 +978,8 @@ func (a *AgentOutput) SetBusy(busy bool) {
 	}
 }
 
-// SetQueueDepth updates the queue depth indicator.
-// Shows how many user messages are waiting in the orchestrator queue.
+// SetQueueDepth updates the queue depth counter.
+// Queued messages are now shown inline in the viewport, so this only tracks the count.
 func (a *AgentOutput) SetQueueDepth(depth int) {
 	a.queueDepth = depth
 }

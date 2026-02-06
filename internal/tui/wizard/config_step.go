@@ -343,6 +343,36 @@ func (c *ConfigStep) Iterations() int {
 	return iterations
 }
 
+// Cursor returns the cursor from the currently focused input, with Y offset
+// adjusted for lines above the input within this step's View output.
+func (c *ConfigStep) Cursor() *tea.Cursor {
+	var cur *tea.Cursor
+	switch c.focusIndex {
+	case 0:
+		cur = c.sessionInput.Cursor()
+		if cur != nil {
+			// Session input is below the "Session Name" label (1 line)
+			cur.Y += 1
+		}
+	case 1:
+		cur = c.iterationsInput.Cursor()
+		if cur != nil {
+			// Lines above iterations input:
+			// "Session Name" label: 1
+			// session input: 1
+			// session error (if present): 0 or 1
+			// blank line: 1
+			// "Max Iterations" label: 1
+			yOffset := 4 // label + input + blank + label
+			if c.sessionError != "" {
+				yOffset++ // error line
+			}
+			cur.Y += yOffset
+		}
+	}
+	return cur
+}
+
 // PreferredHeight returns the preferred height for this step's content.
 // This allows the modal to size dynamically based on content.
 func (c *ConfigStep) PreferredHeight() int {
