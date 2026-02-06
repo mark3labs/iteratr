@@ -294,11 +294,29 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentPhaseReadyMsg:
-		// Agent phase is ready, initialize its channel listeners
-		if m.agentStep != nil {
-			return m, m.agentStep.Init()
+		// Assign resources from the background goroutine onto the main model.
+		m.mcpServer = msg.MCPServer
+		m.agentStep = msg.AgentStep
+		m.agentRunner = msg.AgentRunner
+
+		// Size the agent phase to the modal content area (not raw terminal dims).
+		contentWidth, contentHeight := m.getModalContentSize()
+		m.agentStep.SetSize(contentWidth, contentHeight)
+
+		// Launch RunIteration from the main loop so m.agentRunner is assigned
+		// before any goroutine references it (prevents nil-deref on cancel).
+		runner := m.agentRunner
+		ctx := m.ctx
+		prompt := msg.Prompt
+		initCmd := m.agentStep.Init()
+		runCmd := func() tea.Msg {
+			err := runner.RunIteration(ctx, prompt, "")
+			if err != nil {
+				logger.Error("Agent iteration failed: %v", err)
+			}
+			return nil
 		}
-		return m, nil
+		return m, tea.Batch(initCmd, runCmd)
 
 	case RestartWizardMsg:
 		// User confirmed restart - go back to title step
@@ -498,10 +516,8 @@ func (m *WizardModel) initCurrentStep() tea.Cmd {
 		m.modelStep = wizard.NewModelSelectorStep()
 		cmd = m.modelStep.Init()
 	case StepAgent:
-		// Agent phase initialized by startAgentPhase(), but create placeholder if needed
-		if m.agentStep == nil && m.mcpServer != nil {
-			m.agentStep = NewAgentPhase(m.mcpServer)
-		}
+		// Agent phase is fully initialized by the AgentPhaseReadyMsg handler.
+		// Nothing to do here; startAgentPhase cmd is dispatched separately.
 	case StepReview:
 		m.reviewStep = NewReviewStep(m.result.SpecContent, m.cfg)
 	case StepCompletion:
@@ -1009,24 +1025,30 @@ func (m *WizardModel) blurStepContent() {
 	}
 }
 
-// startAgentPhase initializes the MCP server, ACP subprocess, and sends the initial prompt.
+// startAgentPhase initializes the MCP server, ACP subprocess, and returns an
+// AgentPhaseReadyMsg carrying the resources so Update can assign them on the
+// main loop (avoiding races from mutating WizardModel fields in a goroutine).
 func (m *WizardModel) startAgentPhase() tea.Msg {
+	// Capture values needed by the goroutine so we don't reference m later.
+	title := m.result.Title
+	description := m.result.Description
+	model := m.result.Model
+	specDir := m.cfg.SpecDir
+	ctx := m.ctx
+	program := m.program
+
 	// Start MCP server
 	logger.Debug("Starting MCP server for spec wizard")
-	m.mcpServer = specmcp.New(m.result.Title, m.cfg.SpecDir)
-	port, err := m.mcpServer.Start(m.ctx)
+	mcpServer := specmcp.New(title, specDir)
+	port, err := mcpServer.Start(ctx)
 	if err != nil {
 		logger.Error("Failed to start MCP server: %v", err)
-		// Add more context to help user troubleshoot
 		return AgentErrorMsg{Err: fmt.Errorf("failed to start MCP server: %w", err)}
 	}
 	logger.Debug("MCP server started on port %d", port)
 
 	// Initialize agent phase component with MCP server
-	m.agentStep = NewAgentPhase(m.mcpServer)
-	if m.width > 0 && m.height > 0 {
-		m.agentStep.SetSize(m.width, m.height)
-	}
+	agentStep := NewAgentPhase(mcpServer)
 
 	// Build MCP server URL
 	mcpServerURL := fmt.Sprintf("http://localhost:%d/mcp", port)
@@ -1038,33 +1060,28 @@ func (m *WizardModel) startAgentPhase() tea.Msg {
 		return AgentErrorMsg{Err: fmt.Errorf("failed to get working directory: %w", err)}
 	}
 
-	// Create agent runner
+	// Create agent runner (all callbacks use only local vars or program sender)
 	logger.Debug("Creating agent runner")
-	m.agentRunner = agent.NewRunner(agent.RunnerConfig{
-		Model:        m.result.Model,
+	agentRunner := agent.NewRunner(agent.RunnerConfig{
+		Model:        model,
 		WorkDir:      workDir,
 		SessionName:  "spec-wizard",
 		NATSPort:     0, // Not using NATS for spec wizard
 		MCPServerURL: mcpServerURL,
 		OnText: func(text string) {
-			// Agent text output - not shown in spec wizard
 			logger.Debug("Agent text: %s", text)
 		},
 		OnToolCall: func(event agent.ToolCallEvent) {
-			// Tool call events - not shown in spec wizard
 			logger.Debug("Agent tool call: %s [%s]", event.Title, event.Status)
 		},
 		OnThinking: func(content string) {
-			// Thinking output - not shown in spec wizard
 			logger.Debug("Agent thinking: %s", content)
 		},
 		OnFinish: func(event agent.FinishEvent) {
 			logger.Debug("Agent finished: %s (error: %s)", event.StopReason, event.Error)
-			// Check if agent terminated with an error
 			if event.StopReason == "error" || event.Error != "" {
-				// Send error message to UI
-				if m.program != nil {
-					m.program.Send(AgentErrorMsg{Err: fmt.Errorf("agent error: %s", event.Error)})
+				if program != nil {
+					program.Send(AgentErrorMsg{Err: fmt.Errorf("agent error: %s", event.Error)})
 				}
 			}
 		},
@@ -1075,9 +1092,8 @@ func (m *WizardModel) startAgentPhase() tea.Msg {
 
 	// Start ACP subprocess
 	logger.Debug("Starting ACP subprocess")
-	if err := m.agentRunner.Start(m.ctx); err != nil {
+	if err := agentRunner.Start(ctx); err != nil {
 		logger.Error("Failed to start ACP: %v", err)
-		// Check if it's an "executable not found" error for better messaging
 		if strings.Contains(err.Error(), "executable file not found") ||
 			strings.Contains(err.Error(), "no such file or directory") {
 			return AgentErrorMsg{Err: fmt.Errorf("failed to start opencode: executable file not found in $PATH")}
@@ -1086,20 +1102,17 @@ func (m *WizardModel) startAgentPhase() tea.Msg {
 	}
 
 	// Build spec prompt
-	prompt := buildSpecPrompt(m.result.Title, m.result.Description)
+	prompt := buildSpecPrompt(title, description)
 	logger.Debug("Sending spec prompt (%d bytes)", len(prompt))
 
-	// Send prompt in goroutine to avoid blocking
-	go func() {
-		err := m.agentRunner.RunIteration(m.ctx, prompt, "")
-		if err != nil {
-			logger.Error("Agent iteration failed: %v", err)
-			// Error will be handled via OnFinish callback
-		}
-	}()
-
-	// Return ready message to trigger AgentPhase.Init()
-	return AgentPhaseReadyMsg{}
+	// Return resources to Update; RunIteration is launched from Update after
+	// fields are assigned, preventing nil deref if CancelWizardMsg clears them.
+	return AgentPhaseReadyMsg{
+		MCPServer:   mcpServer,
+		AgentStep:   agentStep,
+		AgentRunner: agentRunner,
+		Prompt:      prompt,
+	}
 }
 
 // execBuild returns a tea.Cmd that executes iteratr build --spec <path> after the TUI quits.

@@ -211,6 +211,9 @@ type QuestionView struct {
 	// Button bar
 	buttonBar *wizard.ButtonBar
 
+	// Error text displayed below buttons (set by ShowErrorMsg)
+	errText string
+
 	width  int
 	height int
 }
@@ -474,6 +477,8 @@ func (q *QuestionView) Update(msg tea.Msg) tea.Cmd {
 		return nil
 
 	case tea.KeyPressMsg:
+		// Clear any visible error text on user interaction
+		q.errText = ""
 		switch msg.String() {
 		case "esc":
 			if q.currentIndex > 0 {
@@ -644,6 +649,15 @@ func (q *QuestionView) View() string {
 	// Navigation buttons
 	b.WriteString("\n")
 	b.WriteString(q.buttonBar.Render())
+
+	// Error text (if any)
+	if q.errText != "" {
+		errStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(currentTheme.Error)).
+			MarginTop(1)
+		b.WriteString("\n")
+		b.WriteString(errStyle.Render(q.errText))
+	}
 
 	return b.String()
 }

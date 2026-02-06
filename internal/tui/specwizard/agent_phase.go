@@ -288,8 +288,11 @@ func (a *AgentPhase) Update(msg tea.Msg) (*AgentPhase, tea.Cmd) {
 		}
 
 	case ShowErrorMsg:
-		// TODO: Display error message (for now just log)
 		logger.Warn("Validation error: %s", msg.err)
+		// Surface the error in the active question view so the user sees it
+		if a.questionView != nil {
+			a.questionView.errText = msg.err
+		}
 		return a, nil
 
 	case ShowCancelConfirmMsg:
