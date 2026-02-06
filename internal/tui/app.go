@@ -548,27 +548,40 @@ func (a *App) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 	// Sanitize pasted content
 	content := SanitizePaste(msg.Content)
 
-	// 1. Note input modal gets priority when visible
+	// 1. Dialog has no text input — consume paste
+	if a.dialog.IsVisible() {
+		return a, nil
+	}
+
+	// 2. Read-only modals have no text input — consume paste
+	if a.taskModal != nil && a.taskModal.IsVisible() {
+		return a, nil
+	}
+	if a.noteModal != nil && a.noteModal.IsVisible() {
+		return a, nil
+	}
+
+	// 3. Note input modal gets priority when visible
 	if a.noteInputModal != nil && a.noteInputModal.IsVisible() {
 		return a, a.noteInputModal.Update(tea.PasteMsg{Content: content})
 	}
 
-	// 2. Task input modal gets priority when visible
+	// 4. Task input modal gets priority when visible
 	if a.taskInputModal != nil && a.taskInputModal.IsVisible() {
 		return a, a.taskInputModal.Update(tea.PasteMsg{Content: content})
 	}
 
-	// 3. Subagent modal gets priority when visible
+	// 5. Subagent modal gets priority when visible
 	if a.subagentModal != nil {
 		return a, a.subagentModal.Update(tea.PasteMsg{Content: content})
 	}
 
-	// 4. Logs has no text input, so paste is no-op when logs are visible
+	// 6. Logs has no text input, so paste is no-op when logs are visible
 	if a.logsVisible {
 		return a, nil
 	}
 
-	// 5. Delegate to dashboard for focused component handling
+	// 7. Delegate to dashboard for focused component handling
 	return a, a.dashboard.Update(tea.PasteMsg{Content: content})
 }
 
