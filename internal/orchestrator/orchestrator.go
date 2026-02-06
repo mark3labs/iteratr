@@ -684,9 +684,17 @@ func (o *Orchestrator) Run() error {
 				}
 				logger.Error("Post-iteration hook execution failed: %v", err)
 			} else if output != "" {
-				// Send hook output to model immediately (before auto-commit)
+				// Send hook output to model with clear framing so the agent knows
+				// this is post-iteration verification, not a new task prompt.
 				logger.Debug("Post-iteration hook output: %d bytes (sending to model)", len(output))
-				if err := o.runner.SendMessages(o.ctx, []string{output}); err != nil {
+				framedOutput := fmt.Sprintf(
+					"[POST-ITERATION HOOKS - iteration #%d]\n"+
+						"The following output is from post-iteration hooks (linting, vetting, etc.).\n"+
+						"If there are errors or issues, fix them now. Do NOT pick a new task.\n"+
+						"When done fixing (or if no issues), STOP immediately.\n\n%s",
+					currentIteration, output,
+				)
+				if err := o.runner.SendMessages(o.ctx, []string{framedOutput}); err != nil {
 					logger.Error("Failed to send post-iteration hook output to model: %v", err)
 					// Continue anyway - don't fail the iteration
 				}
