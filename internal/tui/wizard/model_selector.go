@@ -2,7 +2,6 @@ package wizard
 
 import (
 	"encoding/json"
-	"fmt"
 	"os/exec"
 	"sort"
 	"strings"
@@ -294,9 +293,10 @@ func parseVerboseModelsOutput(output []byte) []*ModelInfo {
 				jsonLines = append(jsonLines, jline)
 
 				for _, ch := range trimmed {
-					if ch == '{' {
+					switch ch {
+					case '{':
 						braceCount++
-					} else if ch == '}' {
+					case '}':
 						braceCount--
 					}
 				}
@@ -825,37 +825,4 @@ func (m *ModelSelectorStep) PreferredHeight() int {
 	}
 
 	return listItems + overhead
-}
-
-// formatProviderID converts a full model ID "provider/model" to a display-friendly name.
-// Used as a fallback when verbose metadata is unavailable.
-func formatProviderID(fullID string) (providerID, modelName string) {
-	parts := strings.SplitN(fullID, "/", 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1]
-	}
-	return "", fullID
-}
-
-// sortModelsByName sorts models alphabetically by display name within each provider group.
-func sortModelsByName(models []*ModelInfo) {
-	sort.SliceStable(models, func(i, j int) bool {
-		// Group by provider first
-		if models[i].providerID != models[j].providerID {
-			// opencode first
-			if models[i].providerID == "opencode" {
-				return true
-			}
-			if models[j].providerID == "opencode" {
-				return false
-			}
-			return models[i].providerID < models[j].providerID
-		}
-		return strings.ToLower(models[i].displayName) < strings.ToLower(models[j].displayName)
-	})
-}
-
-// uniqueID generates a unique scroll item ID for duplicate model IDs across providers.
-func uniqueID(providerID, modelID string) string {
-	return fmt.Sprintf("%s/%s", providerID, modelID)
 }
