@@ -192,11 +192,14 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 		// Check if resuming existing session or creating new one
 		if result.ResumeMode {
-			// Resume mode: only session name is set from wizard
-			// Spec/model/template will fall back to defaults or existing CLI flags
+			// Resume mode: session name and model are set from wizard
+			// Spec/template will fall back to defaults or existing CLI flags
 			buildFlags.name = result.SessionName
+			if result.Model != "" {
+				buildFlags.model = result.Model
+			}
 			resumeMode = true
-			logger.Info("Resuming existing session: %s", result.SessionName)
+			logger.Info("Resuming existing session: %s (model: %s)", result.SessionName, buildFlags.model)
 		} else {
 			// New session mode: apply all wizard results to buildFlags
 			buildFlags.spec = result.SpecPath

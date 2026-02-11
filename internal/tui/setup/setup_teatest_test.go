@@ -36,9 +36,9 @@ func TestSetupFlow_CompleteWizard(t *testing.T) {
 
 	// Simulate models loaded for step 0 (model selection)
 	testModels := []*ModelInfo{
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
-		{id: "anthropic/claude-opus-4", name: "anthropic/claude-opus-4"},
-		{id: "openai/gpt-4", name: "openai/gpt-4"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
+		{id: "anthropic/claude-opus-4", displayName: "anthropic/claude-opus-4", providerID: "anthropic"},
+		{id: "openai/gpt-4", displayName: "openai/gpt-4", providerID: "openai"},
 	}
 	updatedModel, _ = m.Update(ModelsLoadedMsg{models: testModels})
 	m = updatedModel.(*SetupModel)
@@ -86,7 +86,7 @@ func TestSetupFlow_BackNavigation(t *testing.T) {
 
 	// Load models
 	testModels := []*ModelInfo{
-		{id: "test/model-1", name: "test/model-1"},
+		{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
 	}
 	updatedModel, _ = m.Update(ModelsLoadedMsg{models: testModels})
 	m = updatedModel.(*SetupModel)
@@ -171,7 +171,7 @@ func TestSetupFlow_WindowResize(t *testing.T) {
 
 	// Load models
 	testModels := []*ModelInfo{
-		{id: "test/model-1", name: "test/model-1"},
+		{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
 	}
 	updatedModel, _ := m.Update(ModelsLoadedMsg{models: testModels})
 	m = updatedModel.(*SetupModel)
@@ -225,19 +225,19 @@ func TestSetupFlow_ContentChangedMsg(t *testing.T) {
 
 	// Send models loaded (changes content, increasing height)
 	testModels := []*ModelInfo{
-		{id: "model-1", name: "model-1"},
-		{id: "model-2", name: "model-2"},
-		{id: "model-3", name: "model-3"},
-		{id: "model-4", name: "model-4"},
-		{id: "model-5", name: "model-5"},
+		{id: "model-1", displayName: "model-1", providerID: "test"},
+		{id: "model-2", displayName: "model-2", providerID: "test"},
+		{id: "model-3", displayName: "model-3", providerID: "test"},
+		{id: "model-4", displayName: "model-4", providerID: "test"},
+		{id: "model-5", displayName: "model-5", providerID: "test"},
 	}
 	updatedModel, _ = m.Update(ModelsLoadedMsg{models: testModels})
 	m = updatedModel.(*SetupModel)
 
 	// Preferred height should be different now (more models)
 	newHeight := m.getStepPreferredHeight()
-	// Expected: search (1) + blank (1) + 5 models + blank (1) + hint (1) = 9
-	require.Equal(t, 9, newHeight, "Expected height to change after models loaded")
+	// Expected: search (1) + blank (1) + 1 header + 5 models + blank (1) + hint (1) = 10
+	require.Equal(t, 10, newHeight, "Expected height to change after models loaded")
 	require.NotEqual(t, initialHeight, newHeight, "Expected height to differ from loading state")
 }
 

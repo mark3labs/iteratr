@@ -39,9 +39,9 @@ func TestModelSelector_PreFillsFromConfig(t *testing.T) {
 
 	// Simulate models loaded (including configured model)
 	testModels := []*ModelInfo{
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
-		{id: testModel, name: testModel}, // Our configured model
-		{id: "openai/gpt-4", name: "openai/gpt-4"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
+		{id: testModel, displayName: testModel, providerID: "anthropic"}, // Our configured model (same provider)
+		{id: "openai/gpt-4", displayName: "openai/gpt-4", providerID: "openai"},
 	}
 
 	msg := ModelsLoadedMsg{models: testModels}
@@ -50,8 +50,10 @@ func TestModelSelector_PreFillsFromConfig(t *testing.T) {
 	// Verify configured model is pre-selected
 	require.Equal(t, testModel, selector.SelectedModel(), "Expected model to be pre-selected from config")
 
-	// Verify it's at the correct index (1)
-	require.Equal(t, 1, selector.selectedIdx, "Expected selectedIdx to be 1")
+	// Verify it's at the correct index in filtered list (includes headers)
+	// Providers sorted: anthropic, openai
+	// filtered: [header:Anthropic(0), sonnet(1), opus(2), header:OpenAI(3), gpt-4(4)]
+	require.Equal(t, 2, selector.selectedIdx, "Expected selectedIdx to be 2 (after header)")
 }
 
 // TestModelSelector_UserOverridesConfigModel verifies that user can override
@@ -81,11 +83,11 @@ func TestModelSelector_UserOverridesConfigModel(t *testing.T) {
 	// Create selector
 	selector := NewModelSelectorStep()
 
-	// Load models
+	// Load models (same providerID for simple navigation)
 	testModels := []*ModelInfo{
-		{id: configModel, name: configModel},
-		{id: "openai/gpt-4", name: "openai/gpt-4"},
-		{id: "anthropic/claude-opus-4", name: "anthropic/claude-opus-4"},
+		{id: configModel, displayName: configModel, providerID: "anthropic"},
+		{id: "openai/gpt-4", displayName: "openai/gpt-4", providerID: "anthropic"},
+		{id: "anthropic/claude-opus-4", displayName: "anthropic/claude-opus-4", providerID: "anthropic"},
 	}
 	msg := ModelsLoadedMsg{models: testModels}
 	_ = selector.Update(msg)
@@ -140,8 +142,8 @@ func TestModelSelector_WithoutConfigUsesFirstModel(t *testing.T) {
 
 	// Load models
 	testModels := []*ModelInfo{
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
-		{id: "openai/gpt-4", name: "openai/gpt-4"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
+		{id: "openai/gpt-4", displayName: "openai/gpt-4", providerID: "openai"},
 	}
 	msg := ModelsLoadedMsg{models: testModels}
 	_ = selector.Update(msg)
@@ -206,9 +208,9 @@ func TestModelSelector_ProjectConfigOverridesGlobal(t *testing.T) {
 
 	// Load models
 	testModels := []*ModelInfo{
-		{id: globalModel, name: globalModel},
-		{id: projectModel, name: projectModel},
-		{id: "anthropic/claude-opus-4", name: "anthropic/claude-opus-4"},
+		{id: globalModel, displayName: globalModel, providerID: "anthropic"},
+		{id: projectModel, displayName: projectModel, providerID: "openai"},
+		{id: "anthropic/claude-opus-4", displayName: "anthropic/claude-opus-4", providerID: "anthropic"},
 	}
 	msg := ModelsLoadedMsg{models: testModels}
 	_ = selector.Update(msg)
@@ -253,8 +255,8 @@ func TestModelSelector_EnvVarOverridesConfig(t *testing.T) {
 
 	// Load models
 	testModels := []*ModelInfo{
-		{id: configModel, name: configModel},
-		{id: envModel, name: envModel},
+		{id: configModel, displayName: configModel, providerID: "anthropic"},
+		{id: envModel, displayName: envModel, providerID: "openai"},
 	}
 	msg := ModelsLoadedMsg{models: testModels}
 	_ = selector.Update(msg)
@@ -347,15 +349,14 @@ func TestModelSelector_ConfigModelNotInList(t *testing.T) {
 
 	// Simulate models loaded (not including configured model)
 	testModels := []*ModelInfo{
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
-		{id: "openai/gpt-4", name: "openai/gpt-4"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
+		{id: "openai/gpt-4", displayName: "openai/gpt-4", providerID: "openai"},
 	}
 	msg := ModelsLoadedMsg{models: testModels}
 	_ = selector.Update(msg)
 
 	// Verify first model is selected as fallback
 	require.Equal(t, testModels[0].id, selector.SelectedModel(), "Expected first model as fallback when config model not in list")
-	require.Equal(t, 0, selector.selectedIdx, "Expected selectedIdx to be 0")
 }
 
 // TestModelSelector_MultipleUpdates verifies that subsequent model updates
@@ -372,10 +373,10 @@ func TestModelSelector_MultipleUpdates(t *testing.T) {
 
 	selector := NewModelSelectorStep()
 
-	// First models load
+	// First models load (same providerID for simple navigation)
 	models1 := []*ModelInfo{
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
-		{id: "openai/gpt-4", name: "openai/gpt-4"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
+		{id: "openai/gpt-4", displayName: "openai/gpt-4", providerID: "anthropic"},
 	}
 	_ = selector.Update(ModelsLoadedMsg{models: models1})
 	require.Equal(t, models1[0].id, selector.SelectedModel(), "Expected first model selected initially")
@@ -384,18 +385,17 @@ func TestModelSelector_MultipleUpdates(t *testing.T) {
 	_ = selector.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	require.Equal(t, models1[1].id, selector.SelectedModel(), "Expected second model after navigation")
 
-	// Second models load (simulating refresh)
-	// When models reload, selectedIdx resets to 0 (no config model set)
+	// Second models load (simulating refresh, same providerID)
+	// When models reload, selection resets to first selectable
 	models2 := []*ModelInfo{
-		{id: "anthropic/claude-opus-4", name: "anthropic/claude-opus-4"},
-		{id: "openai/gpt-4-turbo", name: "openai/gpt-4-turbo"},
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
+		{id: "anthropic/claude-opus-4", displayName: "anthropic/claude-opus-4", providerID: "anthropic"},
+		{id: "openai/gpt-4-turbo", displayName: "openai/gpt-4-turbo", providerID: "anthropic"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
 	}
 	_ = selector.Update(ModelsLoadedMsg{models: models2})
 
-	// Without config, selectedIdx resets to 0 after refresh
+	// Without config, selection resets to first selectable model after refresh
 	require.Equal(t, models2[0].id, selector.SelectedModel(), "Expected first model after reload")
-	require.Equal(t, 0, selector.selectedIdx, "Expected selectedIdx to reset to 0")
 }
 
 // TestModelSelector_NavigationBounds verifies that navigation stays within bounds.
@@ -404,32 +404,34 @@ func TestModelSelector_NavigationBounds(t *testing.T) {
 
 	selector := NewModelSelectorStep()
 
+	// All same providerID so only 1 header at index 0
+	// filtered: [header(0), model-1(1), model-2(2), model-3(3)]
 	testModels := []*ModelInfo{
-		{id: "model-1", name: "Model 1"},
-		{id: "model-2", name: "Model 2"},
-		{id: "model-3", name: "Model 3"},
+		{id: "model-1", displayName: "Model 1", providerID: "test"},
+		{id: "model-2", displayName: "Model 2", providerID: "test"},
+		{id: "model-3", displayName: "Model 3", providerID: "test"},
 	}
 	_ = selector.Update(ModelsLoadedMsg{models: testModels})
 
-	// Should start at first model
-	require.Equal(t, 0, selector.selectedIdx, "Expected start at index 0")
+	// Should start at first selectable (index 1, after header)
+	require.Equal(t, 1, selector.selectedIdx, "Expected start at index 1 (after header)")
 
-	// Try to move up (should stay at 0)
+	// Try to move up (should stay at 1, can't go past header)
 	_ = selector.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	require.Equal(t, 0, selector.selectedIdx, "Expected to stay at index 0 when moving up from first")
+	require.Equal(t, 1, selector.selectedIdx, "Expected to stay at index 1 when moving up from first selectable")
 
 	// Move down to last
 	_ = selector.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	_ = selector.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	require.Equal(t, 2, selector.selectedIdx, "Expected to move to last model")
+	require.Equal(t, 3, selector.selectedIdx, "Expected to move to last model")
 
 	// Try to move down (should stay at last)
 	_ = selector.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	require.Equal(t, 2, selector.selectedIdx, "Expected to stay at last index when moving down from last")
+	require.Equal(t, 3, selector.selectedIdx, "Expected to stay at last index when moving down from last")
 
 	// Move back up
 	_ = selector.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	require.Equal(t, 1, selector.selectedIdx, "Expected to move back to middle")
+	require.Equal(t, 2, selector.selectedIdx, "Expected to move back to middle")
 }
 
 // TestModelSelector_EmptyModelList verifies behavior with empty model list.
@@ -459,7 +461,7 @@ func TestModelSelector_SingleModel(t *testing.T) {
 	selector := NewModelSelectorStep()
 
 	singleModel := []*ModelInfo{
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
 	}
 	_ = selector.Update(ModelsLoadedMsg{models: singleModel})
 

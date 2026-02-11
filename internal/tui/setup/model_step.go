@@ -1,7 +1,9 @@
 package setup
 
 import (
+	"encoding/json"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -13,22 +15,59 @@ import (
 
 // ModelInfo represents a model that can be selected.
 type ModelInfo struct {
-	id   string // Model ID (e.g. "anthropic/claude-sonnet-4-5")
-	name string // Display name (same as ID for now)
+	id          string // Full model ID (e.g. "opencode/claude-opus-4-6")
+	displayName string // Human-readable name (e.g. "Claude Opus 4.6")
+	provider    string // Provider display name (e.g. "OpenCode Zen", "Anthropic")
+	providerID  string // Provider ID (e.g. "opencode", "anthropic")
+	isFree      bool   // True when input+output cost are both 0
+	isHeader    bool   // True for section header items (not selectable)
 }
 
 // ID returns the unique identifier for this model (required by ScrollItem interface).
 func (m *ModelInfo) ID() string {
+	if m.isHeader {
+		return "__header__" + m.provider
+	}
 	return m.id
 }
 
 // Render returns the rendered string representation (required by ScrollItem interface).
 func (m *ModelInfo) Render(width int) string {
-	display := m.name
+	if m.isHeader {
+		headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#b4befe")).Bold(true)
+		return headerStyle.Render(m.provider)
+	}
 
-	// Truncate if too long
-	if len(display) > width-2 {
-		display = display[:width-5] + "..."
+	nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#cdd6f4"))
+	providerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086"))
+	freeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#a6e3a1"))
+
+	var left strings.Builder
+	left.WriteString("  ")
+	left.WriteString(nameStyle.Render(m.displayName))
+	left.WriteString(" ")
+	left.WriteString(providerStyle.Render(m.provider))
+
+	right := ""
+	if m.isFree {
+		right = freeStyle.Render("Free")
+	}
+
+	leftLen := lipgloss.Width(left.String())
+	rightLen := lipgloss.Width(right)
+	availWidth := width - 2
+
+	if right != "" && leftLen+rightLen < availWidth {
+		padding := availWidth - leftLen - rightLen
+		if padding < 1 {
+			padding = 1
+		}
+		return left.String() + strings.Repeat(" ", padding) + right
+	}
+
+	display := left.String()
+	if lipgloss.Width(display) > availWidth {
+		return display[:availWidth-3] + "..."
 	}
 
 	return display
@@ -39,12 +78,48 @@ func (m *ModelInfo) Height() int {
 	return 1
 }
 
+// providerDisplayName maps providerID to human-readable name.
+func providerDisplayName(providerID string) string {
+	switch providerID {
+	case "opencode":
+		return "OpenCode Zen"
+	case "anthropic":
+		return "Anthropic"
+	case "openai":
+		return "OpenAI"
+	case "google":
+		return "Google"
+	case "deepseek":
+		return "DeepSeek"
+	case "xai":
+		return "xAI"
+	case "mistral":
+		return "Mistral"
+	default:
+		if len(providerID) > 0 {
+			return strings.ToUpper(providerID[:1]) + providerID[1:]
+		}
+		return providerID
+	}
+}
+
+// verboseModelJSON is the JSON structure from "opencode models --verbose".
+type verboseModelJSON struct {
+	ID         string `json:"id"`
+	ProviderID string `json:"providerID"`
+	Name       string `json:"name"`
+	Cost       struct {
+		Input  float64 `json:"input"`
+		Output float64 `json:"output"`
+	} `json:"cost"`
+}
+
 // ModelStep manages the model selector UI step for setup wizard.
 type ModelStep struct {
-	allModels      []*ModelInfo    // Full list from opencode
-	filtered       []*ModelInfo    // Filtered by search
+	allModels      []*ModelInfo    // Full list from opencode (no headers)
+	filtered       []*ModelInfo    // Filtered by search (includes headers when no search)
 	scrollList     *tui.ScrollList // Lazy-rendering scroll list for filtered models
-	selectedIdx    int             // Index in filtered list
+	selectedIdx    int             // Index in filtered list (skips headers)
 	searchInput    textinput.Model // Fuzzy search input
 	customInput    textinput.Model // Custom model entry input
 	loading        bool            // Whether models are being fetched
@@ -60,19 +135,19 @@ type ModelStep struct {
 func NewModelStep() *ModelStep {
 	// Initialize search input
 	input := textinput.New()
-	input.Placeholder = "Type to filter models..."
-	input.Prompt = "Search: "
+	input.Placeholder = "Search"
+	input.Prompt = ""
 
 	// Configure styles for textinput (using lipgloss v2)
 	styles := textinput.Styles{
 		Focused: textinput.StyleState{
 			Text:        lipgloss.NewStyle().Foreground(lipgloss.Color("#cdd6f4")),
-			Placeholder: lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8")),
+			Placeholder: lipgloss.NewStyle().Foreground(lipgloss.Color("#585b70")),
 			Prompt:      lipgloss.NewStyle().Foreground(lipgloss.Color("#b4befe")),
 		},
 		Blurred: textinput.StyleState{
 			Text:        lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8")),
-			Placeholder: lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8")),
+			Placeholder: lipgloss.NewStyle().Foreground(lipgloss.Color("#585b70")),
 			Prompt:      lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")),
 		},
 		Cursor: textinput.CursorStyle{
@@ -121,7 +196,8 @@ func (m *ModelStep) Init() tea.Cmd {
 	)
 }
 
-// fetchModels executes "opencode models" and parses the output.
+// fetchModels executes "opencode models --verbose" and parses the output.
+// Falls back to plain "opencode models" if verbose fails.
 func (m *ModelStep) fetchModels() tea.Cmd {
 	return func() tea.Msg {
 		// Check if opencode is installed
@@ -132,8 +208,19 @@ func (m *ModelStep) fetchModels() tea.Cmd {
 			}
 		}
 
-		cmd := exec.Command("opencode", "models")
+		// Try verbose mode first for rich metadata
+		cmd := exec.Command("opencode", "models", "--verbose")
 		output, err := cmd.Output()
+		if err == nil {
+			models := parseVerboseModelsOutput(output)
+			if len(models) > 0 {
+				return ModelsLoadedMsg{models: models}
+			}
+		}
+
+		// Fallback to plain mode
+		cmd = exec.Command("opencode", "models")
+		output, err = cmd.Output()
 		if err != nil {
 			return ModelsErrorMsg{
 				err:            err,
@@ -141,15 +228,109 @@ func (m *ModelStep) fetchModels() tea.Cmd {
 			}
 		}
 
-		// Parse output
-		models := parseModelsOutput(output)
+		models := parsePlainModelsOutput(output)
 		return ModelsLoadedMsg{models: models}
 	}
 }
 
-// parseModelsOutput parses the newline-separated model IDs from opencode output.
-// Skips lines starting with "INFO" and empty lines.
-func parseModelsOutput(output []byte) []*ModelInfo {
+// parseVerboseModelsOutput parses the verbose JSON output from "opencode models --verbose".
+func parseVerboseModelsOutput(output []byte) []*ModelInfo {
+	var models []*ModelInfo
+
+	lines := strings.Split(string(output), "\n")
+	i := 0
+	for i < len(lines) {
+		line := strings.TrimSpace(lines[i])
+		i++
+
+		if line == "" || strings.HasPrefix(line, "INFO") {
+			continue
+		}
+
+		if strings.Contains(line, "/") && !strings.Contains(line, "{") {
+			fullID := line
+
+			var jsonLines []string
+			braceCount := 0
+			for i < len(lines) {
+				jline := lines[i]
+				i++
+				trimmed := strings.TrimSpace(jline)
+
+				if trimmed == "" && braceCount == 0 {
+					continue
+				}
+
+				jsonLines = append(jsonLines, jline)
+
+				for _, ch := range trimmed {
+					switch ch {
+					case '{':
+						braceCount++
+					case '}':
+						braceCount--
+					}
+				}
+
+				if braceCount <= 0 && len(jsonLines) > 0 {
+					break
+				}
+			}
+
+			if len(jsonLines) > 0 {
+				jsonStr := strings.Join(jsonLines, "\n")
+				var parsed verboseModelJSON
+				if err := json.Unmarshal([]byte(jsonStr), &parsed); err == nil {
+					displayName := parsed.Name
+					if displayName == "" {
+						displayName = parsed.ID
+					}
+
+					provID := parsed.ProviderID
+					if provID == "" {
+						if parts := strings.SplitN(fullID, "/", 2); len(parts) == 2 {
+							provID = parts[0]
+						}
+					}
+
+					// Only mark as free if the name/ID explicitly contains "free"
+					// Cost=0 is unreliable: many providers (anthropic, github-copilot, etc.)
+					// report 0 because billing is external, not because the model is free.
+					isFree := strings.Contains(strings.ToLower(fullID), "free") ||
+						strings.Contains(strings.ToLower(displayName), "free")
+
+					models = append(models, &ModelInfo{
+						id:          fullID,
+						displayName: displayName,
+						provider:    providerDisplayName(provID),
+						providerID:  provID,
+						isFree:      isFree,
+					})
+					continue
+				}
+			}
+
+			parts := strings.SplitN(fullID, "/", 2)
+			provID := ""
+			name := fullID
+			if len(parts) == 2 {
+				provID = parts[0]
+				name = parts[1]
+			}
+			models = append(models, &ModelInfo{
+				id:          fullID,
+				displayName: name,
+				provider:    providerDisplayName(provID),
+				providerID:  provID,
+			})
+		}
+	}
+
+	return models
+}
+
+// parsePlainModelsOutput parses the newline-separated model IDs from opencode output.
+func parsePlainModelsOutput(output []byte) []*ModelInfo {
 	var models []*ModelInfo
 
 	for _, line := range strings.Split(string(output), "\n") {
@@ -158,38 +339,78 @@ func parseModelsOutput(output []byte) []*ModelInfo {
 			continue
 		}
 
+		parts := strings.SplitN(line, "/", 2)
+		provID := ""
+		name := line
+		if len(parts) == 2 {
+			provID = parts[0]
+			name = parts[1]
+		}
+
 		models = append(models, &ModelInfo{
-			id:   line,
-			name: line,
+			id:          line,
+			displayName: name,
+			provider:    providerDisplayName(provID),
+			providerID:  provID,
 		})
 	}
 
 	return models
 }
 
-// filterModels filters allModels by search query using case-insensitive substring match.
-func (m *ModelStep) filterModels() {
+// buildGroupedList creates the filtered list with provider section headers.
+func (m *ModelStep) buildGroupedList() {
 	query := strings.ToLower(strings.TrimSpace(m.searchInput.Value()))
 
-	if query == "" {
-		// No filter, show all models
-		m.filtered = m.allModels
-	} else {
-		// Filter by case-insensitive substring match
+	if query != "" {
 		m.filtered = make([]*ModelInfo, 0)
 		for _, model := range m.allModels {
-			if strings.Contains(strings.ToLower(model.id), query) {
+			if strings.Contains(strings.ToLower(model.id), query) ||
+				strings.Contains(strings.ToLower(model.displayName), query) ||
+				strings.Contains(strings.ToLower(model.provider), query) {
 				m.filtered = append(m.filtered, model)
 			}
 		}
+	} else {
+		groups := make(map[string][]*ModelInfo)
+		var providerOrder []string
+		for _, model := range m.allModels {
+			if _, exists := groups[model.providerID]; !exists {
+				providerOrder = append(providerOrder, model.providerID)
+			}
+			groups[model.providerID] = append(groups[model.providerID], model)
+		}
+
+		sort.SliceStable(providerOrder, func(i, j int) bool {
+			if providerOrder[i] == "opencode" {
+				return true
+			}
+			if providerOrder[j] == "opencode" {
+				return false
+			}
+			return providerOrder[i] < providerOrder[j]
+		})
+
+		m.filtered = make([]*ModelInfo, 0)
+		for _, provID := range providerOrder {
+			models := groups[provID]
+			if len(models) == 0 {
+				continue
+			}
+			m.filtered = append(m.filtered, &ModelInfo{
+				isHeader:   true,
+				provider:   providerDisplayName(provID),
+				providerID: provID,
+			})
+			m.filtered = append(m.filtered, models...)
+		}
 	}
 
-	// Reset selection if out of bounds
 	if m.selectedIdx >= len(m.filtered) {
 		m.selectedIdx = 0
 	}
+	m.skipToSelectable(1)
 
-	// Update scroll list with filtered items
 	scrollItems := make([]tui.ScrollItem, len(m.filtered))
 	for i, model := range m.filtered {
 		scrollItems[i] = model
@@ -198,11 +419,47 @@ func (m *ModelStep) filterModels() {
 	m.scrollList.SetSelected(m.selectedIdx)
 }
 
+// skipToSelectable moves selectedIdx to the next selectable (non-header) item.
+func (m *ModelStep) skipToSelectable(dir int) {
+	if len(m.filtered) == 0 {
+		return
+	}
+	for m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
+		if !m.filtered[m.selectedIdx].isHeader {
+			return
+		}
+		m.selectedIdx += dir
+	}
+	if m.selectedIdx < 0 {
+		m.selectedIdx = 0
+	}
+	if m.selectedIdx >= len(m.filtered) {
+		m.selectedIdx = len(m.filtered) - 1
+	}
+}
+
+// moveSelection moves the selection up or down, skipping headers.
+func (m *ModelStep) moveSelection(dir int) {
+	if len(m.filtered) == 0 {
+		return
+	}
+	newIdx := m.selectedIdx + dir
+	for newIdx >= 0 && newIdx < len(m.filtered) {
+		if !m.filtered[newIdx].isHeader {
+			m.selectedIdx = newIdx
+			m.scrollList.SetSelected(m.selectedIdx)
+			m.scrollList.ScrollToItem(m.selectedIdx)
+			return
+		}
+		newIdx += dir
+	}
+}
+
 // SetSize updates the dimensions for the model selector.
 func (m *ModelStep) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.searchInput.SetWidth(width - 10)
+	m.searchInput.SetWidth(width - 4)
 	m.scrollList.SetWidth(width)
 	m.scrollList.SetHeight(height)
 }
@@ -213,19 +470,15 @@ func (m *ModelStep) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case ModelsLoadedMsg:
-		// Models fetched successfully
 		m.loading = false
 		m.allModels = msg.models
-		m.filterModels()
-		// Notify wizard that content changed (for modal resizing)
+		m.buildGroupedList()
 		return func() tea.Msg { return ContentChangedMsg{} }
 
 	case ModelsErrorMsg:
-		// Error fetching models
 		m.loading = false
 		m.error = msg.err.Error()
 		m.isNotInstalled = msg.isNotInstalled
-		// Notify wizard that content changed (for modal resizing)
 		return func() tea.Msg { return ContentChangedMsg{} }
 
 	case spinner.TickMsg:
@@ -237,7 +490,6 @@ func (m *ModelStep) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 
-	// If still loading, update spinner and return
 	if m.loading {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -247,7 +499,6 @@ func (m *ModelStep) Update(msg tea.Msg) tea.Cmd {
 	// Handle retry on error
 	if m.error != "" && !m.isNotInstalled {
 		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "r" {
-			// Retry fetching models
 			m.loading = true
 			m.error = ""
 			return tea.Batch(
@@ -263,7 +514,6 @@ func (m *ModelStep) Update(msg tea.Msg) tea.Cmd {
 		if m.isCustomMode {
 			switch keyMsg.String() {
 			case "enter":
-				// Submit custom model
 				customModel := strings.TrimSpace(m.customInput.Value())
 				if customModel != "" {
 					return func() tea.Msg {
@@ -272,68 +522,55 @@ func (m *ModelStep) Update(msg tea.Msg) tea.Cmd {
 				}
 				return nil
 			case "esc":
-				// Exit custom mode
 				m.isCustomMode = false
 				m.customInput.SetValue("")
 				m.customInput.Blur()
 				m.searchInput.Focus()
-				// Notify wizard that content changed (for modal resizing)
 				return func() tea.Msg { return ContentChangedMsg{} }
 			}
 
-			// Update custom input (this will handle typing)
 			var cmd tea.Cmd
 			m.customInput, cmd = m.customInput.Update(msg)
 			cmds = append(cmds, cmd)
 			return tea.Batch(cmds...)
 		}
 
-		// Normal mode - handle model list navigation
+		// Normal mode
 		switch keyMsg.String() {
 		case "c":
-			// Switch to custom model entry mode
 			m.isCustomMode = true
 			m.searchInput.Blur()
 			cmds = append(cmds, m.customInput.Focus())
-			// Notify wizard that content changed (for modal resizing)
 			cmds = append(cmds, func() tea.Msg { return ContentChangedMsg{} })
 			return tea.Batch(cmds...)
 
 		case "up", "k":
-			if m.selectedIdx > 0 {
-				m.selectedIdx--
-				m.scrollList.SetSelected(m.selectedIdx)
-				m.scrollList.ScrollToItem(m.selectedIdx)
-			}
+			m.moveSelection(-1)
 			return nil
 
 		case "down", "j":
-			if m.selectedIdx < len(m.filtered)-1 {
-				m.selectedIdx++
-				m.scrollList.SetSelected(m.selectedIdx)
-				m.scrollList.ScrollToItem(m.selectedIdx)
-			}
+			m.moveSelection(1)
 			return nil
 
 		case "enter":
-			// Model selected
 			if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
 				model := m.filtered[m.selectedIdx]
-				return func() tea.Msg {
-					return ModelSelectedMsg{ModelID: model.id}
+				if !model.isHeader {
+					return func() tea.Msg {
+						return ModelSelectedMsg{ModelID: model.id}
+					}
 				}
 			}
 			return nil
 		}
 	}
 
-	// Update search input (this will handle typing)
+	// Update search input
 	var cmd tea.Cmd
 	m.searchInput, cmd = m.searchInput.Update(msg)
 	cmds = append(cmds, cmd)
 
-	// Re-filter on every input change
-	m.filterModels()
+	m.buildGroupedList()
 
 	return tea.Batch(cmds...)
 }
@@ -342,20 +579,17 @@ func (m *ModelStep) Update(msg tea.Msg) tea.Cmd {
 func (m *ModelStep) View() string {
 	var b strings.Builder
 
-	// Show loading state
 	if m.loading {
 		b.WriteString(m.spinner.View())
 		b.WriteString(" Loading models...\n")
 		return b.String()
 	}
 
-	// Show error state
 	if m.error != "" {
 		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#f38ba8"))
 		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8"))
 
 		if m.isNotInstalled {
-			// Special message for opencode not installed
 			b.WriteString(errorStyle.Render("✗ opencode is not installed"))
 			b.WriteString("\n\n")
 			b.WriteString(hintStyle.Render("opencode is required to fetch available models."))
@@ -364,7 +598,6 @@ func (m *ModelStep) View() string {
 			b.WriteString("\n\n")
 			b.WriteString(hintStyle.Render("Press 'c' for custom model or ESC to exit"))
 		} else {
-			// Generic error message
 			b.WriteString(errorStyle.Render("Error: " + m.error))
 			b.WriteString("\n\n")
 			b.WriteString(hintStyle.Render("Press 'r' to retry, 'c' for custom model, or ESC to exit"))
@@ -372,7 +605,6 @@ func (m *ModelStep) View() string {
 		return b.String()
 	}
 
-	// Show custom model entry mode
 	if m.isCustomMode {
 		titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#b4befe")).Bold(true)
 		b.WriteString(titleStyle.Render("Enter Custom Model"))
@@ -384,25 +616,26 @@ func (m *ModelStep) View() string {
 		return b.String()
 	}
 
-	// Show search input
 	b.WriteString(m.searchInput.View())
 	b.WriteString("\n\n")
 
-	// Show filtered models
-	if len(m.filtered) == 0 {
+	selectableCount := 0
+	for _, model := range m.filtered {
+		if !model.isHeader {
+			selectableCount++
+		}
+	}
+
+	if selectableCount == 0 {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8")).Render("No models match your search"))
 		b.WriteString("\n\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8")).Render("Type to filter • 'c' for custom • ESC to exit"))
 		return b.String()
 	}
 
-	// Render model list using ScrollList for lazy rendering
 	b.WriteString(m.scrollList.View())
-
-	// Add spacing before hint bar
 	b.WriteString("\n")
 
-	// Hint bar for normal state
 	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#a6adc8"))
 	b.WriteString(hintStyle.Render("↑↓/j/k navigate • Enter select • 'c' custom • ESC exit"))
 
@@ -410,44 +643,23 @@ func (m *ModelStep) View() string {
 }
 
 // PreferredHeight returns the preferred height for this step's content.
-// This allows the modal to size dynamically based on content.
 func (m *ModelStep) PreferredHeight() int {
-	// For loading state
 	if m.loading {
-		// "Loading models..." = 1 line
 		return 1
 	}
 
-	// For error state
 	if m.error != "" {
 		if m.isNotInstalled {
-			// Error + blank + 2 help lines + blank + hint = 6 lines
 			return 6
 		}
-		// Error + blank + hint = 3 lines
 		return 3
 	}
 
-	// For custom mode:
-	// - Title: 1
-	// - Blank line: 1
-	// - Input: 1
-	// - Blank line: 1
-	// - Hint bar: 1
-	// Total: 5
 	if m.isCustomMode {
 		return 5
 	}
 
-	// For normal state:
-	// - Search input: 1
-	// - Blank line: 1
-	// - Model list (cap at 20 for reasonable modal size)
-	// - Blank line: 1
-	// - Hint bar: 1
-	// Total overhead: 4
 	overhead := 4
-
 	listItems := len(m.filtered)
 	if listItems > 20 {
 		listItems = 20

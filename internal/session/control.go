@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/iteratr/internal/nats"
@@ -46,6 +47,33 @@ func (s *Store) SessionComplete(ctx context.Context, session string) error {
 	_, err = s.PublishEvent(ctx, event)
 	if err != nil {
 		return fmt.Errorf("failed to publish session complete event: %w", err)
+	}
+
+	return nil
+}
+
+// SetSessionModel records the model used for this session.
+// Creates an event of type "control" with action "set_model".
+// Called at session start so the model can be retrieved when resuming.
+func (s *Store) SetSessionModel(ctx context.Context, session string, model string) error {
+	meta, err := json.Marshal(map[string]string{
+		"model": model,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal model metadata: %w", err)
+	}
+
+	event := Event{
+		Session: session,
+		Type:    nats.EventTypeControl,
+		Action:  "set_model",
+		Meta:    meta,
+		Data:    fmt.Sprintf("Model set to %s", model),
+	}
+
+	_, err = s.PublishEvent(ctx, event)
+	if err != nil {
+		return fmt.Errorf("failed to publish set_model event: %w", err)
 	}
 
 	return nil

@@ -200,10 +200,17 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.initCurrentStep()
 			return m, nil
 		} else {
-			// Existing session selected - exit wizard in resume mode
+			// Existing session selected - proceed to model selector for model (re)selection
 			m.result.SessionName = msg.Name
 			m.result.ResumeMode = true
-			return m, tea.Quit
+			m.step = 2 // Jump to model selector
+			m.buttonFocused = false
+			m.initCurrentStep()
+			// Pre-select the session's previous model
+			if msg.PreviousModel != "" && m.modelSelectorStep != nil {
+				m.modelSelectorStep.SetDefaultModel(msg.PreviousModel)
+			}
+			return m, m.modelSelectorStep.Init()
 		}
 
 	case FileSelectedMsg:
@@ -217,6 +224,10 @@ func (m *WizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ModelSelectedMsg:
 		// Model selected in step 2
 		m.result.Model = msg.ModelID
+		if m.result.ResumeMode {
+			// Resume mode: model selected, wizard is done
+			return m, tea.Quit
+		}
 		m.step++
 		m.buttonFocused = false
 		m.initCurrentStep()
@@ -319,7 +330,14 @@ func (m *WizardModel) activateButton(btnID ButtonID) (tea.Model, tea.Cmd) {
 // goBack returns to the previous step.
 func (m *WizardModel) goBack() (tea.Model, tea.Cmd) {
 	if m.step > 0 {
-		m.step--
+		if m.result.ResumeMode && m.step == 2 {
+			// Resume mode: go back from model selector to session selector (step 0)
+			m.step = 0
+			m.result.ResumeMode = false
+			m.result.SessionName = ""
+		} else {
+			m.step--
+		}
 		m.buttonFocused = false
 		m.initCurrentStep()
 	}
@@ -358,6 +376,10 @@ func (m *WizardModel) goNext() (tea.Model, tea.Cmd) {
 			modelID := m.modelSelectorStep.SelectedModel()
 			if modelID != "" {
 				m.result.Model = modelID
+				if m.result.ResumeMode {
+					// Resume mode: model selected, wizard is done
+					return m, tea.Quit
+				}
 				m.step++
 				m.buttonFocused = false
 				m.initCurrentStep()
@@ -426,6 +448,11 @@ func (m *WizardModel) ensureButtonBar() {
 	switch m.step {
 	case 0:
 		buttons = CreateCancelNextButtons(isValid, nextLabel)
+	case 2:
+		if m.result.ResumeMode {
+			nextLabel = "Resume →"
+		}
+		buttons = CreateBackNextButtons(true, isValid, nextLabel)
 	case 4:
 		nextLabel = "Finish"
 		buttons = CreateBackNextButtons(true, isValid, nextLabel)
@@ -697,7 +724,12 @@ func (m *WizardModel) renderModal(stepContent string) string {
 		"Edit Prompt Template",
 		"Session Configuration",
 	}
-	title := fmt.Sprintf("Build Wizard - Step %d of 5: %s", m.step+1, stepNames[m.step])
+	var title string
+	if m.result.ResumeMode {
+		title = fmt.Sprintf("Resume Session - %s", stepNames[m.step])
+	} else {
+		title = fmt.Sprintf("Build Wizard - Step %d of 5: %s", m.step+1, stepNames[m.step])
+	}
 	sections = append(sections, theme.Current().S().ModalTitle.Render(title))
 	sections = append(sections, "")
 
@@ -748,6 +780,12 @@ func (m *WizardModel) createButtonBar(modalX, modalY, modalWidth, contentStartY 
 		} else {
 			buttons = CreateCancelNextButtons(isValid, nextLabel)
 		}
+	case 2:
+		// Model selector: show "Resume" if in resume mode
+		if m.result.ResumeMode {
+			nextLabel = "Resume →"
+		}
+		buttons = CreateBackNextButtons(true, isValid, nextLabel)
 	case 4:
 		// Last step: Back + Finish
 		nextLabel = "Finish"

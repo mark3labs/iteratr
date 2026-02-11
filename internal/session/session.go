@@ -86,6 +86,7 @@ type State struct {
 	NoteCounter int              `json:"note_counter"` // Incrementing counter for NOT-N IDs
 	Iterations  []*Iteration     `json:"iterations"`   // Iteration history
 	Complete    bool             `json:"complete"`     // Session marked complete
+	Model       string           `json:"model"`        // Last model used for this session
 }
 
 // Task represents a task in the task system.
@@ -127,6 +128,7 @@ type SessionInfo struct {
 	TasksTotal     int       `json:"tasks_total"`
 	TasksCompleted int       `json:"tasks_completed"`
 	LastActivity   time.Time `json:"last_activity"`
+	Model          string    `json:"model"` // Last model used for this session
 }
 
 // Apply applies an event to the state, implementing the reduce pattern.
@@ -414,6 +416,15 @@ func (st *State) applyControlEvent(event Event) {
 		st.Complete = true
 	case "session_restart":
 		st.Complete = false
+	case "set_model":
+		// Parse model from meta
+		var meta struct {
+			Model string `json:"model"`
+		}
+		_ = json.Unmarshal(event.Meta, &meta)
+		if meta.Model != "" {
+			st.Model = meta.Model
+		}
 	}
 }
 
@@ -477,6 +488,7 @@ func (s *Store) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 			TasksTotal:     len(state.Tasks),
 			TasksCompleted: completed,
 			LastActivity:   lastActivity,
+			Model:          state.Model,
 		}
 		infos = append(infos, info)
 	}

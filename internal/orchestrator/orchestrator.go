@@ -123,6 +123,14 @@ func (o *Orchestrator) Start() error {
 	}
 	logger.Debug("JetStream setup complete")
 
+	// 3.25. Record model in session state (for resume default)
+	if o.cfg.Model != "" {
+		if err := o.store.SetSessionModel(o.ctx, o.cfg.SessionName, o.cfg.Model); err != nil {
+			logger.Warn("Failed to record session model: %v", err)
+			// Non-fatal - continue without model persistence
+		}
+	}
+
 	// 3.5. Start MCP tools server
 	logger.Debug("Starting MCP tools server")
 	o.mcpServer = mcpserver.New(o.store, o.cfg.SessionName)

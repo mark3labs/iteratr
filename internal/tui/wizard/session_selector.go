@@ -548,9 +548,10 @@ type SessionsErrorMsg struct {
 
 // SessionSelectedMsg is sent when a session is selected.
 type SessionSelectedMsg struct {
-	Name        string // Session name (empty if IsNew)
-	IsNew       bool   // True if "New Session" selected
-	ShouldReset bool   // True if user chose to reset tasks/notes
+	Name          string // Session name (empty if IsNew)
+	IsNew         bool   // True if "New Session" selected
+	ShouldReset   bool   // True if user chose to reset tasks/notes
+	PreviousModel string // Model previously used by this session (for pre-selection)
 }
 
 // resetAndResume resets the session and returns a command to resume it.
@@ -559,15 +560,19 @@ func (s *SessionSelectorStep) resetAndResume() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
+		// Capture model before reset (reset purges all events including set_model)
+		previousModel := s.selectedSession.info.Model
+
 		// Reset the session (purge all events)
 		if err := s.sessionStore.ResetSession(ctx, s.selectedSession.info.Name); err != nil {
 			return SessionsErrorMsg{err: err}
 		}
 
 		return SessionSelectedMsg{
-			Name:        s.selectedSession.info.Name,
-			IsNew:       false,
-			ShouldReset: true,
+			Name:          s.selectedSession.info.Name,
+			IsNew:         false,
+			ShouldReset:   true,
+			PreviousModel: previousModel,
 		}
 	}
 }
@@ -587,9 +592,10 @@ func (s *SessionSelectorStep) resumeWithoutReset() tea.Cmd {
 		}
 
 		return SessionSelectedMsg{
-			Name:        s.selectedSession.info.Name,
-			IsNew:       false,
-			ShouldReset: false,
+			Name:          s.selectedSession.info.Name,
+			IsNew:         false,
+			ShouldReset:   false,
+			PreviousModel: s.selectedSession.info.Model,
 		}
 	}
 }

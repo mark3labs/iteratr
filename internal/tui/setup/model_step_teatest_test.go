@@ -19,10 +19,10 @@ func TestModelStepTeatest_CustomMode(t *testing.T) {
 	updatedStep := step
 	updatedStep.loading = false
 	updatedStep.allModels = []*ModelInfo{
-		{id: "test/model-1", name: "test/model-1"},
-		{id: "test/model-2", name: "test/model-2"},
+		{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
+		{id: "test/model-2", displayName: "test/model-2", providerID: "test"},
 	}
-	updatedStep.filterModels()
+	updatedStep.buildGroupedList()
 
 	// Initially should not be in custom mode
 	require.False(t, updatedStep.isCustomMode, "Expected isCustomMode to be false initially")
@@ -67,9 +67,9 @@ func TestModelStepTeatest_CustomModeCancel(t *testing.T) {
 	// Simulate models loaded
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "test/model-1", name: "test/model-1"},
+		{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
 	// Enter custom mode
 	cmd := step.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
@@ -101,9 +101,9 @@ func TestModelStepTeatest_CustomModeEmptyInput(t *testing.T) {
 	// Simulate models loaded
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "test/model-1", name: "test/model-1"},
+		{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
 	// Enter custom mode
 	step.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
@@ -122,9 +122,9 @@ func TestModelStepTeatest_CustomModeWhitespaceOnly(t *testing.T) {
 	step := NewModelStep()
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "test/model-1", name: "test/model-1"},
+		{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
 	// Enter custom mode
 	step.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
@@ -148,13 +148,13 @@ func TestModelStepTeatest_PreferredHeight_CustomMode(t *testing.T) {
 	// Not in custom mode initially - add multiple models so height differs from custom mode
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "test/model-1", name: "test/model-1"},
-		{id: "test/model-2", name: "test/model-2"},
-		{id: "test/model-3", name: "test/model-3"},
-		{id: "test/model-4", name: "test/model-4"},
-		{id: "test/model-5", name: "test/model-5"},
+		{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
+		{id: "test/model-2", displayName: "test/model-2", providerID: "test"},
+		{id: "test/model-3", displayName: "test/model-3", providerID: "test"},
+		{id: "test/model-4", displayName: "test/model-4", providerID: "test"},
+		{id: "test/model-5", displayName: "test/model-5", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
 	normalHeight := step.PreferredHeight()
 
@@ -166,7 +166,7 @@ func TestModelStepTeatest_PreferredHeight_CustomMode(t *testing.T) {
 	// Custom mode should have fixed height of 5
 	require.Equal(t, 5, customHeight, "Expected custom mode height to be 5")
 
-	// Heights should be different (normal mode has 5 models + 4 overhead = 9)
+	// Heights should be different (normal mode has 5 models + 1 header + 4 overhead = 10)
 	require.NotEqual(t, normalHeight, customHeight, "Expected normal and custom mode to have different heights")
 }
 
@@ -211,26 +211,28 @@ func TestModelStepTeatest_PreferredHeight_Normal(t *testing.T) {
 	step.loading = false
 
 	// Test with various model counts
+	// buildGroupedList adds 1 header per provider group when no search query.
+	// All test models use same providerID, so 1 header is added.
 	testCases := []struct {
 		name        string
 		modelCount  int
-		expectedMax int // Max height with cap at 20
+		expectedMax int // Max height with cap at 20 filtered items
 	}{
-		{"Empty", 0, 4},    // overhead only
-		{"One", 1, 5},      // 1 + 4 overhead
-		{"Five", 5, 9},     // 5 + 4 overhead
-		{"Twenty", 20, 24}, // 20 + 4 overhead (at cap)
-		{"Thirty", 30, 24}, // 20 (capped) + 4 overhead
+		{"Empty", 0, 4},    // overhead only (no models, no headers)
+		{"One", 1, 6},      // 1 model + 1 header + 4 overhead
+		{"Five", 5, 10},    // 5 models + 1 header + 4 overhead
+		{"Twenty", 20, 24}, // 20 (capped from 21) + 4 overhead
+		{"Thirty", 30, 24}, // 20 (capped from 31) + 4 overhead
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			models := make([]*ModelInfo, tc.modelCount)
 			for i := 0; i < tc.modelCount; i++ {
-				models[i] = &ModelInfo{id: "test/model", name: "test/model"}
+				models[i] = &ModelInfo{id: "test/model", displayName: "test/model", providerID: "test"}
 			}
 			step.allModels = models
-			step.filterModels()
+			step.buildGroupedList()
 
 			height := step.PreferredHeight()
 			require.Equal(t, tc.expectedMax, height, "Unexpected height for %d models", tc.modelCount)
@@ -285,10 +287,10 @@ func TestModelStepTeatest_ViewStates(t *testing.T) {
 			setup: func(m *ModelStep) {
 				m.loading = false
 				m.allModels = []*ModelInfo{
-					{id: "test/model-1", name: "test/model-1"},
+					{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
 				}
 				m.searchInput.SetValue("nomatch")
-				m.filterModels()
+				m.buildGroupedList()
 			},
 			contains: []string{"No models match your search"},
 		},
@@ -297,10 +299,10 @@ func TestModelStepTeatest_ViewStates(t *testing.T) {
 			setup: func(m *ModelStep) {
 				m.loading = false
 				m.allModels = []*ModelInfo{
-					{id: "test/model-1", name: "test/model-1"},
-					{id: "test/model-2", name: "test/model-2"},
+					{id: "test/model-1", displayName: "test/model-1", providerID: "test"},
+					{id: "test/model-2", displayName: "test/model-2", providerID: "test"},
 				}
-				m.filterModels()
+				m.buildGroupedList()
 			},
 			contains: []string{"navigate", "select", "custom"},
 		},
@@ -324,92 +326,98 @@ func TestModelStepTeatest_ViewStates(t *testing.T) {
 func TestModelStepTeatest_Navigation(t *testing.T) {
 	t.Parallel()
 
+	// All same providerID so 1 header at index 0
+	// filtered: [header(0), model-1(1), model-2(2), model-3(3)]
 	step := NewModelStep()
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "model-1", name: "model-1"},
-		{id: "model-2", name: "model-2"},
-		{id: "model-3", name: "model-3"},
+		{id: "model-1", displayName: "model-1", providerID: "test"},
+		{id: "model-2", displayName: "model-2", providerID: "test"},
+		{id: "model-3", displayName: "model-3", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
-	// Initial selection should be 0
-	require.Equal(t, 0, step.selectedIdx, "Expected initial selectedIdx to be 0")
+	// Initial selection should be 1 (first selectable, after header)
+	require.Equal(t, 1, step.selectedIdx, "Expected initial selectedIdx to be 1 (after header)")
 
 	// Press down
 	step.Update(tea.KeyPressMsg{Code: tea.KeyDown, Text: "down"})
-	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to be 1 after down")
+	require.Equal(t, 2, step.selectedIdx, "Expected selectedIdx to be 2 after down")
 
 	// Press down again
 	step.Update(tea.KeyPressMsg{Code: tea.KeyDown, Text: "down"})
-	require.Equal(t, 2, step.selectedIdx, "Expected selectedIdx to be 2 after second down")
+	require.Equal(t, 3, step.selectedIdx, "Expected selectedIdx to be 3 after second down")
 
-	// Press down at bottom - should stay at 2
+	// Press down at bottom - should stay at 3
 	step.Update(tea.KeyPressMsg{Code: tea.KeyDown, Text: "down"})
-	require.Equal(t, 2, step.selectedIdx, "Expected selectedIdx to stay at 2 at bottom")
+	require.Equal(t, 3, step.selectedIdx, "Expected selectedIdx to stay at 3 at bottom")
 
 	// Press up
 	step.Update(tea.KeyPressMsg{Code: tea.KeyUp, Text: "up"})
-	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to be 1 after up")
+	require.Equal(t, 2, step.selectedIdx, "Expected selectedIdx to be 2 after up")
 
 	// Press up again
 	step.Update(tea.KeyPressMsg{Code: tea.KeyUp, Text: "up"})
-	require.Equal(t, 0, step.selectedIdx, "Expected selectedIdx to be 0 after second up")
+	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to be 1 after second up")
 
-	// Press up at top - should stay at 0
+	// Press up at top - should stay at 1 (can't go past header)
 	step.Update(tea.KeyPressMsg{Code: tea.KeyUp, Text: "up"})
-	require.Equal(t, 0, step.selectedIdx, "Expected selectedIdx to stay at 0 at top")
+	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to stay at 1 at top")
 }
 
 // TestModelStepTeatest_VimNavigation verifies j/k vim-style navigation.
 func TestModelStepTeatest_VimNavigation(t *testing.T) {
 	t.Parallel()
 
+	// All same providerID so 1 header at index 0
+	// filtered: [header(0), model-1(1), model-2(2), model-3(3)]
 	step := NewModelStep()
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "model-1", name: "model-1"},
-		{id: "model-2", name: "model-2"},
-		{id: "model-3", name: "model-3"},
+		{id: "model-1", displayName: "model-1", providerID: "test"},
+		{id: "model-2", displayName: "model-2", providerID: "test"},
+		{id: "model-3", displayName: "model-3", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
-	// Initial selection should be 0
-	require.Equal(t, 0, step.selectedIdx)
+	// Initial selection should be 1 (after header)
+	require.Equal(t, 1, step.selectedIdx)
 
 	// Press 'j' (down)
 	step.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
-	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to be 1 after 'j'")
+	require.Equal(t, 2, step.selectedIdx, "Expected selectedIdx to be 2 after 'j'")
 
 	// Press 'j' again
 	step.Update(tea.KeyPressMsg{Code: 'j', Text: "j"})
-	require.Equal(t, 2, step.selectedIdx, "Expected selectedIdx to be 2 after second 'j'")
+	require.Equal(t, 3, step.selectedIdx, "Expected selectedIdx to be 3 after second 'j'")
 
 	// Press 'k' (up)
 	step.Update(tea.KeyPressMsg{Code: 'k', Text: "k"})
-	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to be 1 after 'k'")
+	require.Equal(t, 2, step.selectedIdx, "Expected selectedIdx to be 2 after 'k'")
 
 	// Press 'k' again
 	step.Update(tea.KeyPressMsg{Code: 'k', Text: "k"})
-	require.Equal(t, 0, step.selectedIdx, "Expected selectedIdx to be 0 after second 'k'")
+	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to be 1 after second 'k'")
 }
 
 // TestModelStepTeatest_EnterSelectsModel verifies Enter sends ModelSelectedMsg.
 func TestModelStepTeatest_EnterSelectsModel(t *testing.T) {
 	t.Parallel()
 
+	// All same providerID so 1 header at index 0
+	// filtered: [header(0), model-1(1), model-2(2), model-3(3)]
 	step := NewModelStep()
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "model-1", name: "model-1"},
-		{id: "model-2", name: "model-2"},
-		{id: "model-3", name: "model-3"},
+		{id: "model-1", displayName: "model-1", providerID: "test"},
+		{id: "model-2", displayName: "model-2", providerID: "test"},
+		{id: "model-3", displayName: "model-3", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
-	// Navigate to second model
+	// Navigate to second model (from index 1 to 2)
 	step.Update(tea.KeyPressMsg{Code: tea.KeyDown, Text: "down"})
-	require.Equal(t, 1, step.selectedIdx)
+	require.Equal(t, 2, step.selectedIdx)
 
 	// Press Enter
 	cmd := step.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Text: "enter"})
@@ -430,20 +438,22 @@ func TestModelStepTeatest_FilterModels(t *testing.T) {
 	step := NewModelStep()
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "anthropic/claude-sonnet-4-5", name: "anthropic/claude-sonnet-4-5"},
-		{id: "anthropic/claude-opus-4", name: "anthropic/claude-opus-4"},
-		{id: "openai/gpt-4", name: "openai/gpt-4"},
-		{id: "openai/gpt-3.5-turbo", name: "openai/gpt-3.5-turbo"},
+		{id: "anthropic/claude-sonnet-4-5", displayName: "anthropic/claude-sonnet-4-5", providerID: "anthropic"},
+		{id: "anthropic/claude-opus-4", displayName: "anthropic/claude-opus-4", providerID: "anthropic"},
+		{id: "openai/gpt-4", displayName: "openai/gpt-4", providerID: "openai"},
+		{id: "openai/gpt-3.5-turbo", displayName: "openai/gpt-3.5-turbo", providerID: "openai"},
 	}
 
+	// When searching (non-empty query), headers are omitted - flat list.
+	// When empty query, headers are added (1 per provider group).
 	testCases := []struct {
 		name          string
 		searchQuery   string
-		expectedCount int
-		expectedFirst string // ID of first filtered model
+		expectedCount int    // total filtered items (models + headers when no query)
+		expectedFirst string // ID of first filtered item
 	}{
-		{"Empty", "", 4, "anthropic/claude-sonnet-4-5"},
-		{"Anthropic", "anthropic", 2, "anthropic/claude-sonnet-4-5"},
+		{"Empty", "", 6, "__header__Anthropic"},                      // 2 headers + 4 models
+		{"Anthropic", "anthropic", 2, "anthropic/claude-sonnet-4-5"}, // search: flat
 		{"OpenAI", "openai", 2, "openai/gpt-4"},
 		{"Claude", "claude", 2, "anthropic/claude-sonnet-4-5"},
 		{"GPT", "gpt", 2, "openai/gpt-4"},
@@ -455,12 +465,12 @@ func TestModelStepTeatest_FilterModels(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			step.searchInput.SetValue(tc.searchQuery)
-			step.filterModels()
+			step.buildGroupedList()
 
-			require.Equal(t, tc.expectedCount, len(step.filtered), "Expected %d filtered models", tc.expectedCount)
+			require.Equal(t, tc.expectedCount, len(step.filtered), "Expected %d filtered items", tc.expectedCount)
 
 			if tc.expectedCount > 0 {
-				require.Equal(t, tc.expectedFirst, step.filtered[0].id, "Expected first filtered model to be '%s'", tc.expectedFirst)
+				require.Equal(t, tc.expectedFirst, step.filtered[0].ID(), "Expected first filtered item ID to be '%s'", tc.expectedFirst)
 				// Verify selectedIdx is within bounds for non-empty filtered list
 				require.True(t, step.selectedIdx < len(step.filtered), "Expected selectedIdx to be within bounds")
 			} else {
@@ -482,7 +492,7 @@ func TestModelStepTeatest_SetSize(t *testing.T) {
 
 	require.Equal(t, 100, step.width, "Expected width to be 100")
 	require.Equal(t, 30, step.height, "Expected height to be 30")
-	require.Equal(t, 90, step.searchInput.Width(), "Expected searchInput width to be width-10 = 90")
+	require.Equal(t, 96, step.searchInput.Width(), "Expected searchInput width to be width-4 = 96")
 }
 
 // TestModelStepTeatest_ModelsLoadedMsg verifies ModelsLoadedMsg handling.
@@ -493,8 +503,8 @@ func TestModelStepTeatest_ModelsLoadedMsg(t *testing.T) {
 	step.loading = true
 
 	models := []*ModelInfo{
-		{id: "model-1", name: "model-1"},
-		{id: "model-2", name: "model-2"},
+		{id: "model-1", displayName: "model-1", providerID: "test"},
+		{id: "model-2", displayName: "model-2", providerID: "test"},
 	}
 
 	cmd := step.Update(ModelsLoadedMsg{models: models})
@@ -504,7 +514,8 @@ func TestModelStepTeatest_ModelsLoadedMsg(t *testing.T) {
 
 	// Should set models
 	require.Equal(t, models, step.allModels, "Expected allModels to be set")
-	require.Equal(t, 2, len(step.filtered), "Expected filtered models to be set")
+	// filtered includes 1 header + 2 models = 3
+	require.Equal(t, 3, len(step.filtered), "Expected filtered items to include header + models")
 
 	// Should return ContentChangedMsg command
 	require.NotNil(t, cmd, "Expected ContentChangedMsg command")
@@ -632,7 +643,7 @@ func TestModelStepTeatest_EmptyModelList(t *testing.T) {
 	step := NewModelStep()
 	step.loading = false
 	step.allModels = []*ModelInfo{}
-	step.filterModels()
+	step.buildGroupedList()
 
 	// Navigation should not panic
 	step.Update(tea.KeyPressMsg{Code: tea.KeyDown, Text: "down"})
@@ -654,19 +665,20 @@ func TestModelStepTeatest_SingleModel(t *testing.T) {
 	step := NewModelStep()
 	step.loading = false
 	step.allModels = []*ModelInfo{
-		{id: "only-model", name: "only-model"},
+		{id: "only-model", displayName: "only-model", providerID: "test"},
 	}
-	step.filterModels()
+	step.buildGroupedList()
 
-	// Initial selection should be 0
-	require.Equal(t, 0, step.selectedIdx)
+	// Initial selection should be 1 (after header at index 0)
+	// filtered: [header(0), only-model(1)]
+	require.Equal(t, 1, step.selectedIdx)
 
-	// Navigation should stay at 0
+	// Navigation should stay at 1 (only selectable item)
 	step.Update(tea.KeyPressMsg{Code: tea.KeyDown, Text: "down"})
-	require.Equal(t, 0, step.selectedIdx, "Expected selectedIdx to stay at 0")
+	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to stay at 1")
 
 	step.Update(tea.KeyPressMsg{Code: tea.KeyUp, Text: "up"})
-	require.Equal(t, 0, step.selectedIdx, "Expected selectedIdx to stay at 0")
+	require.Equal(t, 1, step.selectedIdx, "Expected selectedIdx to stay at 1")
 
 	// Enter should select the only model
 	cmd := step.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Text: "enter"})
@@ -690,8 +702,8 @@ func TestModelStepTeatest_ContentChangedMsg(t *testing.T) {
 			name: "EnterCustomMode",
 			action: func(m *ModelStep) tea.Cmd {
 				m.loading = false
-				m.allModels = []*ModelInfo{{id: "test", name: "test"}}
-				m.filterModels()
+				m.allModels = []*ModelInfo{{id: "test", displayName: "test", providerID: "test"}}
+				m.buildGroupedList()
 				return m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
 			},
 		},
@@ -707,7 +719,7 @@ func TestModelStepTeatest_ContentChangedMsg(t *testing.T) {
 			name: "ModelsLoaded",
 			action: func(m *ModelStep) tea.Cmd {
 				m.loading = true
-				return m.Update(ModelsLoadedMsg{models: []*ModelInfo{{id: "test", name: "test"}}})
+				return m.Update(ModelsLoadedMsg{models: []*ModelInfo{{id: "test", displayName: "test", providerID: "test"}}})
 			},
 		},
 		{
