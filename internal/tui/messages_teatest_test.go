@@ -1056,3 +1056,104 @@ ERROR [175:15] cannot use result (variable of type *Result) as string value in r
 	goldenPath := filepath.Join("testdata", "diagnostic_multiple_errors.golden")
 	testfixtures.CompareGolden(t, goldenPath, canvas.Render())
 }
+
+// --- extractReadContent Tests ---
+
+func TestExtractReadContent_TaggedFormat(t *testing.T) {
+	t.Parallel()
+
+	output := "<path>/some/file.go</path>\n<type>file</type>\n<content>1: package main\n2: func main() {}\n</content>"
+	result := extractReadContent(output)
+
+	require.Equal(t, "1: package main\n2: func main() {}", result)
+}
+
+func TestExtractReadContent_NoTags(t *testing.T) {
+	t.Parallel()
+
+	output := "line 1\nline 2\nline 3"
+	result := extractReadContent(output)
+
+	require.Equal(t, output, result, "should return input unchanged when no tags present")
+}
+
+func TestExtractReadContent_LegacyFileFormat(t *testing.T) {
+	t.Parallel()
+
+	output := "<file>\n00001| package main\n00002| func main() {}\n</file>"
+	result := extractReadContent(output)
+
+	require.Equal(t, output, result, "should return legacy format unchanged")
+}
+
+func TestExtractReadContent_ContentTagOnly(t *testing.T) {
+	t.Parallel()
+
+	output := "<content>1: hello\n2: world\n</content>"
+	result := extractReadContent(output)
+
+	require.Equal(t, "1: hello\n2: world", result)
+}
+
+// --- Tagged Read Format Rendering Tests ---
+
+func TestToolMessageItem_TaggedReadFormat(t *testing.T) {
+	t.Parallel()
+
+	output := "<path>/path/to/file.go</path>\n<type>file</type>\n<content>1: package main\n2: \n3: func main() {\n</content>"
+
+	item := ToolMessageItem{
+		id:       "tagged-read-1",
+		toolName: "Read",
+		kind:     "read",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"filePath": "/path/to/file.go",
+		},
+		output:   output,
+		expanded: true,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	require.Contains(t, result, "Read", "should contain tool name")
+	// Should NOT show the raw tags in the rendered output
+	require.NotContains(t, result, "<path>", "should not contain raw <path> tag")
+	require.NotContains(t, result, "<type>", "should not contain raw <type> tag")
+	require.NotContains(t, result, "<content>", "should not contain raw <content> tag")
+	require.NotContains(t, result, "</content>", "should not contain raw </content> tag")
+}
+
+func TestToolMessageItem_TaggedReadFormat_Truncation(t *testing.T) {
+	t.Parallel()
+
+	// Build a tagged output with 20 lines
+	var contentLines []string
+	for i := 1; i <= 20; i++ {
+		contentLines = append(contentLines, fmt.Sprintf("%d: line %d content", i, i))
+	}
+	output := "<path>/path/to/file.go</path>\n<type>file</type>\n<content>" +
+		strings.Join(contentLines, "\n") + "\n</content>"
+
+	item := ToolMessageItem{
+		id:       "tagged-read-trunc",
+		toolName: "Read",
+		kind:     "read",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"filePath": "/path/to/file.go",
+		},
+		output:   output,
+		expanded: false,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.NotEmpty(t, result, "render should not be empty")
+	// Should show truncation hint based on content lines only, not metadata
+	require.Contains(t, result, "more lines", "should show truncation hint")
+	require.Contains(t, result, "10 more lines", "should count only content lines for truncation")
+}

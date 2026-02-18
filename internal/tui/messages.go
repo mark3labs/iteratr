@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -513,8 +514,11 @@ func (t *ToolMessageItem) Render(width int) string {
 	if t.output != "" && !isEditDiff && !isWriteFile && !hasDiagnostics {
 		result.WriteString("\n\n") // blank line between header and output
 
+		// Extract content from tagged format (strips <path>, <type> metadata)
+		outputText := extractReadContent(t.output)
+
 		// Split output into lines
-		outputLines := strings.Split(t.output, "\n")
+		outputLines := strings.Split(outputText, "\n")
 
 		// Determine visible lines based on expansion state
 		var visibleLines []string
@@ -1100,18 +1104,49 @@ func formatToolParams(input map[string]any, maxWidth int) string {
 	return str
 }
 
+// extractReadContent extracts the file content from Read tool output that may
+// contain metadata tags. Handles the tagged format:
+//
+//	<path>/some/file.go</path>
+//	<type>file</type>
+//	<content>1: code line
+//	2: code line
+//	</content>
+//
+// If <content> tags are found, returns only the inner content.
+// Otherwise returns the input unchanged (backward compatibility).
+func extractReadContent(output string) string {
+	contentStart := strings.Index(output, "<content>")
+	if contentStart == -1 {
+		return output
+	}
+	contentEnd := strings.Index(output, "</content>")
+	if contentEnd == -1 {
+		return output
+	}
+	inner := output[contentStart+len("<content>") : contentEnd]
+	inner = strings.TrimPrefix(inner, "\n")
+	inner = strings.TrimSuffix(inner, "\n")
+	return inner
+}
+
 // renderCodeBlock parses tool output with line numbers and renders it as a
 // properly styled code block with separate line number gutter and syntax-highlighted
 // code content with full-width background fill.
 //
-// Expected input format:
+// Expected input formats:
 //
 //	<file>
 //	00001| code line
 //	00002| code line
 //	</file>
+//
+// Or (new tagged format, after extractReadContent):
+//
+//	1: code line
+//	2: code line
 func renderCodeBlock(content, fileName string, width int) string {
-	// Strip <file> and </file> tags
+	// Strip <file> and </file> tags (legacy format)
 	content = strings.TrimPrefix(content, "<file>")
 	content = strings.TrimSuffix(content, "</file>")
 	content = strings.TrimPrefix(content, "\n")
@@ -1146,6 +1181,20 @@ func renderCodeBlock(content, fileName string, width int) string {
 			})
 			if len(line[:idx]) > maxNumWidth {
 				maxNumWidth = len(line[:idx])
+			}
+		} else if idx := strings.Index(line, ": "); idx > 0 && idx <= 7 {
+			// Handle "N: code" format (new Read tool format)
+			numPart := line[:idx]
+			if _, err := strconv.Atoi(strings.TrimSpace(numPart)); err == nil {
+				parsed = append(parsed, codeLine{
+					lineNum: numPart,
+					code:    line[idx+2:], // skip ": "
+				})
+				if len(numPart) > maxNumWidth {
+					maxNumWidth = len(numPart)
+				}
+			} else {
+				parsed = append(parsed, codeLine{code: line})
 			}
 		} else {
 			// No line number format, use as-is
