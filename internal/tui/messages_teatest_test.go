@@ -1242,7 +1242,7 @@ func TestToolMessageItem_TodoWriteRendering(t *testing.T) {
 	result := item.Render(80)
 
 	require.NotEmpty(t, result, "render should not be empty")
-	require.Contains(t, result, "Todowrite", "should contain tool name in header")
+	require.Contains(t, result, "Todos", "should contain friendly display name in header")
 	// Should render formatted todos, not raw JSON
 	require.Contains(t, result, "[✓]", "should contain completed checkbox")
 	require.Contains(t, result, "[•]", "should contain in_progress checkbox")
@@ -1276,4 +1276,124 @@ func TestToolMessageItem_TodoWriteNoParams(t *testing.T) {
 	require.NotEmpty(t, lines)
 	header := lines[0]
 	require.NotContains(t, header, "todos=", "header should not show raw todos param")
+}
+
+// --- toolDisplayName Tests ---
+
+func TestToolDisplayName_IteratrTools(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"iteratr-tools_task-add", "Task Add"},
+		{"iteratr-tools_task-update", "Task Update"},
+		{"iteratr-tools_task-list", "Task List"},
+		{"iteratr-tools_task-next", "Next Task"},
+		{"iteratr-tools_note-add", "Note Add"},
+		{"iteratr-tools_note-list", "Note List"},
+		{"iteratr-tools_iteration-summary", "Iteration Summary"},
+		{"iteratr-tools_session-complete", "Session Complete"},
+	}
+
+	for _, tt := range tests {
+		require.Equal(t, tt.expected, toolDisplayName(tt.input), "toolDisplayName(%q)", tt.input)
+	}
+}
+
+func TestToolDisplayName_SpecTools(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, "Ask Questions", toolDisplayName("iteratr-spec_ask-questions"))
+	require.Equal(t, "Finish Spec", toolDisplayName("iteratr-spec_finish-spec"))
+}
+
+func TestToolDisplayName_TodoWrite(t *testing.T) {
+	t.Parallel()
+
+	// All casing variants should map to "Todos"
+	require.Equal(t, "Todos", toolDisplayName("TodoWrite"))
+	require.Equal(t, "Todos", toolDisplayName("Todowrite"))
+	require.Equal(t, "Todos", toolDisplayName("todowrite"))
+	require.Equal(t, "Todos", toolDisplayName("mcp_todowrite"))
+}
+
+func TestToolDisplayName_Fallback(t *testing.T) {
+	t.Parallel()
+
+	// Unknown tools should get first-letter capitalization
+	require.Equal(t, "Bash", toolDisplayName("bash"))
+	require.Equal(t, "Read", toolDisplayName("read"))
+	require.Equal(t, "Edit", toolDisplayName("edit"))
+	require.Equal(t, "Mcp_bash", toolDisplayName("mcp_bash"))
+	require.Equal(t, "", toolDisplayName(""))
+}
+
+func TestToolDisplayName_InRender(t *testing.T) {
+	t.Parallel()
+
+	item := ToolMessageItem{
+		id:       "iteratr-1",
+		toolName: "iteratr-tools_task-update",
+		status:   ToolStatusSuccess,
+		input: map[string]any{
+			"id":     "TAS-7",
+			"status": "completed",
+		},
+		output:   "Updated task TAS-7: status=completed",
+		expanded: false,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.Contains(t, result, "Task Update", "should show friendly display name")
+	require.NotContains(t, result, "iteratr-tools", "should not show raw server prefix")
+}
+
+// --- hookDisplayName Tests ---
+
+func TestHookDisplayName_AllTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"session_start", "Session Start"},
+		{"pre_iteration", "Pre Iteration"},
+		{"post_iteration", "Post Iteration"},
+		{"session_end", "Session End"},
+		{"on_task_complete", "Task Complete"},
+		{"on_error", "On Error"},
+	}
+
+	for _, tt := range tests {
+		require.Equal(t, tt.expected, hookDisplayName(tt.input), "hookDisplayName(%q)", tt.input)
+	}
+}
+
+func TestHookDisplayName_Fallback(t *testing.T) {
+	t.Parallel()
+
+	// Unknown hook types should pass through unchanged
+	require.Equal(t, "custom_hook", hookDisplayName("custom_hook"))
+}
+
+func TestHookDisplayName_InRender(t *testing.T) {
+	t.Parallel()
+
+	item := HookMessageItem{
+		id:       "hook-1",
+		hookType: "pre_iteration",
+		command:  "go test ./...",
+		status:   HookStatusSuccess,
+		maxLines: 10,
+	}
+
+	result := item.Render(80)
+
+	require.Contains(t, result, "Pre Iteration", "should show friendly hook display name")
+	require.NotContains(t, result, "pre_iteration", "should not show raw hook type")
 }

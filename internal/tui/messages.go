@@ -383,11 +383,7 @@ func (t *ToolMessageItem) Render(width int) string {
 	}
 
 	// Build header: [indent] [icon] [name] [params]
-	// Capitalize tool name for display
-	displayName := t.toolName
-	if displayName != "" {
-		displayName = strings.ToUpper(displayName[:1]) + displayName[1:]
-	}
+	displayName := toolDisplayName(t.toolName)
 	header := "  " + iconStyle.Render(icon) + " " + s.ToolName.Render(displayName)
 
 	// Add formatted params if present
@@ -933,8 +929,8 @@ func (h *HookMessageItem) Render(width int) string {
 		iconStyle = s.HookIconRunning
 	}
 
-	// Format hook type for display (e.g. "pre_iteration" → "pre_iteration")
-	hookLabel := s.HookType.Render(h.hookType)
+	// Format hook type for display (e.g. "pre_iteration" → "Pre Iteration")
+	hookLabel := s.HookType.Render(hookDisplayName(h.hookType))
 
 	// Truncate command for display
 	displayCmd := h.command
@@ -1047,6 +1043,59 @@ type GitInfoMsg struct {
 	Ahead  int    // Commits ahead of remote
 	Behind int    // Commits behind remote
 	Valid  bool   // false if not a git repo
+}
+
+// toolDisplayNames maps raw tool names to human-friendly display names.
+var toolDisplayNames = map[string]string{
+	// Iteratr internal tools (server: iteratr-tools)
+	"iteratr-tools_task-add":          "Task Add",
+	"iteratr-tools_task-update":       "Task Update",
+	"iteratr-tools_task-list":         "Task List",
+	"iteratr-tools_task-next":         "Next Task",
+	"iteratr-tools_note-add":          "Note Add",
+	"iteratr-tools_note-list":         "Note List",
+	"iteratr-tools_iteration-summary": "Iteration Summary",
+	"iteratr-tools_session-complete":  "Session Complete",
+	// Spec mode tools (server: iteratr-spec)
+	"iteratr-spec_ask-questions": "Ask Questions",
+	"iteratr-spec_finish-spec":   "Finish Spec",
+	// Claude built-in tools
+	"TodoWrite":     "Todos",
+	"Todowrite":     "Todos",
+	"todowrite":     "Todos",
+	"mcp_todowrite": "Todos",
+}
+
+// toolDisplayName returns a human-friendly display name for a tool.
+// Falls back to capitalizing the first letter of the raw name.
+func toolDisplayName(rawName string) string {
+	if display, ok := toolDisplayNames[rawName]; ok {
+		return display
+	}
+	// Fallback: capitalize first letter
+	if rawName != "" {
+		return strings.ToUpper(rawName[:1]) + rawName[1:]
+	}
+	return rawName
+}
+
+// hookDisplayNames maps raw hook type strings to human-friendly display names.
+var hookDisplayNames = map[string]string{
+	"session_start":    "Session Start",
+	"pre_iteration":    "Pre Iteration",
+	"post_iteration":   "Post Iteration",
+	"session_end":      "Session End",
+	"on_task_complete": "Task Complete",
+	"on_error":         "On Error",
+}
+
+// hookDisplayName returns a human-friendly display name for a hook type.
+// Falls back to the raw hook type string.
+func hookDisplayName(rawType string) string {
+	if display, ok := hookDisplayNames[rawType]; ok {
+		return display
+	}
+	return rawType
 }
 
 // formatDuration formats a duration as a human-readable string.
