@@ -348,12 +348,12 @@ func (a *AgentOutput) AppendToolCall(msg AgentToolCallMsg) tea.Cmd {
 		// Map status strings to ToolStatus enum
 		status := mapToolStatus(msg.Status)
 
-		// Detect subagent call by checking Input["subagent_type"]
-		subagentType, isSubagent := msg.Input["subagent_type"].(string)
+		// Detect subagent call by Kind or Input["subagent_type"]
+		subagentType, isSubagent := detectSubagent(msg)
 
 		if isSubagent {
 			// Create SubagentMessageItem for subagent tasks
-			description, _ := msg.Input["prompt"].(string)
+			description := extractSubagentDescription(msg)
 			newMsg := &SubagentMessageItem{
 				id:           msg.ToolCallID,
 				subagentType: subagentType,
@@ -422,10 +422,10 @@ func (a *AgentOutput) AppendToolCall(msg AgentToolCallMsg) tea.Cmd {
 			}
 		} else if toolMsg, ok := a.messages[idx].(*ToolMessageItem); ok {
 			// Check if this is a subagent call that we missed on initial creation
-			// (RawInput is empty on pending, only populated on in_progress)
-			if subagentType, isSubagent := msg.Input["subagent_type"].(string); isSubagent {
+			// (ParsedArgs is empty on pending, only populated on in_progress)
+			if subagentType, isSubagent := detectSubagent(msg); isSubagent {
 				// Convert ToolMessageItem to SubagentMessageItem
-				description, _ := msg.Input["prompt"].(string)
+				description := extractSubagentDescription(msg)
 				status := mapToolStatus(msg.Status)
 				newMsg := &SubagentMessageItem{
 					id:           msg.ToolCallID,
@@ -488,6 +488,27 @@ func mapToolStatus(status string) ToolStatus {
 	default:
 		return ToolStatusPending
 	}
+}
+
+// detectSubagent checks whether a tool call message represents a subagent.
+// KIT SDK spawn_subagent tool has Kind == "agent".
+func detectSubagent(msg AgentToolCallMsg) (subagentType string, isSubagent bool) {
+	if msg.Kind == "agent" {
+		subagentType = msg.Title
+		if subagentType == "" {
+			subagentType = "subagent"
+		}
+		return subagentType, true
+	}
+	return "", false
+}
+
+// extractSubagentDescription extracts the task description from a subagent tool call.
+func extractSubagentDescription(msg AgentToolCallMsg) string {
+	if desc, ok := msg.Input["task"].(string); ok {
+		return desc
+	}
+	return ""
 }
 
 // AddIterationDivider adds a horizontal divider for a new iteration.
