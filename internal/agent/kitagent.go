@@ -244,21 +244,6 @@ func (a *KitAgent) RunIteration(ctx context.Context, prompt string, hookOutput s
 	// Map KIT stop reason to iteratr conventions
 	stopReason := mapStopReason(result.StopReason)
 
-	// Detect silent failures: agent returned without producing text
-	if stopReason == "end_turn" && result.Response == "" {
-		logger.Warn("Agent returned end_turn without producing any output — possible credential or API error")
-		if a.onFinish != nil {
-			a.onFinish(FinishEvent{
-				StopReason: "error",
-				Error:      "agent returned no output — this may indicate a credential error or model availability issue",
-				Duration:   duration,
-				Model:      a.model,
-				Provider:   extractProvider(a.model),
-			})
-		}
-		return fmt.Errorf("agent returned no output — this may indicate a credential error or model availability issue")
-	}
-
 	if a.onFinish != nil {
 		a.onFinish(FinishEvent{
 			StopReason: stopReason,
