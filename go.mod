@@ -15,6 +15,7 @@ require (
 	github.com/charmbracelet/x/editor v0.2.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gosimple/slug v1.15.0
+	github.com/mark3labs/kit v0.12.1
 	github.com/mark3labs/mcp-go v0.44.1
 	github.com/nats-io/nats-server/v2 v2.10.27
 	github.com/nats-io/nats.go v1.39.1
@@ -93,7 +94,6 @@ require (
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mailru/easyjson v0.9.1 // indirect
-	github.com/mark3labs/kit v0.12.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.20 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect

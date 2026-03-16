@@ -161,32 +161,40 @@ func (a *KitAgent) subscribeEvents() {
 			Output:     e.Result,
 		}
 
-		// Extract file diff metadata from edit/write tools
-		if e.Metadata != nil && len(e.Metadata.FileDiffs) > 0 {
-			fd := e.Metadata.FileDiffs[0]
-			event.FileDiff = &FileDiff{
-				File:      fd.Path,
-				Additions: fd.Additions,
-				Deletions: fd.Deletions,
-			}
-			for _, db := range fd.DiffBlocks {
-				event.DiffBlocks = append(event.DiffBlocks, DiffBlock{
-					Path:    fd.Path,
-					OldText: db.OldText,
-					NewText: db.NewText,
-				})
-			}
-
-			// Notify file change callback for each modified file
-			if a.onFileChange != nil {
-				for _, fdInfo := range e.Metadata.FileDiffs {
-					a.onFileChange(FileChange{
-						AbsPath:   fdInfo.Path,
-						IsNew:     fdInfo.IsNew,
-						Additions: fdInfo.Additions,
-						Deletions: fdInfo.Deletions,
+		// Extract metadata from tool results
+		if e.Metadata != nil {
+			// File diff metadata from edit/write tools
+			if len(e.Metadata.FileDiffs) > 0 {
+				fd := e.Metadata.FileDiffs[0]
+				event.FileDiff = &FileDiff{
+					File:      fd.Path,
+					Additions: fd.Additions,
+					Deletions: fd.Deletions,
+				}
+				for _, db := range fd.DiffBlocks {
+					event.DiffBlocks = append(event.DiffBlocks, DiffBlock{
+						Path:    fd.Path,
+						OldText: db.OldText,
+						NewText: db.NewText,
 					})
 				}
+
+				// Notify file change callback for each modified file
+				if a.onFileChange != nil {
+					for _, fdInfo := range e.Metadata.FileDiffs {
+						a.onFileChange(FileChange{
+							AbsPath:   fdInfo.Path,
+							IsNew:     fdInfo.IsNew,
+							Additions: fdInfo.Additions,
+							Deletions: fdInfo.Deletions,
+						})
+					}
+				}
+			}
+
+			// Subagent session ID from spawn_subagent tool
+			if e.Metadata.SubagentSessionID != "" {
+				event.SessionID = e.Metadata.SubagentSessionID
 			}
 		}
 
