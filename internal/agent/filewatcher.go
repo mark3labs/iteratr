@@ -12,8 +12,6 @@ import (
 	"github.com/mark3labs/iteratr/internal/logger"
 )
 
-const debounceInterval = 100 * time.Millisecond
-
 // FileWatcher watches the working directory for filesystem changes using fsnotify.
 // It catches all file modifications regardless of source (agent tools, bash, subprocesses).
 // Respects .gitignore patterns plus any hard-coded exclusions.
@@ -55,7 +53,7 @@ func NewFileWatcher(workDir string, excludeDirs []string) (*FileWatcher, error) 
 // Start walks the directory tree, adds watches, and starts the event loop.
 func (fw *FileWatcher) Start() error {
 	if err := fw.addRecursive(fw.workDir); err != nil {
-		fw.watcher.Close()
+		_ = fw.watcher.Close()
 		return err
 	}
 

@@ -30,7 +30,7 @@ func (m *mockScrollItem) Render(width int) string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(fmt.Sprintf("Item %s line %d", m.id, i+1))
+		fmt.Fprintf(&b, "Item %s line %d", m.id, i+1)
 	}
 	m.height = m.lines
 	return b.String()

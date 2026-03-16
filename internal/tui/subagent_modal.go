@@ -26,8 +26,8 @@ type SubagentModal struct {
 	subagentType string
 	workDir      string
 
-	// ACP subprocess (populated by Start())
-	loader *agent.SessionLoader
+	// Session loader (populated by Start())
+	loader *agent.KitSessionLoader
 
 	// State
 	loading bool
@@ -67,30 +67,30 @@ func NewSubagentModal(sessionID, subagentType, workDir string) *SubagentModal {
 	}
 }
 
-// Start spawns the ACP subprocess, initializes it, and begins loading the session.
+// Start loads the session via KIT SDK and begins iterating through messages.
 // Returns a command that will start the session loading process.
 func (m *SubagentModal) Start() tea.Cmd {
 	return func() tea.Msg {
-		// Spawn SessionLoader subprocess
-		loader, err := agent.NewSessionLoader(m.ctx, m.workDir)
-		if err != nil {
-			logger.Warn("Failed to start ACP subprocess for subagent modal: %v", err)
-			return SubagentErrorMsg{Err: fmt.Errorf("failed to start ACP: %w", err)}
-		}
-		m.loader = loader
-
-		// Load the session (triggers replay)
-		logger.Debug("subagent modal: loading session %s", m.sessionID)
-		if err := loader.LoadAndStream(m.ctx, m.sessionID, m.workDir); err != nil {
-			logger.Warn("Failed to load session %s: %v", m.sessionID, err)
+		// Find the session file from session ID by listing all sessions
+		sessions, err := agent.FindSessionByID(m.sessionID, m.workDir)
+		if err != nil || sessions == "" {
+			logger.Warn("Failed to find session %s: %v", m.sessionID, err)
 			return SubagentErrorMsg{Err: fmt.Errorf("session not found: %s", m.sessionID)}
 		}
 
-		// Session loading started - modal no longer in loading state
-		logger.Debug("subagent modal: session loaded, starting stream")
+		// Load session via KIT SDK
+		loader, err := agent.NewKitSessionLoader(m.ctx, sessions, m.workDir)
+		if err != nil {
+			logger.Warn("Failed to load session for subagent modal: %v", err)
+			return SubagentErrorMsg{Err: fmt.Errorf("failed to load session: %w", err)}
+		}
+		m.loader = loader
+
+		// Session loaded - modal no longer in loading state
+		logger.Debug("subagent modal: session loaded, starting iteration")
 		m.loading = false
 
-		// Start streaming notifications
+		// Start iterating through messages
 		return m.streamNext()
 	}
 }
@@ -613,15 +613,14 @@ func (m *SubagentModal) ScrollViewport(lines int) {
 	}
 }
 
-// Close terminates the ACP subprocess and cleans up resources.
-// Safe to call multiple times or if Start() was never called.
+// Close releases resources. Safe to call multiple times or if Start() was never called.
 func (m *SubagentModal) Close() {
 	// Cancel context to stop any ongoing operations
 	if m.cancel != nil {
 		m.cancel()
 	}
 
-	// Close SessionLoader if established
+	// Close session loader if established
 	if m.loader != nil {
 		if err := m.loader.Close(); err != nil {
 			logger.Warn("Failed to close session loader: %v", err)

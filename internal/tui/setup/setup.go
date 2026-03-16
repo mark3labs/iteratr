@@ -312,7 +312,7 @@ func (m *SetupModel) View() tea.View {
 		Max: uv.Position{X: m.width, Y: m.height},
 	})
 
-	view.Content = lipgloss.NewLayer(canvas.Render())
+	view.Content = canvas.Render()
 	return view
 }
 

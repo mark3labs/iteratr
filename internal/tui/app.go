@@ -1045,7 +1045,7 @@ func (a *App) View() tea.View {
 		view.AltScreen = false
 		view.MouseMode = 0
 		view.ReportFocus = false
-		view.Content = lipglossv2.NewLayer("")
+		view.Content = ""
 		return view
 	}
 
@@ -1065,7 +1065,7 @@ func (a *App) View() tea.View {
 	// Render canvas to string
 	content := canvas.Render()
 
-	view.Content = lipglossv2.NewLayer(content)
+	view.Content = content
 
 	// Set global background color for the entire terminal
 	view.BackgroundColor = theme.HexToColor(theme.Current().BgCrust)

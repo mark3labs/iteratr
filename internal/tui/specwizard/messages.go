@@ -50,7 +50,7 @@ type ShowCancelConfirmMsg struct{}
 type AgentPhaseReadyMsg struct {
 	MCPServer   *specmcp.Server
 	AgentStep   *AgentPhase
-	AgentRunner *agent.Runner
+	AgentRunner *agent.KitAgent
 	Prompt      string
 }
 

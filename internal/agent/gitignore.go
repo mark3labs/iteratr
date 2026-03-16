@@ -35,7 +35,7 @@ func (gi *gitIgnore) loadFile(path string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -149,7 +149,7 @@ func matchRule(rule ignoreRule, relPath string) bool {
 	if idx := strings.Index(pattern, "/**/"); idx >= 0 {
 		prefix := pattern[:idx]
 		suffix := pattern[idx+4:]
-		if !(relPath == prefix || strings.HasPrefix(relPath, prefix+"/")) {
+		if relPath != prefix && !strings.HasPrefix(relPath, prefix+"/") {
 			return false
 		}
 		remaining := strings.TrimPrefix(relPath, prefix+"/")

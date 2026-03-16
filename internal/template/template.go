@@ -219,9 +219,9 @@ func formatNotes(state *session.State) string {
 
 		// Uppercase first letter for display
 		displayType := strings.ToUpper(noteType[:1]) + noteType[1:]
-		sb.WriteString(fmt.Sprintf("%s:\n", displayType))
+		fmt.Fprintf(&sb, "%s:\n", displayType)
 		for _, note := range notes {
-			sb.WriteString(fmt.Sprintf("  - [#%d] %s\n", note.Iteration, note.Content))
+			fmt.Fprintf(&sb, "  - [#%d] %s\n", note.Iteration, note.Content)
 		}
 	}
 	return sb.String()
@@ -251,7 +251,7 @@ func formatTasks(state *session.State) string {
 
 		// Uppercase first letter for display
 		displayStatus := strings.ToUpper(status[:1]) + strings.ReplaceAll(status[1:], "_", " ")
-		sb.WriteString(fmt.Sprintf("%s:\n", displayStatus))
+		fmt.Fprintf(&sb, "%s:\n", displayStatus)
 		for _, task := range tasks {
 			// Format priority prefix [P0]-[P4]
 			priorityPrefix := fmt.Sprintf("[P%d] ", task.Priority)
@@ -270,7 +270,7 @@ func formatTasks(state *session.State) string {
 				depInfo = fmt.Sprintf(" (depends on: %s)", strings.Join(depIDs, ", "))
 			}
 
-			sb.WriteString(fmt.Sprintf("  - %s[%s] %s%s%s\n", priorityPrefix, task.ID, task.Content, iterInfo, depInfo))
+			fmt.Fprintf(&sb, "  - %s[%s] %s%s%s\n", priorityPrefix, task.ID, task.Content, iterInfo, depInfo)
 		}
 	}
 
@@ -312,7 +312,7 @@ func formatIterationHistory(state *session.State) string {
 		timeAgo := formatTimeAgo(elapsed)
 
 		// Format: "- #N (time ago): Summary"
-		sb.WriteString(fmt.Sprintf("- #%d (%s): %s\n", iter.Number, timeAgo, iter.Summary))
+		fmt.Fprintf(&sb, "- #%d (%s): %s\n", iter.Number, timeAgo, iter.Summary)
 	}
 
 	return sb.String()

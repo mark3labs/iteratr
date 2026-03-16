@@ -1133,7 +1133,7 @@ func formatToolParams(input map[string]any, maxWidth int) string {
 
 	// Add primary parameter if found
 	if primaryKey != "" {
-		result.WriteString(fmt.Sprintf("%v", primaryVal))
+		fmt.Fprintf(&result, "%v", primaryVal)
 	}
 
 	// Collect remaining parameters

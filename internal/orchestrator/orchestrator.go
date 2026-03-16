@@ -52,7 +52,7 @@ type Orchestrator struct {
 	nc                *natsgo.Conn       // NATS connection
 	store             *session.Store     // Session store
 	mcpServer         *mcpserver.Server  // MCP tools server
-	runner            *agent.Runner      // Agent runner for opencode subprocess
+	runner            *agent.KitAgent    // Agent runner (KIT SDK in-process)
 	tuiApp            *tui.App           // TUI application (nil if headless)
 	tuiProgram        *tea.Program       // Bubbletea program
 	tuiDone           chan struct{}      // TUI completion signal
@@ -272,7 +272,7 @@ func (o *Orchestrator) Run() error {
 	logger.Debug("Setting up agent runner with callbacks")
 	if o.tuiProgram != nil {
 		// TUI mode - send output to TUI
-		o.runner = agent.NewRunner(agent.RunnerConfig{
+		o.runner = agent.NewKitAgent(agent.KitAgentConfig{
 			Model:        o.cfg.Model,
 			WorkDir:      o.cfg.WorkDir,
 			SessionName:  o.cfg.SessionName,
@@ -328,7 +328,7 @@ func (o *Orchestrator) Run() error {
 		})
 	} else {
 		// Headless mode - print to stdout
-		o.runner = agent.NewRunner(agent.RunnerConfig{
+		o.runner = agent.NewKitAgent(agent.KitAgentConfig{
 			Model:        o.cfg.Model,
 			WorkDir:      o.cfg.WorkDir,
 			SessionName:  o.cfg.SessionName,
@@ -378,13 +378,13 @@ func (o *Orchestrator) Run() error {
 		})
 	}
 
-	// Start the persistent ACP session
-	logger.Debug("Starting persistent ACP session")
+	// Start the KIT agent
+	logger.Debug("Starting KIT agent")
 	if err := o.runner.Start(o.ctx); err != nil {
-		logger.Error("Failed to start ACP session: %v", err)
-		return fmt.Errorf("failed to start ACP session: %w", err)
+		logger.Error("Failed to start KIT agent: %v", err)
+		return fmt.Errorf("failed to start KIT agent: %w", err)
 	}
-	logger.Debug("ACP session started successfully")
+	logger.Debug("KIT agent started successfully")
 	// Ensure runner is stopped on exit
 	defer func() {
 		if o.runner != nil {
@@ -406,7 +406,7 @@ func (o *Orchestrator) Run() error {
 			o.fileWatcher = fw
 			defer func() {
 				if o.fileWatcher != nil {
-					o.fileWatcher.Stop()
+					_ = o.fileWatcher.Stop()
 					o.fileWatcher = nil
 				}
 			}()
@@ -1124,12 +1124,12 @@ func (o *Orchestrator) buildCommitPrompt(ctx context.Context) string {
 			continue
 		}
 		if change.IsNew {
-			sb.WriteString(fmt.Sprintf("- %s (new file)\n", p))
+			fmt.Fprintf(&sb, "- %s (new file)\n", p)
 		} else if change.Additions > 0 || change.Deletions > 0 {
-			sb.WriteString(fmt.Sprintf("- %s (+%d/-%d)\n", p, change.Additions, change.Deletions))
+			fmt.Fprintf(&sb, "- %s (+%d/-%d)\n", p, change.Additions, change.Deletions)
 		} else {
 			// No metadata available
-			sb.WriteString(fmt.Sprintf("- %s\n", p))
+			fmt.Fprintf(&sb, "- %s\n", p)
 		}
 	}
 
@@ -1137,17 +1137,17 @@ func (o *Orchestrator) buildCommitPrompt(ctx context.Context) string {
 	if currentTask != "" || iterationSummary != "" {
 		sb.WriteString("\nContext:\n")
 		if currentTask != "" {
-			sb.WriteString(fmt.Sprintf("- Task: %s\n", currentTask))
+			fmt.Fprintf(&sb, "- Task: %s\n", currentTask)
 		}
 		if iterationSummary != "" {
-			sb.WriteString(fmt.Sprintf("- Summary: %s\n", iterationSummary))
+			fmt.Fprintf(&sb, "- Summary: %s\n", iterationSummary)
 		}
 	}
 
 	sb.WriteString("\nInstructions:\n")
 	sb.WriteString("1. Stage only the listed files with `git add`\n")
 	if o.cfg.CommitDataDir {
-		sb.WriteString(fmt.Sprintf("2. Also stage the data directory: `git add %s`\n", o.cfg.DataDir))
+		fmt.Fprintf(&sb, "2. Also stage the data directory: `git add %s`\n", o.cfg.DataDir)
 		sb.WriteString("3. Create a commit with a clear, conventional message\n")
 		sb.WriteString("4. Do NOT push\n")
 	} else {
@@ -1202,9 +1202,9 @@ func (o *Orchestrator) Stop() error {
 		o.fileWatcher = nil
 	}
 
-	// Stop agent runner (closes ACP connection and subprocess)
+	// Stop agent runner (closes KIT SDK instance)
 	if o.runner != nil {
-		logger.Debug("Stopping agent runner")
+		logger.Debug("Stopping KIT agent")
 		o.runner.Stop()
 		o.runner = nil
 	}

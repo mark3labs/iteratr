@@ -647,7 +647,7 @@ func (m *WizardModel) View() tea.View {
 		Max: uv.Position{X: m.width, Y: m.height},
 	})
 
-	view.Content = lipgloss.NewLayer(canvas.Render())
+	view.Content = canvas.Render()
 
 	// Set cursor position from the focused input component.
 	// The textinput.Cursor() returns coordinates relative to the input itself.

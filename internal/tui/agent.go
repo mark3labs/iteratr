@@ -184,7 +184,7 @@ func (a *AgentOutput) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 	if viewportHeight < 1 {
 		viewportHeight = 1
 	}
-	viewportArea, inputArea := uv.SplitVertical(area, uv.Fixed(viewportHeight))
+	viewportArea, inputArea := splitVertical(area, viewportHeight)
 
 	// Store input area for mouse hit detection
 	a.inputArea = inputArea

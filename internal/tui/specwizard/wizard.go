@@ -84,7 +84,7 @@ type WizardModel struct {
 
 	// Agent infrastructure
 	mcpServer   *specmcp.Server
-	agentRunner *agent.Runner
+	agentRunner *agent.KitAgent
 	agentError  *error // Error from agent startup or runtime
 
 	// Save error state
@@ -476,7 +476,7 @@ func (m *WizardModel) View() tea.View {
 
 	if m.width == 0 || m.height == 0 {
 		// Not ready to render
-		view.Content = lipgloss.NewLayer("")
+		view.Content = ""
 		return view
 	}
 
@@ -499,7 +499,7 @@ func (m *WizardModel) View() tea.View {
 		Max: uv.Position{X: m.width, Y: m.height},
 	})
 
-	view.Content = lipgloss.NewLayer(canvas.Render())
+	view.Content = canvas.Render()
 	return view
 }
 
@@ -1063,7 +1063,7 @@ func (m *WizardModel) startAgentPhase() tea.Msg {
 
 	// Create agent runner (all callbacks use only local vars or program sender)
 	logger.Debug("Creating agent runner")
-	agentRunner := agent.NewRunner(agent.RunnerConfig{
+	agentRunner := agent.NewKitAgent(agent.KitAgentConfig{
 		Model:        model,
 		WorkDir:      workDir,
 		SessionName:  "spec-wizard",
@@ -1091,15 +1091,11 @@ func (m *WizardModel) startAgentPhase() tea.Msg {
 		},
 	})
 
-	// Start ACP subprocess
-	logger.Debug("Starting ACP subprocess")
+	// Start KIT agent
+	logger.Debug("Starting KIT agent")
 	if err := agentRunner.Start(ctx); err != nil {
-		logger.Error("Failed to start ACP: %v", err)
-		if strings.Contains(err.Error(), "executable file not found") ||
-			strings.Contains(err.Error(), "no such file or directory") {
-			return AgentErrorMsg{Err: fmt.Errorf("failed to start opencode: executable file not found in $PATH")}
-		}
-		return AgentErrorMsg{Err: fmt.Errorf("failed to start opencode: %w", err)}
+		logger.Error("Failed to start KIT agent: %v", err)
+		return AgentErrorMsg{Err: fmt.Errorf("failed to start agent: %w", err)}
 	}
 
 	// Build spec prompt

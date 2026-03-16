@@ -441,7 +441,7 @@ func (s *Sidebar) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 
 	// Split area vertically: Logo (fixed) | Tasks (55%) | Notes (45%)
 	// First split off the logo area
-	logoArea, remainder := uv.SplitVertical(area, uv.Fixed(logoHeight))
+	logoArea, remainder := splitVertical(area, logoHeight)
 
 	// Then split remaining space between tasks and notes
 	remainingHeight := remainder.Dy()
@@ -450,7 +450,7 @@ func (s *Sidebar) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 		tasksHeight = 3
 	}
 
-	tasksArea, notesArea := uv.SplitVertical(remainder, uv.Fixed(tasksHeight))
+	tasksArea, notesArea := splitVertical(remainder, tasksHeight)
 
 	// Draw Logo section
 	s.drawLogo(scr, logoArea)

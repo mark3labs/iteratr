@@ -36,3 +36,4 @@
 | [coderabbit-pr-fixes](./coderabbit-pr-fixes.md) | Fetch unresolved coderabbitai[bot] PR comments, create tasks, fix issues | 2026-02-04 |
 | [tui-teatest-suite](./tui-teatest-suite.md) | Comprehensive teatest v2 suite for all TUI components | 2026-02-04 |
 | [file-watcher](./file-watcher.md) | fsnotify-based file watcher for robust modified file detection | 2026-02-25 |
+| [kit-migration](./kit-migration.md) | Replace opencode ACP subprocess with in-process KIT Go SDK | 2026-03-16 |

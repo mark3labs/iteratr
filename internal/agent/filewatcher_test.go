@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -14,7 +15,7 @@ func TestNewFileWatcher(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileWatcher() error = %v", err)
 	}
-	defer fw.watcher.Close()
+	defer func() { _ = fw.watcher.Close() }()
 
 	if fw.workDir != dir {
 		t.Errorf("workDir = %q, want %q", fw.workDir, dir)
@@ -41,7 +42,7 @@ func TestFileWatcher_DetectsNewFile(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Create a file
 	filePath := filepath.Join(dir, "test.txt")
@@ -79,7 +80,7 @@ func TestFileWatcher_DetectsModifiedFile(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Modify the file
 	if err := os.WriteFile(filePath, []byte("modified"), 0644); err != nil {
@@ -115,7 +116,7 @@ func TestFileWatcher_ExcludesDirectories(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Create file in excluded directory
 	if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/main"), 0644); err != nil {
@@ -168,7 +169,7 @@ func TestFileWatcher_ExcludesGitignorePatterns(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Create a .log file (gitignored)
 	if err := os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log"), 0644); err != nil {
@@ -194,7 +195,7 @@ func TestFileWatcher_ExcludesGitignorePatterns(t *testing.T) {
 		if filepath.Ext(p) == ".log" {
 			t.Errorf("gitignored .log file found in changes: %s", p)
 		}
-		if filepath.HasPrefix(p, "build") {
+		if strings.HasPrefix(p, "build") {
 			t.Errorf("gitignored build/ file found in changes: %s", p)
 		}
 	}
@@ -228,7 +229,7 @@ func TestFileWatcher_DetectsSubdirectoryFiles(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Create file in subdirectory
 	if err := os.WriteFile(filepath.Join(subDir, "main.go"), []byte("package main"), 0644); err != nil {
@@ -261,7 +262,7 @@ func TestFileWatcher_DetectsNewSubdirectoryFiles(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Create a new subdirectory AFTER watcher started
 	newDir := filepath.Join(dir, "internal")
@@ -302,7 +303,7 @@ func TestFileWatcher_Clear(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Create a file
 	if err := os.WriteFile(filepath.Join(dir, "test.txt"), []byte("hello"), 0644); err != nil {
@@ -344,7 +345,7 @@ func TestFileWatcher_DataDirExclusion(t *testing.T) {
 	if err := fw.Start(); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	defer fw.Stop()
+	defer func() { _ = fw.Stop() }()
 
 	// Write to data dir — should be ignored
 	if err := os.WriteFile(filepath.Join(dataDir, "state.json"), []byte("{}"), 0644); err != nil {
@@ -360,7 +361,7 @@ func TestFileWatcher_DataDirExclusion(t *testing.T) {
 
 	paths := fw.ChangedPaths()
 	for _, p := range paths {
-		if filepath.HasPrefix(p, ".iteratr") {
+		if strings.HasPrefix(p, ".iteratr") {
 			t.Errorf("excluded .iteratr path found in changes: %s", p)
 		}
 	}

@@ -1,6 +1,31 @@
 package tui
 
-import uv "github.com/charmbracelet/ultraviolet"
+import (
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/ultraviolet/layout"
+)
+
+// splitVertical splits the area vertically into two parts.
+// The first part has the given fixed height; the second takes the remainder.
+// Replaces the removed uv.SplitVertical(area, uv.Fixed(n)).
+func splitVertical(area uv.Rectangle, fixedHeight int) (top uv.Rectangle, bottom uv.Rectangle) {
+	rects := layout.Vertical(layout.Len(fixedHeight), layout.Fill(1)).Split(area)
+	if len(rects) >= 2 {
+		return rects[0], rects[1]
+	}
+	return area, uv.Rectangle{}
+}
+
+// splitHorizontal splits the area horizontally into two parts.
+// The first part has the given fixed width; the second takes the remainder.
+// Replaces the removed uv.SplitHorizontal(area, uv.Fixed(n)).
+func splitHorizontal(area uv.Rectangle, fixedWidth int) (left uv.Rectangle, right uv.Rectangle) {
+	rects := layout.Horizontal(layout.Len(fixedWidth), layout.Fill(1)).Split(area)
+	if len(rects) >= 2 {
+		return rects[0], rects[1]
+	}
+	return area, uv.Rectangle{}
+}
 
 // Layout breakpoints and dimensions
 const (
@@ -55,7 +80,7 @@ func CalculateLayout(width, height int, sidebarHidden bool) Layout {
 	}
 
 	// Split vertically: content | status
-	contentRect, statusRect := uv.SplitVertical(area, uv.Fixed(area.Dy()-StatusHeight))
+	contentRect, statusRect := splitVertical(area, area.Dy()-StatusHeight)
 
 	// Split content horizontally: main | sidebar (desktop mode only)
 	var mainRect, sidebarRect uv.Rectangle
@@ -68,7 +93,7 @@ func CalculateLayout(width, height int, sidebarHidden bool) Layout {
 		}
 
 		// Split horizontally: main (flexible) | gap (1 char) | sidebar (fixed width)
-		mainRect, sidebarRect = uv.SplitHorizontal(contentRect, uv.Fixed(contentRect.Dx()-sidebarWidth))
+		mainRect, sidebarRect = splitHorizontal(contentRect, contentRect.Dx()-sidebarWidth)
 		mainRect.Max.X -= 1 // 1-char gap between main and sidebar
 	} else {
 		// Compact mode or sidebar hidden: no sidebar, main takes full content width

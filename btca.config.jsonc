@@ -56,7 +56,6 @@
       "branch": "v2.0.0-beta.3",
       "specialNotes": "Lipgloss v2 style definitions for terminal UIs. Flexbox-like composition with JoinVertical/JoinHorizontal. Includes table and tree subpackages."
     },
-
     {
       "type": "git",
       "name": "viper",
@@ -70,6 +69,12 @@
       "url": "https://github.com/mark3labs/mcp-go",
       "branch": "main",
       "specialNotes": "MCP (Model Context Protocol) Go SDK. Supports stdio, SSE, and streamable HTTP transports."
+    },
+    {
+      "type": "git",
+      "name": "kit",
+      "url": "https://github.com/mark3labs/kit",
+      "branch": "master"
     }
   ],
   "model": "claude-haiku-4-5",
