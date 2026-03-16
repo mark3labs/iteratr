@@ -71,6 +71,11 @@ func NewSubagentModal(sessionID, subagentType, workDir string) *SubagentModal {
 // Returns a command that will start the session loading process.
 func (m *SubagentModal) Start() tea.Cmd {
 	return func() tea.Msg {
+		// If no session ID yet (subagent still running), show message
+		if m.sessionID == "" {
+			return SubagentErrorMsg{Err: fmt.Errorf("subagent is still running — session will be available when complete")}
+		}
+
 		// Find the session file from session ID by listing all sessions
 		sessions, err := agent.FindSessionByID(m.sessionID, m.workDir)
 		if err != nil || sessions == "" {

@@ -778,15 +778,13 @@ func (s *SubagentMessageItem) Render(width int) string {
 	content.WriteString("\n\n")
 	content.WriteString(description)
 
-	// --- "Click to view" HINT (only if sessionID available) ---
-	if s.sessionID != "" {
-		content.WriteString("\n\n")
-		hintStyled := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(t.FgSubtle)).
-			Background(bg).
-			Render("[Click to view]")
-		content.WriteString(hintStyled)
-	}
+	// --- "Click to view" HINT ---
+	content.WriteString("\n\n")
+	hintStyled := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(t.FgSubtle)).
+		Background(bg).
+		Render("[Click to view]")
+	content.WriteString(hintStyled)
 
 	// Apply box styling - MarginLeft(2) is built into the style
 	boxed := th.SubagentMessageBox.Width(contentWidth).Render(content.String())

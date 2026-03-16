@@ -590,18 +590,14 @@ func (a *AgentOutput) HandleClick(x, y int) tea.Cmd {
 		return nil
 	}
 
-	// Check if it's a SubagentMessageItem with sessionID (clickable to view)
+	// Check if it's a SubagentMessageItem (always clickable)
 	if subagentMsg, ok := a.messages[msgIdx].(*SubagentMessageItem); ok {
-		if subagentMsg.sessionID != "" {
-			// Return command to open subagent modal
-			return func() tea.Msg {
-				return OpenSubagentModalMsg{
-					SessionID:    subagentMsg.sessionID,
-					SubagentType: subagentMsg.subagentType,
-				}
+		return func() tea.Msg {
+			return OpenSubagentModalMsg{
+				SessionID:    subagentMsg.sessionID, // May be empty if still running
+				SubagentType: subagentMsg.subagentType,
 			}
 		}
-		return nil
 	}
 
 	// Toggle if expandable
