@@ -67,23 +67,25 @@ func NewSubagentModal(sessionID, subagentType, workDir string) *SubagentModal {
 	}
 }
 
-// Start loads the session via KIT SDK and begins iterating through messages.
-// Returns a command that will start the session loading process.
+// Start loads the session or enters live mode if the subagent is still running.
+// In live mode (empty sessionID), the modal receives events via HandleUpdate.
+// In replay mode (sessionID set), it loads the saved session and iterates.
 func (m *SubagentModal) Start() tea.Cmd {
 	return func() tea.Msg {
-		// If no session ID yet (subagent still running), show message
+		// Live mode: subagent is still running, events arrive via HandleUpdate
 		if m.sessionID == "" {
-			return SubagentErrorMsg{Err: fmt.Errorf("subagent is still running — session will be available when complete")}
+			logger.Debug("subagent modal: entering live mode (no session ID)")
+			m.loading = false
+			return nil
 		}
 
-		// Find the session file from session ID by listing all sessions
+		// Replay mode: load saved session
 		sessions, err := agent.FindSessionByID(m.sessionID, m.workDir)
 		if err != nil || sessions == "" {
 			logger.Warn("Failed to find session %s: %v", m.sessionID, err)
 			return SubagentErrorMsg{Err: fmt.Errorf("session not found: %s", m.sessionID)}
 		}
 
-		// Load session via KIT SDK
 		loader, err := agent.NewKitSessionLoader(m.ctx, sessions, m.workDir)
 		if err != nil {
 			logger.Warn("Failed to load session for subagent modal: %v", err)
@@ -91,11 +93,9 @@ func (m *SubagentModal) Start() tea.Cmd {
 		}
 		m.loader = loader
 
-		// Session loaded - modal no longer in loading state
 		logger.Debug("subagent modal: session loaded, starting iteration")
 		m.loading = false
 
-		// Start iterating through messages
 		return m.streamNext()
 	}
 }

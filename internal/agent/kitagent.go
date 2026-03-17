@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	kit "github.com/mark3labs/kit/pkg/kit"
@@ -19,12 +20,23 @@ type KitAgent struct {
 	workDir      string
 	mcpServerURL string
 
-	// Callbacks (same signatures as former Runner)
+	// Callbacks for main agent output
 	onText       func(string)
 	onToolCall   func(ToolCallEvent)
 	onThinking   func(string)
 	onFinish     func(FinishEvent)
 	onFileChange func(FileChange)
+
+	// Callbacks for live subagent event streaming
+	onSubagentText     func(toolCallID, text string)
+	onSubagentToolCall func(toolCallID string, event ToolCallEvent)
+	onSubagentThinking func(toolCallID, content string)
+
+	// Tracks the currently executing spawn_subagent tool call.
+	// While set, text/tool/thinking events from the bus are from
+	// the subagent and get routed to the subagent callbacks.
+	mu                     sync.Mutex
+	activeSubagentToolCall string
 
 	// KIT SDK instance (created in Start, reused across iterations)
 	host         *kit.Kit
@@ -43,20 +55,30 @@ type KitAgentConfig struct {
 	OnThinking   func(string)        // Callback for thinking/reasoning output
 	OnFinish     func(FinishEvent)   // Callback for iteration finish events
 	OnFileChange func(FileChange)    // Callback for file modifications
+
+	// Subagent live streaming callbacks. Called when a spawn_subagent tool
+	// is executing and its child events flow through the parent's event bus.
+	// The toolCallID identifies which spawn_subagent tool call owns the events.
+	OnSubagentText     func(toolCallID, text string)
+	OnSubagentToolCall func(toolCallID string, event ToolCallEvent)
+	OnSubagentThinking func(toolCallID, content string)
 }
 
 // NewKitAgent creates a new KitAgent instance. Call Start() to initialize the
 // KIT SDK and subscribe to events.
 func NewKitAgent(cfg KitAgentConfig) *KitAgent {
 	return &KitAgent{
-		model:        cfg.Model,
-		workDir:      cfg.WorkDir,
-		mcpServerURL: cfg.MCPServerURL,
-		onText:       cfg.OnText,
-		onToolCall:   cfg.OnToolCall,
-		onThinking:   cfg.OnThinking,
-		onFinish:     cfg.OnFinish,
-		onFileChange: cfg.OnFileChange,
+		model:              cfg.Model,
+		workDir:            cfg.WorkDir,
+		mcpServerURL:       cfg.MCPServerURL,
+		onText:             cfg.OnText,
+		onToolCall:         cfg.OnToolCall,
+		onThinking:         cfg.OnThinking,
+		onFinish:           cfg.OnFinish,
+		onFileChange:       cfg.OnFileChange,
+		onSubagentText:     cfg.OnSubagentText,
+		onSubagentToolCall: cfg.OnSubagentToolCall,
+		onSubagentThinking: cfg.OnSubagentThinking,
 	}
 }
 
@@ -99,10 +121,25 @@ func (a *KitAgent) Start(ctx context.Context) error {
 	return nil
 }
 
+// isSubagentActive returns true if a spawn_subagent tool is currently executing.
+func (a *KitAgent) isSubagentActive() (string, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.activeSubagentToolCall, a.activeSubagentToolCall != ""
+}
+
 // subscribeEvents wires KIT SDK events to the iteratr callback model.
+// When a spawn_subagent tool is executing, child events (text, tool calls,
+// thinking) are routed to the subagent callbacks instead of the main ones.
 func (a *KitAgent) subscribeEvents() {
-	// Text streaming
+	// Text streaming — route to subagent if active
 	a.addUnsub(a.host.OnStreaming(func(e kit.MessageUpdateEvent) {
+		if tcID, active := a.isSubagentActive(); active {
+			if a.onSubagentText != nil {
+				a.onSubagentText(tcID, e.Chunk)
+			}
+			return
+		}
 		if a.onText != nil {
 			a.onText(e.Chunk)
 		}
@@ -112,11 +149,37 @@ func (a *KitAgent) subscribeEvents() {
 	a.addUnsub(a.host.Subscribe(func(e kit.Event) {
 		switch ev := e.(type) {
 		case kit.ReasoningDeltaEvent:
+			if tcID, active := a.isSubagentActive(); active {
+				if a.onSubagentThinking != nil {
+					a.onSubagentThinking(tcID, ev.Delta)
+				}
+				return
+			}
 			if a.onThinking != nil {
 				a.onThinking(ev.Delta)
 			}
 
 		case kit.ToolExecutionStartEvent:
+			if ev.ToolKind == "agent" {
+				// Subagent tool starting — mark active BEFORE dispatching
+				a.mu.Lock()
+				a.activeSubagentToolCall = ev.ToolCallID
+				a.mu.Unlock()
+			}
+
+			// If this is a child tool inside an active subagent, route it
+			if tcID, active := a.isSubagentActive(); active && ev.ToolKind != "agent" {
+				if a.onSubagentToolCall != nil {
+					a.onSubagentToolCall(tcID, ToolCallEvent{
+						ToolCallID: ev.ToolCallID,
+						Title:      ev.ToolName,
+						Kind:       ev.ToolKind,
+						Status:     "in_progress",
+					})
+				}
+				return
+			}
+
 			if a.onToolCall != nil {
 				a.onToolCall(ToolCallEvent{
 					ToolCallID: ev.ToolCallID,
@@ -128,8 +191,20 @@ func (a *KitAgent) subscribeEvents() {
 		}
 	}))
 
-	// Tool call parsed (pending)
+	// Tool call parsed (pending) — route child tools to subagent
 	a.addUnsub(a.host.OnToolCall(func(e kit.ToolCallEvent) {
+		if tcID, active := a.isSubagentActive(); active && e.ToolKind != "agent" {
+			if a.onSubagentToolCall != nil {
+				a.onSubagentToolCall(tcID, ToolCallEvent{
+					ToolCallID: e.ToolCallID,
+					Title:      e.ToolName,
+					Kind:       e.ToolKind,
+					Status:     "pending",
+					RawInput:   e.ParsedArgs,
+				})
+			}
+			return
+		}
 		if a.onToolCall != nil {
 			a.onToolCall(ToolCallEvent{
 				ToolCallID: e.ToolCallID,
@@ -143,6 +218,33 @@ func (a *KitAgent) subscribeEvents() {
 
 	// Tool result (completed/error) with full metadata
 	a.addUnsub(a.host.OnToolResult(func(e kit.ToolResultEvent) {
+		// If this is the spawn_subagent tool completing, clear active state
+		if e.ToolKind == "agent" {
+			a.mu.Lock()
+			a.activeSubagentToolCall = ""
+			a.mu.Unlock()
+			// Fall through to main handler for the spawn_subagent result
+		}
+
+		// Child tool result inside active subagent
+		if tcID, active := a.isSubagentActive(); active && e.ToolKind != "agent" {
+			if a.onSubagentToolCall != nil {
+				status := "completed"
+				if e.IsError {
+					status = "error"
+				}
+				a.onSubagentToolCall(tcID, ToolCallEvent{
+					ToolCallID: e.ToolCallID,
+					Title:      e.ToolName,
+					Kind:       e.ToolKind,
+					Status:     status,
+					RawInput:   e.ParsedArgs,
+					Output:     e.Result,
+				})
+			}
+			return
+		}
+
 		if a.onToolCall == nil {
 			return
 		}

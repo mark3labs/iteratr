@@ -325,6 +325,15 @@ func (o *Orchestrator) Run() error {
 					Deletions: change.Deletions,
 				})
 			},
+			OnSubagentText: func(toolCallID, text string) {
+				o.tuiProgram.Send(tui.SubagentTextMsg{Text: text})
+			},
+			OnSubagentToolCall: func(toolCallID string, event agent.ToolCallEvent) {
+				o.tuiProgram.Send(tui.SubagentToolCallMsg{Event: event})
+			},
+			OnSubagentThinking: func(toolCallID, content string) {
+				o.tuiProgram.Send(tui.SubagentThinkingMsg{Content: content})
+			},
 		})
 	} else {
 		// Headless mode - print to stdout
