@@ -1366,7 +1366,8 @@ type FileChangeMsg struct {
 	Deletions int
 }
 
-// OpenSubagentModalMsg is sent when the user clicks a subagent message item with a sessionID.
+// OpenSubagentModalMsg is sent when the user clicks a subagent message item.
+// SessionID may be empty while subagent is still running (live mode).
 type OpenSubagentModalMsg struct {
 	SessionID    string
 	SubagentType string

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/term"
 	"github.com/mark3labs/iteratr/internal/agent"
 	ierr "github.com/mark3labs/iteratr/internal/errors"
 	"github.com/mark3labs/iteratr/internal/hooks"
@@ -56,6 +58,7 @@ type Orchestrator struct {
 	tuiApp            *tui.App           // TUI application (nil if headless)
 	tuiProgram        *tea.Program       // Bubbletea program
 	tuiDone           chan struct{}      // TUI completion signal
+	tuiInput          io.Reader          // Bubbletea input source (set in tests to avoid stdin races)
 	sendChan          chan string        // Channel for user input messages from TUI to orchestrator
 	ctx               context.Context    // Context for cancellation
 	cancel            context.CancelFunc // Cancel function
@@ -1322,8 +1325,17 @@ func (o *Orchestrator) startTUI() error {
 	// Create TUI app
 	o.tuiApp = tui.NewApp(o.ctx, o.store, o.cfg.SessionName, o.cfg.WorkDir, o.cfg.DataDir, o.nc, o.sendChan, o)
 
-	// Create Bubbletea program with context for graceful shutdown
-	o.tuiProgram = tea.NewProgram(o.tuiApp, tea.WithContext(o.ctx))
+	// Create Bubbletea program with context for graceful shutdown.
+	// In tests/non-interactive environments, avoid reading os.Stdin to prevent
+	// shutdown races in cancelreader.
+	programOptions := []tea.ProgramOption{tea.WithContext(o.ctx)}
+	if o.tuiInput != nil {
+		programOptions = append(programOptions, tea.WithInput(o.tuiInput))
+	} else if !term.IsTerminal(os.Stdin.Fd()) {
+		logger.Debug("stdin is not a terminal, disabling TUI input")
+		programOptions = append(programOptions, tea.WithInput(nil))
+	}
+	o.tuiProgram = tea.NewProgram(o.tuiApp, programOptions...)
 
 	// Start TUI in background with panic recovery
 	go func() {

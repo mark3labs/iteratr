@@ -640,12 +640,18 @@ func TestAgentOutput_HandleClick_SubagentWithoutSession(t *testing.T) {
 	scr := uv.NewScreenBuffer(testfixtures.TestTermWidth, testfixtures.TestTermHeight)
 	ao.Draw(scr, area)
 
-	// Click should be ignored for subagent without sessionID
+	// Click should open subagent modal in live mode (empty sessionID)
 	clickX := ao.viewportArea.Min.X + 5
 	clickY := ao.viewportArea.Min.Y + 1
 
 	cmd := ao.HandleClick(clickX, clickY)
-	require.Nil(t, cmd, "HandleClick should return nil for subagent without sessionID")
+	require.NotNil(t, cmd, "HandleClick should return command for running subagent")
+
+	msg := cmd()
+	openMsg, ok := msg.(OpenSubagentModalMsg)
+	require.True(t, ok, "command should return OpenSubagentModalMsg")
+	require.Equal(t, "", openMsg.SessionID, "session ID should be empty in live mode")
+	require.Equal(t, "explore", openMsg.SubagentType, "subagent type should match")
 }
 
 // --- Keyboard Navigation Tests ---

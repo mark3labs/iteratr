@@ -32,11 +32,9 @@ type KitAgent struct {
 	onSubagentToolCall func(toolCallID string, event ToolCallEvent)
 	onSubagentThinking func(toolCallID, content string)
 
-	// Tracks the currently executing spawn_subagent tool call.
-	// While set, text/tool/thinking events from the bus are from
-	// the subagent and get routed to the subagent callbacks.
-	mu                     sync.Mutex
-	activeSubagentToolCall string
+	// Per-subagent subscriptions registered via KIT SubscribeSubagent.
+	mu             sync.Mutex
+	subagentUnsubs map[string]func() // toolCallID -> unsubscribe func
 
 	// KIT SDK instance (created in Start, reused across iterations)
 	host         *kit.Kit
@@ -79,6 +77,7 @@ func NewKitAgent(cfg KitAgentConfig) *KitAgent {
 		onSubagentText:     cfg.OnSubagentText,
 		onSubagentToolCall: cfg.OnSubagentToolCall,
 		onSubagentThinking: cfg.OnSubagentThinking,
+		subagentUnsubs:     make(map[string]func()),
 	}
 }
 
@@ -121,65 +120,121 @@ func (a *KitAgent) Start(ctx context.Context) error {
 	return nil
 }
 
-// isSubagentActive returns true if a spawn_subagent tool is currently executing.
-func (a *KitAgent) isSubagentActive() (string, bool) {
+// addSubagentUnsub registers (or replaces) a per-subagent unsubscribe callback.
+func (a *KitAgent) addSubagentUnsub(toolCallID string, unsub func()) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.activeSubagentToolCall, a.activeSubagentToolCall != ""
+	if a.subagentUnsubs == nil {
+		a.subagentUnsubs = make(map[string]func())
+	}
+	if old, ok := a.subagentUnsubs[toolCallID]; ok && old != nil {
+		old()
+	}
+	a.subagentUnsubs[toolCallID] = unsub
+}
+
+// removeSubagentUnsub removes and invokes the unsubscribe callback for a subagent.
+func (a *KitAgent) removeSubagentUnsub(toolCallID string) {
+	a.mu.Lock()
+	unsub, ok := a.subagentUnsubs[toolCallID]
+	if ok {
+		delete(a.subagentUnsubs, toolCallID)
+	}
+	a.mu.Unlock()
+	if ok && unsub != nil {
+		unsub()
+	}
+}
+
+// clearSubagentUnsubs removes all subagent subscriptions.
+func (a *KitAgent) clearSubagentUnsubs() {
+	a.mu.Lock()
+	all := make([]func(), 0, len(a.subagentUnsubs))
+	for id, unsub := range a.subagentUnsubs {
+		delete(a.subagentUnsubs, id)
+		if unsub != nil {
+			all = append(all, unsub)
+		}
+	}
+	a.mu.Unlock()
+	for _, unsub := range all {
+		unsub()
+	}
+}
+
+// handleSubagentEvent maps KIT child events to iteratr subagent callbacks.
+func (a *KitAgent) handleSubagentEvent(parentToolCallID string, e kit.Event) {
+	switch ev := e.(type) {
+	case kit.MessageUpdateEvent:
+		if a.onSubagentText != nil {
+			a.onSubagentText(parentToolCallID, ev.Chunk)
+		}
+
+	case kit.ReasoningDeltaEvent:
+		if a.onSubagentThinking != nil {
+			a.onSubagentThinking(parentToolCallID, ev.Delta)
+		}
+
+	case kit.ToolCallEvent:
+		if a.onSubagentToolCall != nil {
+			a.onSubagentToolCall(parentToolCallID, ToolCallEvent{
+				ToolCallID: ev.ToolCallID,
+				Title:      ev.ToolName,
+				Kind:       ev.ToolKind,
+				Status:     "pending",
+				RawInput:   ev.ParsedArgs,
+			})
+		}
+
+	case kit.ToolExecutionStartEvent:
+		if a.onSubagentToolCall != nil {
+			a.onSubagentToolCall(parentToolCallID, ToolCallEvent{
+				ToolCallID: ev.ToolCallID,
+				Title:      ev.ToolName,
+				Kind:       ev.ToolKind,
+				Status:     "in_progress",
+			})
+		}
+
+	case kit.ToolResultEvent:
+		if a.onSubagentToolCall == nil {
+			return
+		}
+		status := "completed"
+		if ev.IsError {
+			status = "error"
+		}
+		childEvent := ToolCallEvent{
+			ToolCallID: ev.ToolCallID,
+			Title:      ev.ToolName,
+			Kind:       ev.ToolKind,
+			Status:     status,
+			RawInput:   ev.ParsedArgs,
+			Output:     ev.Result,
+		}
+		a.onSubagentToolCall(parentToolCallID, childEvent)
+	}
 }
 
 // subscribeEvents wires KIT SDK events to the iteratr callback model.
-// When a spawn_subagent tool is executing, child events (text, tool calls,
-// thinking) are routed to the subagent callbacks instead of the main ones.
+// Subagent live events are streamed via KIT SubscribeSubagent.
 func (a *KitAgent) subscribeEvents() {
-	// Text streaming — route to subagent if active
+	// Main text streaming
 	a.addUnsub(a.host.OnStreaming(func(e kit.MessageUpdateEvent) {
-		if tcID, active := a.isSubagentActive(); active {
-			if a.onSubagentText != nil {
-				a.onSubagentText(tcID, e.Chunk)
-			}
-			return
-		}
 		if a.onText != nil {
 			a.onText(e.Chunk)
 		}
 	}))
 
-	// Reasoning/thinking + tool execution lifecycle
+	// Main reasoning + tool execution start
 	a.addUnsub(a.host.Subscribe(func(e kit.Event) {
 		switch ev := e.(type) {
 		case kit.ReasoningDeltaEvent:
-			if tcID, active := a.isSubagentActive(); active {
-				if a.onSubagentThinking != nil {
-					a.onSubagentThinking(tcID, ev.Delta)
-				}
-				return
-			}
 			if a.onThinking != nil {
 				a.onThinking(ev.Delta)
 			}
 
 		case kit.ToolExecutionStartEvent:
-			if ev.ToolKind == "agent" {
-				// Subagent tool starting — mark active BEFORE dispatching
-				a.mu.Lock()
-				a.activeSubagentToolCall = ev.ToolCallID
-				a.mu.Unlock()
-			}
-
-			// If this is a child tool inside an active subagent, route it
-			if tcID, active := a.isSubagentActive(); active && ev.ToolKind != "agent" {
-				if a.onSubagentToolCall != nil {
-					a.onSubagentToolCall(tcID, ToolCallEvent{
-						ToolCallID: ev.ToolCallID,
-						Title:      ev.ToolName,
-						Kind:       ev.ToolKind,
-						Status:     "in_progress",
-					})
-				}
-				return
-			}
-
 			if a.onToolCall != nil {
 				a.onToolCall(ToolCallEvent{
 					ToolCallID: ev.ToolCallID,
@@ -191,20 +246,15 @@ func (a *KitAgent) subscribeEvents() {
 		}
 	}))
 
-	// Tool call parsed (pending) — route child tools to subagent
+	// Tool call parsed (pending). For spawn_subagent calls, subscribe to child stream.
 	a.addUnsub(a.host.OnToolCall(func(e kit.ToolCallEvent) {
-		if tcID, active := a.isSubagentActive(); active && e.ToolKind != "agent" {
-			if a.onSubagentToolCall != nil {
-				a.onSubagentToolCall(tcID, ToolCallEvent{
-					ToolCallID: e.ToolCallID,
-					Title:      e.ToolName,
-					Kind:       e.ToolKind,
-					Status:     "pending",
-					RawInput:   e.ParsedArgs,
-				})
-			}
-			return
+		if e.ToolKind == "agent" {
+			unsub := a.host.SubscribeSubagent(e.ToolCallID, func(child kit.Event) {
+				a.handleSubagentEvent(e.ToolCallID, child)
+			})
+			a.addSubagentUnsub(e.ToolCallID, unsub)
 		}
+
 		if a.onToolCall != nil {
 			a.onToolCall(ToolCallEvent{
 				ToolCallID: e.ToolCallID,
@@ -216,33 +266,11 @@ func (a *KitAgent) subscribeEvents() {
 		}
 	}))
 
-	// Tool result (completed/error) with full metadata
+	// Tool result (completed/error) with full metadata.
 	a.addUnsub(a.host.OnToolResult(func(e kit.ToolResultEvent) {
-		// If this is the spawn_subagent tool completing, clear active state
 		if e.ToolKind == "agent" {
-			a.mu.Lock()
-			a.activeSubagentToolCall = ""
-			a.mu.Unlock()
-			// Fall through to main handler for the spawn_subagent result
-		}
-
-		// Child tool result inside active subagent
-		if tcID, active := a.isSubagentActive(); active && e.ToolKind != "agent" {
-			if a.onSubagentToolCall != nil {
-				status := "completed"
-				if e.IsError {
-					status = "error"
-				}
-				a.onSubagentToolCall(tcID, ToolCallEvent{
-					ToolCallID: e.ToolCallID,
-					Title:      e.ToolName,
-					Kind:       e.ToolKind,
-					Status:     status,
-					RawInput:   e.ParsedArgs,
-					Output:     e.Result,
-				})
-			}
-			return
+			// Subagent completed (or errored) - stop receiving child events for this call.
+			a.removeSubagentUnsub(e.ToolCallID)
 		}
 
 		if a.onToolCall == nil {
@@ -419,6 +447,9 @@ func (a *KitAgent) Stop() {
 		unsub()
 	}
 	a.unsubscribes = nil
+
+	// Ensure per-subagent listeners are released.
+	a.clearSubagentUnsubs()
 
 	if a.host != nil {
 		logger.Debug("Closing KIT SDK instance")

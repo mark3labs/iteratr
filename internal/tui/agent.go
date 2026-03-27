@@ -491,21 +491,39 @@ func mapToolStatus(status string) ToolStatus {
 }
 
 // detectSubagent checks whether a tool call message represents a subagent.
-// KIT SDK spawn_subagent tool has Kind == "agent".
+// Supports both KIT SDK spawn_subagent semantics (Kind == "agent") and
+// legacy payloads that include "subagent_type" in input args.
 func detectSubagent(msg AgentToolCallMsg) (subagentType string, isSubagent bool) {
+	// Preferred KIT signal
 	if msg.Kind == "agent" {
-		subagentType = msg.Title
-		if subagentType == "" {
-			subagentType = "subagent"
+		// Legacy/custom subtype (if present)
+		if t, ok := msg.Input["subagent_type"].(string); ok && strings.TrimSpace(t) != "" {
+			return t, true
 		}
-		return subagentType, true
+		// Optional model hint
+		if m, ok := msg.Input["model"].(string); ok && strings.TrimSpace(m) != "" {
+			return m, true
+		}
+		return "subagent", true
 	}
+
+	// Legacy fallback
+	if t, ok := msg.Input["subagent_type"].(string); ok && strings.TrimSpace(t) != "" {
+		return t, true
+	}
+
 	return "", false
 }
 
-// extractSubagentDescription extracts the task description from a subagent tool call.
+// extractSubagentDescription extracts task/prompt description from a subagent tool call.
 func extractSubagentDescription(msg AgentToolCallMsg) string {
-	if desc, ok := msg.Input["task"].(string); ok {
+	if desc, ok := msg.Input["task"].(string); ok && strings.TrimSpace(desc) != "" {
+		return desc
+	}
+	if prompt, ok := msg.Input["prompt"].(string); ok && strings.TrimSpace(prompt) != "" {
+		return prompt
+	}
+	if desc, ok := msg.Input["description"].(string); ok && strings.TrimSpace(desc) != "" {
 		return desc
 	}
 	return ""
@@ -590,11 +608,12 @@ func (a *AgentOutput) HandleClick(x, y int) tea.Cmd {
 		return nil
 	}
 
-	// Check if it's a SubagentMessageItem (always clickable)
+	// Check if it's a SubagentMessageItem (always clickable).
+	// When sessionID is empty, app opens modal in live mode and streams events.
 	if subagentMsg, ok := a.messages[msgIdx].(*SubagentMessageItem); ok {
 		return func() tea.Msg {
 			return OpenSubagentModalMsg{
-				SessionID:    subagentMsg.sessionID, // May be empty if still running
+				SessionID:    subagentMsg.sessionID,
 				SubagentType: subagentMsg.subagentType,
 			}
 		}
