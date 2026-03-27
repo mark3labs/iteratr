@@ -16,7 +16,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gosimple/slug v1.15.0
-	github.com/mark3labs/kit v0.26.0
+	github.com/mark3labs/kit v0.26.1
 	github.com/mark3labs/mcp-go v0.46.0
 	github.com/nats-io/nats-server/v2 v2.12.6
 	github.com/nats-io/nats.go v1.50.0
