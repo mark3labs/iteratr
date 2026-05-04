@@ -11,6 +11,17 @@ import (
 // ApplyGradient applies a color gradient from colorA to colorB across the string.
 // Uses ~8 color stops for performance rather than per-character coloring.
 func ApplyGradient(text, colorA, colorB string) string {
+	return ApplyGradientOnBg(text, colorA, colorB, "")
+}
+
+// ApplyGradientOnBg applies a color gradient from colorA to colorB across the string,
+// with each segment also setting the given background color. Pass an empty string
+// for bg to skip setting a background (terminal default / inherited).
+//
+// Setting an explicit background is important for half-block glyphs like ▄ ▀,
+// whose "transparent" halves otherwise reveal whatever previous bg the terminal
+// happened to have, producing an uneven/checkered look against modal surfaces.
+func ApplyGradientOnBg(text, colorA, colorB, bg string) string {
 	runes := []rune(text)
 	if len(runes) == 0 {
 		return text
@@ -33,6 +44,9 @@ func ApplyGradient(text, colorA, colorB string) string {
 		pos := float64(i) / float64(len(runes))
 		color := InterpolateColor(colorA, colorB, pos)
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+		if bg != "" {
+			style = style.Background(lipgloss.Color(bg))
+		}
 		result.WriteString(style.Render(string(runes[i:end])))
 	}
 

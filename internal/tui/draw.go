@@ -41,6 +41,39 @@ func FillAreaWithColor(scr uv.Screen, area uv.Rectangle, hexColor string) {
 	uvscreen.FillArea(scr, cell, area)
 }
 
+// ApplyBackgroundFallback walks every cell in the area and, for any cell whose
+// background is unset (nil), assigns the given hex color as its background.
+// Foreground, attributes, and content are left untouched.
+//
+// This is used as a final post-pass after all components have drawn, to
+// guarantee the entire app surface has a uniform background color regardless
+// of whether individual rendered text segments specified a bg, and regardless
+// of whether the terminal honors OSC 11 (view.BackgroundColor).
+func ApplyBackgroundFallback(scr uv.Screen, area uv.Rectangle, hexColor string) {
+	r, g, b := theme.ParseHexColor(hexColor)
+	fallbackBg := color.RGBA{R: r, G: g, B: b, A: 255}
+
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			c := scr.CellAt(x, y)
+			if c == nil {
+				// Empty cell: write a space with the fallback bg.
+				scr.SetCell(x, y, &uv.Cell{
+					Content: " ",
+					Width:   1,
+					Style:   uv.Style{Bg: fallbackBg},
+				})
+				continue
+			}
+			if c.Style.Bg == nil {
+				newCell := *c
+				newCell.Style.Bg = fallbackBg
+				scr.SetCell(x, y, &newCell)
+			}
+		}
+	}
+}
+
 // DrawPanel renders a panel with a title header and returns the inner content area.
 // The header shows "Title ────────" with a trailing rule line.
 // Focus is indicated by the header color.

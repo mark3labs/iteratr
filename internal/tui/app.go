@@ -1067,8 +1067,13 @@ func (a *App) View() tea.View {
 
 	view.Content = content
 
-	// Set global background color for the entire terminal
-	view.BackgroundColor = theme.HexToColor(theme.Current().BgCrust)
+	// Set global background color for the entire terminal. We use BgBase
+	// (#1e1e2e) — the Catppuccin "main background" — rather than BgCrust
+	// (#11111b, the "outermost edge" color) because BgCrust is so dark it's
+	// often indistinguishable from terminal black on many displays. BgBase is
+	// a clearly visible navy that matches the modal interiors, so the entire
+	// app surface reads as one consistent dark background.
+	view.BackgroundColor = theme.HexToColor(theme.Current().BgBase)
 
 	return view
 }
@@ -1142,6 +1147,16 @@ func (a *App) Draw(scr uv.Screen, area uv.Rectangle) *tea.Cursor {
 			uv.NewStyledString(toastContent).Draw(scr, toastArea)
 		}
 	}
+
+	// Final pass: ensure every cell has an explicit background. Components draw
+	// styled text segments which often leave bg unset; many terminals don't
+	// honor view.BackgroundColor (OSC 11) consistently — e.g. terminals with
+	// custom/transparent themes — causing those cells to render with the
+	// terminal's true default bg (often pure black). By assigning BgBase to any
+	// cell with bg=nil, the entire surface renders uniformly as the Catppuccin
+	// "main background" (#1e1e2e), which is the same color used by modal
+	// interiors so the whole app reads as a single coherent surface.
+	ApplyBackgroundFallback(scr, area, theme.Current().BgBase)
 
 	return cursor
 }
