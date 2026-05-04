@@ -92,6 +92,7 @@ func (a *KitAgent) Start(ctx context.Context) error {
 		NoSession:  true, // Ephemeral sessions — fresh context per iteration
 		SessionDir: a.workDir,
 		Quiet:      true,
+		SkipConfig: true, // Hermetic: ignore ~/.kit.yml so iteratr behaves consistently
 	}
 
 	// Configure MCP server if URL provided.
@@ -245,6 +246,44 @@ func (a *KitAgent) subscribeEvents() {
 		}
 	}))
 
+	// Tool call started — fires immediately when the LLM begins generating
+	// arguments, before the JSON has finished streaming. Emit an early
+	// "pending" event with no input so the UI can show a spinner without
+	// waiting for the full argument JSON. OnToolCall will follow with the
+	// parsed args and refresh the same row by ToolCallID.
+	a.addUnsub(a.host.OnToolCallStart(func(e kit.ToolCallStartEvent) {
+		if a.onToolCall != nil {
+			a.onToolCall(ToolCallEvent{
+				ToolCallID: e.ToolCallID,
+				Title:      e.ToolName,
+				Kind:       e.ToolKind,
+				Status:     "pending",
+			})
+		}
+	}))
+
+	// Provider-level errors (distinct from TurnEndEvent.Error — fires at
+	// the point of failure during streaming).
+	a.addUnsub(a.host.OnError(func(e kit.ErrorEvent) {
+		if e.Error != nil {
+			logger.Error("KIT agent error: %v", e.Error)
+		}
+	}))
+
+	// Transient retries against the LLM provider.
+	a.addUnsub(a.host.OnRetry(func(e kit.RetryEvent) {
+		logger.Warn("KIT provider retry (attempt %d): %v", e.Attempt, e.Error)
+	}))
+
+	// Per-step usage — useful for debugging long tool-calling turns.
+	a.addUnsub(a.host.OnStepFinish(func(e kit.StepFinishEvent) {
+		logger.Debug("KIT step %d finished (reason=%s, tools=%v): in=%d out=%d cache_read=%d cache_write=%d",
+			e.StepNumber, e.FinishReason, e.HasToolCalls,
+			e.Usage.InputTokens, e.Usage.OutputTokens,
+			e.Usage.CacheReadTokens, e.Usage.CacheCreationTokens,
+		)
+	}))
+
 	// Tool call parsed (pending). For spawn_subagent calls, subscribe to child stream.
 	a.addUnsub(a.host.OnToolCall(func(e kit.ToolCallEvent) {
 		if e.ToolKind == "agent" {
@@ -383,6 +422,7 @@ func (a *KitAgent) RunIteration(ctx context.Context, prompt string, hookOutput s
 			Duration:   duration,
 			Model:      a.model,
 			Provider:   extractProvider(a.model),
+			Usage:      convertUsage(result.TotalUsage),
 		})
 	}
 
@@ -429,6 +469,7 @@ func (a *KitAgent) SendMessages(ctx context.Context, texts []string) error {
 			Duration:   duration,
 			Model:      a.model,
 			Provider:   extractProvider(a.model),
+			Usage:      convertUsage(result.TotalUsage),
 		})
 	}
 
@@ -459,6 +500,22 @@ func (a *KitAgent) Stop() {
 // addUnsub stores an unsubscribe function for cleanup in Stop().
 func (a *KitAgent) addUnsub(unsub func()) {
 	a.unsubscribes = append(a.unsubscribes, unsub)
+}
+
+// convertUsage maps a kit LLMUsage to the agent-layer Usage struct.
+// Returns nil when the provider didn't report usage.
+func convertUsage(u *kit.LLMUsage) *Usage {
+	if u == nil {
+		return nil
+	}
+	return &Usage{
+		InputTokens:         u.InputTokens,
+		OutputTokens:        u.OutputTokens,
+		TotalTokens:         u.TotalTokens,
+		ReasoningTokens:     u.ReasoningTokens,
+		CacheCreationTokens: u.CacheCreationTokens,
+		CacheReadTokens:     u.CacheReadTokens,
+	}
 }
 
 // extractProvider parses provider name from model string.

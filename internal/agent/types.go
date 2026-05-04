@@ -32,6 +32,18 @@ type ToolCallEvent struct {
 	SessionID  string         // Session ID for subagent tasks (populated on completed from rawOutput.metadata.sessionId)
 }
 
+// Usage carries aggregate token usage for an agent iteration.
+// Mirrors kit.LLMUsage but lives in the agent layer so callers don't
+// need to import the SDK type.
+type Usage struct {
+	InputTokens         int64
+	OutputTokens        int64
+	TotalTokens         int64
+	ReasoningTokens     int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
+}
+
 // FinishEvent represents the completion of an agent iteration.
 // Emitted when prompt() returns, either successfully or with an error.
 type FinishEvent struct {
@@ -40,4 +52,5 @@ type FinishEvent struct {
 	Duration   time.Duration // Time taken for the iteration
 	Model      string        // Model used (e.g., "anthropic/claude-sonnet-4-5")
 	Provider   string        // Provider extracted from model (e.g., "Anthropic")
+	Usage      *Usage        // Aggregate token usage across all steps (nil on early errors)
 }

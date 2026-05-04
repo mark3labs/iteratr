@@ -625,12 +625,13 @@ func (t *ToolMessageItem) ToggleExpanded() {
 	t.cachedWidth = 0
 }
 
-// InfoMessageItem represents agent metadata (model, provider, duration).
+// InfoMessageItem represents agent metadata (model, provider, duration, tokens).
 type InfoMessageItem struct {
 	id           string
 	model        string
 	provider     string
 	duration     time.Duration
+	usage        *AgentUsage
 	cachedRender string
 	cachedWidth  int
 }
@@ -641,7 +642,7 @@ func (i *InfoMessageItem) ID() string {
 }
 
 // Render renders the info message at the given width.
-// Formats as "◇ Model via Provider ⏱ Duration ────────"
+// Formats as "◇ Model via Provider ⏱ Duration ⌬ in/out[+cache]"
 func (i *InfoMessageItem) Render(width int) string {
 	// Return cached render if width matches
 	if i.cachedWidth == width && i.cachedRender != "" {
@@ -672,10 +673,31 @@ func (i *InfoMessageItem) Render(width int) string {
 			s.InfoDuration.Render(durationStr)
 	}
 
+	// Append token usage if available.
+	if i.usage != nil && (i.usage.InputTokens > 0 || i.usage.OutputTokens > 0) {
+		tokenStr := fmt.Sprintf("%s\u2192%s", formatTokens(i.usage.InputTokens), formatTokens(i.usage.OutputTokens))
+		if i.usage.CacheReadTokens > 0 {
+			tokenStr += fmt.Sprintf(" (cache %s)", formatTokens(i.usage.CacheReadTokens))
+		}
+		infoText += " " + s.InfoDuration.Render("⌬") + " " + s.InfoDuration.Render(tokenStr)
+	}
+
 	// Cache and return
 	i.cachedRender = infoText
 	i.cachedWidth = width
 	return infoText
+}
+
+// formatTokens renders a token count compactly: 1500 → 1.5k, 1200000 → 1.2M.
+func formatTokens(n int64) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fk", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
 }
 
 // Height returns the number of lines this info message occupies.

@@ -309,13 +309,24 @@ func (o *Orchestrator) Run() error {
 				o.tuiProgram.Send(tui.AgentThinkingMsg{Content: content})
 			},
 			OnFinish: func(event agent.FinishEvent) {
-				o.tuiProgram.Send(tui.AgentFinishMsg{
+				msg := tui.AgentFinishMsg{
 					Reason:   event.StopReason,
 					Error:    event.Error,
 					Model:    event.Model,
 					Provider: event.Provider,
 					Duration: event.Duration,
-				})
+				}
+				if event.Usage != nil {
+					msg.Usage = &tui.AgentUsage{
+						InputTokens:         event.Usage.InputTokens,
+						OutputTokens:        event.Usage.OutputTokens,
+						TotalTokens:         event.Usage.TotalTokens,
+						ReasoningTokens:     event.Usage.ReasoningTokens,
+						CacheCreationTokens: event.Usage.CacheCreationTokens,
+						CacheReadTokens:     event.Usage.CacheReadTokens,
+					}
+				}
+				o.tuiProgram.Send(msg)
 			},
 			OnFileChange: func(change agent.FileChange) {
 				// Record change in tracker
@@ -380,6 +391,12 @@ func (o *Orchestrator) Run() error {
 				fmt.Printf(" | Duration: %s", event.Duration.Round(time.Millisecond))
 				if event.Model != "" {
 					fmt.Printf(" | Model: %s", event.Model)
+				}
+				if event.Usage != nil {
+					fmt.Printf(" | Tokens: in=%d out=%d", event.Usage.InputTokens, event.Usage.OutputTokens)
+					if event.Usage.CacheReadTokens > 0 || event.Usage.CacheCreationTokens > 0 {
+						fmt.Printf(" cache_read=%d cache_write=%d", event.Usage.CacheReadTokens, event.Usage.CacheCreationTokens)
+					}
 				}
 				fmt.Println(" ---")
 			},

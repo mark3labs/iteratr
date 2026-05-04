@@ -1255,6 +1255,18 @@ type AgentFinishMsg struct {
 	Model    string
 	Provider string
 	Duration time.Duration
+	Usage    *AgentUsage
+}
+
+// AgentUsage carries token usage stats for an iteration. Mirrors agent.Usage
+// to keep the TUI free of agent package imports in message types.
+type AgentUsage struct {
+	InputTokens         int64
+	OutputTokens        int64
+	TotalTokens         int64
+	ReasoningTokens     int64
+	CacheCreationTokens int64
+	CacheReadTokens     int64
 }
 
 type IterationStartMsg struct {

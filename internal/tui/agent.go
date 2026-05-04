@@ -917,12 +917,13 @@ func (a *AgentOutput) AppendFinish(msg AgentFinishMsg) tea.Cmd {
 		}
 	}
 
-	// 2. Append InfoMessageItem with model/provider/duration (before queued messages)
+	// 2. Append InfoMessageItem with model/provider/duration/usage (before queued messages)
 	infoMsg := &InfoMessageItem{
 		id:       fmt.Sprintf("info-%d", len(a.messages)),
 		model:    msg.Model,
 		provider: msg.Provider,
 		duration: msg.Duration,
+		usage:    msg.Usage,
 	}
 	a.appendBeforeQueued(infoMsg)
 
