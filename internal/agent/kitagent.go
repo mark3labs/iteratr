@@ -94,15 +94,15 @@ func (a *KitAgent) Start(ctx context.Context) error {
 		Quiet:      true,
 	}
 
-	// Configure MCP server if URL provided
+	// Configure MCP server if URL provided.
+	// Use top-level Options.MCPConfig — Options.CLI is reserved for the
+	// kit binary and SDK consumers should leave it nil.
 	if a.mcpServerURL != "" {
-		opts.CLI = &kit.CLIOptions{
-			MCPConfig: &kit.Config{
-				MCPServers: map[string]kit.MCPServerConfig{
-					"iteratr-tools": {
-						Type: "remote",
-						URL:  a.mcpServerURL,
-					},
+		opts.MCPConfig = &kit.Config{
+			MCPServers: map[string]kit.MCPServerConfig{
+				"iteratr-tools": {
+					Type: "remote",
+					URL:  a.mcpServerURL,
 				},
 			},
 		}
@@ -219,30 +219,29 @@ func (a *KitAgent) handleSubagentEvent(parentToolCallID string, e kit.Event) {
 // subscribeEvents wires KIT SDK events to the iteratr callback model.
 // Subagent live events are streamed via KIT SubscribeSubagent.
 func (a *KitAgent) subscribeEvents() {
-	// Main text streaming
-	a.addUnsub(a.host.OnStreaming(func(e kit.MessageUpdateEvent) {
+	// Main text streaming (OnMessageUpdate replaces deprecated OnStreaming).
+	a.addUnsub(a.host.OnMessageUpdate(func(e kit.MessageUpdateEvent) {
 		if a.onText != nil {
 			a.onText(e.Chunk)
 		}
 	}))
 
-	// Main reasoning + tool execution start
-	a.addUnsub(a.host.Subscribe(func(e kit.Event) {
-		switch ev := e.(type) {
-		case kit.ReasoningDeltaEvent:
-			if a.onThinking != nil {
-				a.onThinking(ev.Delta)
-			}
+	// Reasoning / thinking deltas.
+	a.addUnsub(a.host.OnReasoningDelta(func(e kit.ReasoningDeltaEvent) {
+		if a.onThinking != nil {
+			a.onThinking(e.Delta)
+		}
+	}))
 
-		case kit.ToolExecutionStartEvent:
-			if a.onToolCall != nil {
-				a.onToolCall(ToolCallEvent{
-					ToolCallID: ev.ToolCallID,
-					Title:      ev.ToolName,
-					Kind:       ev.ToolKind,
-					Status:     "in_progress",
-				})
-			}
+	// Tool execution started → flip status to in_progress.
+	a.addUnsub(a.host.OnToolExecutionStart(func(e kit.ToolExecutionStartEvent) {
+		if a.onToolCall != nil {
+			a.onToolCall(ToolCallEvent{
+				ToolCallID: e.ToolCallID,
+				Title:      e.ToolName,
+				Kind:       e.ToolKind,
+				Status:     "in_progress",
+			})
 		}
 	}))
 
@@ -331,13 +330,9 @@ func (a *KitAgent) subscribeEvents() {
 		a.onToolCall(event)
 	}))
 
-	// Turn completion with stop reason
-	a.addUnsub(a.host.OnTurnEnd(func(e kit.TurnEndEvent) {
-		// Note: onFinish is called by RunIteration/SendMessages with timing info.
-		// This subscription is only used for error-path finish events that bypass
-		// the normal return path. The main finish event is dispatched in
-		// RunIteration/SendMessages to include Duration.
-	}))
+	// Note: onFinish is dispatched directly from RunIteration / SendMessages
+	// so it can include Duration. We deliberately don't subscribe to OnTurnEnd
+	// here to avoid double-emitting finish events.
 }
 
 // RunIteration clears the session for fresh context and sends the prompt.
