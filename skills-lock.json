@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "kit-sdk": {
+      "source": "mark3labs/kit",
+      "sourceType": "github",
+      "skillPath": "skills/kit-sdk/SKILL.md",
+      "computedHash": "872cdb44ab3fb311737a5c0f9ce356e38a939997abd2ae17acfb93c1dc580063"
+    }
+  }
+}
